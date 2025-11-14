@@ -17,29 +17,56 @@ import {
   CircularProgress,
   Collapse,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
 import PIForm from '../components/PIForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
-const PIRow = ({ pi }) => {
+const PIRow = ({ pi, onEdit, onDelete }) => {
   const [open, setOpen] = useState(false)
 
   return (
     <>
-      <TableRow>
+      <TableRow 
+        sx={{ 
+          '&:hover': { bgcolor: 'action.hover' },
+          bgcolor: open ? 'action.selected' : 'inherit'
+        }}
+      >
         <TableCell>
           <IconButton size="small" onClick={() => setOpen(!open)}>
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
           </IconButton>
         </TableCell>
-        <TableCell>{pi.pi_number}</TableCell>
-        <TableCell>{pi.partner_vendor?.name || '-'}</TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+            {pi.pi_number}
+          </Typography>
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2">
+            {pi.partner_vendor?.vendor_name || '-'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {pi.partner_vendor?.vendor_code || ''}
+          </Typography>
+        </TableCell>
         <TableCell>{new Date(pi.pi_date).toLocaleDateString()}</TableCell>
-        <TableCell>₹{pi.total_amount?.toFixed(2) || '0.00'}</TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            ₹{pi.total_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+          </Typography>
+        </TableCell>
         <TableCell>
           <Chip
             label={pi.status || 'PENDING'}
@@ -47,38 +74,114 @@ const PIRow = ({ pi }) => {
             size="small"
           />
         </TableCell>
+        <TableCell align="right">
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={() => onEdit(pi)}
+            sx={{ mr: 1 }}
+            title="Edit PI"
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => onDelete(pi)}
+            title="Delete PI"
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ margin: 2 }}>
-              <Typography variant="h6" gutterBottom component="div">
-                Items
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Medicine</TableCell>
-                    <TableCell>Quantity</TableCell>
-                    <TableCell>Unit Price</TableCell>
-                    <TableCell>Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {pi.items?.map((item, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{item.medicine?.medicine_name || '-'}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>₹{item.unit_price?.toFixed(2)}</TableCell>
-                      <TableCell>₹{(item.quantity * item.unit_price).toFixed(2)}</TableCell>
+            <Box sx={{ margin: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" gutterBottom component="div">
+                  Line Items
+                </Typography>
+                <Chip 
+                  label={`${pi.items?.length || 0} item${pi.items?.length !== 1 ? 's' : ''}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              </Box>
+              <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={50}>#</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Quantity</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Unit Price</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Total</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {pi.items?.map((item, idx) => (
+                      <TableRow 
+                        key={idx}
+                        sx={{
+                          bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
+                          '&:hover': { bgcolor: 'primary.50' }
+                        }}
+                      >
+                        <TableCell>{idx + 1}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {item.medicine?.medicine_name || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={item.medicine?.dosage_form || '-'} 
+                            size="small" 
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2">
+                            {item.quantity?.toLocaleString('en-IN')}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2">
+                            ₹{item.unit_price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.main' }}>
+                            ₹{(item.quantity * item.unit_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow sx={{ bgcolor: 'success.50' }}>
+                      <TableCell colSpan={5} align="right">
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                          Grand Total:
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'success.dark' }}>
+                          ₹{pi.total_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
               {pi.remarks && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Remarks:</strong> {pi.remarks}
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    REMARKS
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {pi.remarks}
                   </Typography>
                 </Box>
               )}
@@ -94,8 +197,12 @@ const PIPage = () => {
   const [pis, setPis] = useState([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
+  const [editingPI, setEditingPI] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [piToDelete, setPiToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchPIs = async () => {
@@ -116,22 +223,76 @@ const PIPage = () => {
     fetchPIs()
   }, [])
 
-  const handleSubmit = async (formData) => {
+  const handleSubmit = async (formData, piId = null) => {
     try {
       setSubmitting(true)
       clearError()
       
-      const response = await api.post('/api/pi/', formData)
-      if (response.data.success) {
+      let response
+      if (piId) {
+        response = await api.put(`/api/pi/${piId}`, formData)
+        setSuccessMessage('PI updated successfully')
+      } else {
+        response = await api.post('/api/pi/', formData)
         setSuccessMessage('PI created successfully')
+      }
+      
+      if (response.data.success) {
         fetchPIs()
         setFormOpen(false)
+        setEditingPI(null)
       }
     } catch (err) {
       handleApiError(err)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleEdit = (pi) => {
+    setEditingPI(pi)
+    setFormOpen(true)
+  }
+
+  const handleDeleteClick = (pi) => {
+    setPiToDelete(pi)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!piToDelete) return
+    
+    try {
+      setDeleting(true)
+      clearError()
+      
+      const response = await api.delete(`/api/pi/${piToDelete.id}`)
+      if (response.data.success) {
+        setSuccessMessage('PI deleted successfully')
+        fetchPIs()
+        setDeleteDialogOpen(false)
+        setPiToDelete(null)
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false)
+    setPiToDelete(null)
+  }
+
+  const handleCreateNew = () => {
+    setEditingPI(null)
+    setFormOpen(true)
+  }
+
+  const handleFormClose = () => {
+    setFormOpen(false)
+    setEditingPI(null)
   }
 
   return (
@@ -141,7 +302,7 @@ const PIPage = () => {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setFormOpen(true)}
+          onClick={handleCreateNew}
         >
           Create PI
         </Button>
@@ -154,21 +315,27 @@ const PIPage = () => {
       ) : pis.length === 0 ? (
         <Alert severity="info">No PIs found. Click "Create PI" to create one.</Alert>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} elevation={2}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>PI Number</TableCell>
-                <TableCell>Partner Vendor</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Total Amount</TableCell>
-                <TableCell>Status</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white' }} width={50} />
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PI Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Partner Vendor</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Amount</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={120} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {pis.map((pi) => (
-                <PIRow key={pi.id} pi={pi} />
+              {pis.map((pi, index) => (
+                <PIRow 
+                  key={pi.id} 
+                  pi={pi} 
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                />
               ))}
             </TableBody>
           </Table>
@@ -177,10 +344,37 @@ const PIPage = () => {
 
       <PIForm
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={handleFormClose}
         onSubmit={handleSubmit}
         isLoading={submitting}
+        pi={editingPI}
       />
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+      >
+        <DialogTitle>Delete PI</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete PI <strong>{piToDelete?.pi_number}</strong>?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={!!successMessage}

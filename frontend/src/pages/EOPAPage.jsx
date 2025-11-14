@@ -20,48 +20,83 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
-  TextField,
-  MenuItem,
 } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import EOPAForm from '../components/EOPAForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
-const EOPARow = ({ eopa, onApprove, onGeneratePO }) => {
+const EOPARow = ({ eopa, onEdit, onDelete, onApprove, onGeneratePO }) => {
   const [open, setOpen] = useState(false)
 
   return (
     <>
-      <TableRow>
+      <TableRow sx={{ '&:hover': { bgcolor: 'action.hover' }, bgcolor: open ? 'action.selected' : 'inherit' }}>
         <TableCell>
           <IconButton size="small" onClick={() => setOpen(!open)}>
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
           </IconButton>
         </TableCell>
-        <TableCell>{eopa.eopa_number}</TableCell>
-        <TableCell>{eopa.pi?.pi_number || '-'}</TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+            {eopa.eopa_number}
+          </Typography>
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2">
+            {eopa.pi?.pi_number || '-'}
+          </Typography>
+        </TableCell>
         <TableCell>{new Date(eopa.eopa_date).toLocaleDateString()}</TableCell>
-        <TableCell>₹{eopa.estimated_total?.toFixed(2) || '0.00'}</TableCell>
+        <TableCell>
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            ₹{eopa.total_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+          </Typography>
+        </TableCell>
         <TableCell>
           <Chip
             label={eopa.status || 'PENDING'}
-            color={eopa.status === 'APPROVED' ? 'success' : 'warning'}
+            color={eopa.status === 'APPROVED' ? 'success' : eopa.status === 'REJECTED' ? 'error' : 'warning'}
             size="small"
           />
         </TableCell>
-        <TableCell>
+        <TableCell align="right">
           {eopa.status === 'PENDING' && (
-            <Button
-              size="small"
-              variant="outlined"
-              color="success"
-              onClick={() => onApprove(eopa.id)}
-            >
-              Approve
-            </Button>
+            <>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => onEdit(eopa)}
+                sx={{ mr: 1 }}
+                title="Edit EOPA"
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="success"
+                onClick={() => onApprove(eopa.id)}
+                sx={{ mr: 1 }}
+                title="Approve EOPA"
+              >
+                <CheckCircleIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => onDelete(eopa)}
+                title="Delete EOPA"
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </>
           )}
           {eopa.status === 'APPROVED' && !eopa.po_generated && (
             <Button
@@ -80,30 +115,94 @@ const EOPARow = ({ eopa, onApprove, onGeneratePO }) => {
       <TableRow>
         <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ margin: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Items
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Medicine</TableCell>
-                    <TableCell>Quantity</TableCell>
-                    <TableCell>Estimated Price</TableCell>
-                    <TableCell>Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {eopa.items?.map((item, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{item.medicine?.medicine_name || '-'}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>₹{item.estimated_unit_price?.toFixed(2)}</TableCell>
-                      <TableCell>₹{(item.quantity * item.estimated_unit_price).toFixed(2)}</TableCell>
+            <Box sx={{ margin: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" gutterBottom component="div">
+                  Line Items
+                </Typography>
+                <Chip 
+                  label={`${eopa.items?.length || 0} item${eopa.items?.length !== 1 ? 's' : ''}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              </Box>
+              <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={50}>#</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Quantity</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Unit Price</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Total</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {eopa.items?.map((item, idx) => (
+                      <TableRow 
+                        key={idx}
+                        sx={{
+                          bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
+                          '&:hover': { bgcolor: 'primary.50' }
+                        }}
+                      >
+                        <TableCell>{idx + 1}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            {item.medicine?.medicine_name || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={item.medicine?.dosage_form || '-'} 
+                            size="small" 
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2">
+                            {item.quantity?.toLocaleString('en-IN')}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2">
+                            ₹{item.unit_price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.main' }}>
+                            ₹{(item.quantity * item.unit_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow sx={{ bgcolor: 'success.50' }}>
+                      <TableCell colSpan={5} align="right">
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                          Grand Total:
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'success.dark' }}>
+                          ₹{eopa.total_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {eopa.remarks && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    REMARKS
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {eopa.remarks}
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Collapse>
         </TableCell>
@@ -114,12 +213,14 @@ const EOPARow = ({ eopa, onApprove, onGeneratePO }) => {
 
 const EOPAPage = () => {
   const [eopas, setEopas] = useState([])
-  const [pis, setPis] = useState([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [selectedPI, setSelectedPI] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingEOPA, setEditingEOPA] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [eopaToDelete, setEopaToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchEOPAs = async () => {
@@ -136,41 +237,80 @@ const EOPAPage = () => {
     }
   }
 
-  const fetchPIs = async () => {
-    try {
-      const response = await api.get('/api/pi/')
-      if (response.data.success) {
-        // Filter PIs that don't have EOPA yet
-        setPis(response.data.data.filter(pi => !pi.eopa_generated))
-      }
-    } catch (err) {
-      console.error('Failed to fetch PIs:', err)
-    }
-  }
-
   useEffect(() => {
     fetchEOPAs()
-    fetchPIs()
   }, [])
 
-  const handleCreateEOPA = async () => {
-    if (!selectedPI) return
-
+  const handleSubmit = async (formData, eopaId = null) => {
     try {
       setSubmitting(true)
-      const response = await api.post('/api/eopa/', { pi_id: parseInt(selectedPI) })
-      if (response.data.success) {
+      clearError()
+      
+      let response
+      if (eopaId) {
+        response = await api.put(`/api/eopa/${eopaId}`, formData)
+        setSuccessMessage('EOPA updated successfully')
+      } else {
+        response = await api.post('/api/eopa/', formData)
         setSuccessMessage('EOPA created successfully')
+      }
+      
+      if (response.data.success) {
         fetchEOPAs()
-        fetchPIs()
-        setDialogOpen(false)
-        setSelectedPI('')
+        setFormOpen(false)
+        setEditingEOPA(null)
       }
     } catch (err) {
       handleApiError(err)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleEdit = (eopa) => {
+    setEditingEOPA(eopa)
+    setFormOpen(true)
+  }
+
+  const handleDeleteClick = (eopa) => {
+    setEopaToDelete(eopa)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!eopaToDelete) return
+    
+    try {
+      setDeleting(true)
+      clearError()
+      
+      const response = await api.delete(`/api/eopa/${eopaToDelete.id}`)
+      if (response.data.success) {
+        setSuccessMessage('EOPA deleted successfully')
+        fetchEOPAs()
+        setDeleteDialogOpen(false)
+        setEopaToDelete(null)
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false)
+    setEopaToDelete(null)
+  }
+
+  const handleCreateNew = () => {
+    setEditingEOPA(null)
+    setFormOpen(true)
+  }
+
+  const handleFormClose = () => {
+    setFormOpen(false)
+    setEditingEOPA(null)
   }
 
   const handleApprove = async (eopaId) => {
@@ -205,7 +345,11 @@ const EOPAPage = () => {
     <Container maxWidth="lg">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">EOPA (Estimated Order & Price Approval)</Typography>
-        <Button variant="contained" onClick={() => setDialogOpen(true)}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateNew}
+        >
           Create EOPA
         </Button>
       </Box>
@@ -217,17 +361,17 @@ const EOPAPage = () => {
       ) : eopas.length === 0 ? (
         <Alert severity="info">No EOPAs found. Create an EOPA from an approved PI.</Alert>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} elevation={2}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>EOPA Number</TableCell>
-                <TableCell>PI Number</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Estimated Total</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Actions</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white' }} width={50} />
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>EOPA Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PI Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Estimated Total</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={200} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -235,6 +379,8 @@ const EOPAPage = () => {
                 <EOPARow
                   key={eopa.id}
                   eopa={eopa}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
                   onApprove={handleApprove}
                   onGeneratePO={handleGeneratePO}
                 />
@@ -244,36 +390,36 @@ const EOPAPage = () => {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create EOPA from PI</DialogTitle>
+      <EOPAForm
+        open={formOpen}
+        onClose={handleFormClose}
+        onSubmit={handleSubmit}
+        isLoading={submitting}
+        eopa={editingEOPA}
+      />
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+      >
+        <DialogTitle>Delete EOPA</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            select
-            label="Select PI"
-            value={selectedPI}
-            onChange={(e) => setSelectedPI(e.target.value)}
-            sx={{ mt: 2 }}
-            disabled={submitting}
-          >
-            <MenuItem value="">Select a PI</MenuItem>
-            {pis.map((pi) => (
-              <MenuItem key={pi.id} value={pi.id}>
-                {pi.pi_number} - {pi.partner_vendor?.name} - ₹{pi.total_amount?.toFixed(2)}
-              </MenuItem>
-            ))}
-          </TextField>
+          <DialogContentText>
+            Are you sure you want to delete EOPA <strong>{eopaToDelete?.eopa_number}</strong>?
+            This action cannot be undone.
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} disabled={submitting}>
+          <Button onClick={handleDeleteCancel} disabled={deleting}>
             Cancel
           </Button>
-          <Button
-            onClick={handleCreateEOPA}
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
             variant="contained"
-            disabled={!selectedPI || submitting}
+            disabled={deleting}
           >
-            {submitting ? 'Creating...' : 'Create EOPA'}
+            {deleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

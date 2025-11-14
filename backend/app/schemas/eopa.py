@@ -4,6 +4,26 @@ from datetime import datetime, date
 from app.models.eopa import EOPAStatus
 
 
+class MedicineBasic(BaseModel):
+    """Basic medicine info for nested responses"""
+    id: int
+    medicine_name: str
+    dosage_form: str
+    
+    class Config:
+        from_attributes = True
+
+
+class PIBasic(BaseModel):
+    """Basic PI info for nested responses"""
+    id: int
+    pi_number: str
+    pi_date: date
+    
+    class Config:
+        from_attributes = True
+
+
 class EOPAItemResponse(BaseModel):
     id: int
     medicine_id: int
@@ -11,6 +31,7 @@ class EOPAItemResponse(BaseModel):
     unit_price: float
     total_price: float
     created_at: datetime
+    medicine: Optional[MedicineBasic] = None
     
     class Config:
         from_attributes = True
@@ -37,6 +58,7 @@ class EOPAResponse(EOPABase):
     created_by: int
     created_at: datetime
     items: List[EOPAItemResponse] = []
+    pi: Optional[PIBasic] = None
     
     class Config:
         from_attributes = True

@@ -18,12 +18,15 @@ import {
   IconButton,
   Typography,
   Box,
+  Divider,
+  Alert,
+  Chip,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import api from '../services/api'
 
-const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
+const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   const [partnerVendors, setPartnerVendors] = useState([])
   const [medicines, setMedicines] = useState([])
   
@@ -40,6 +43,34 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
   }])
 
   const [errors, setErrors] = useState({})
+
+  // Populate form when editing
+  useEffect(() => {
+    if (pi && open) {
+      setFormData({
+        partner_vendor_id: pi.partner_vendor_id || '',
+        pi_date: pi.pi_date ? pi.pi_date.split('T')[0] : new Date().toISOString().split('T')[0],
+        remarks: pi.remarks || '',
+      })
+      
+      if (pi.items && pi.items.length > 0) {
+        setItems(pi.items.map(item => ({
+          medicine_id: item.medicine_id || '',
+          quantity: item.quantity || '',
+          unit_price: item.unit_price || '',
+        })))
+      }
+    } else if (open && !pi) {
+      // Reset form for create mode
+      setFormData({
+        partner_vendor_id: '',
+        pi_date: new Date().toISOString().split('T')[0],
+        remarks: '',
+      })
+      setItems([{ medicine_id: '', quantity: '', unit_price: '' }])
+      setErrors({})
+    }
+  }, [pi, open])
 
   useEffect(() => {
     if (open) {
@@ -83,6 +114,12 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
     const newItems = [...items]
     newItems[index][field] = value
     setItems(newItems)
+    
+    // Clear errors for this field
+    const errorKey = `item_${index}_${field === 'medicine_id' ? 'medicine' : field === 'unit_price' ? 'price' : 'quantity'}`
+    if (errors[errorKey]) {
+      setErrors(prev => ({ ...prev, [errorKey]: null }))
+    }
   }
 
   const addItem = () => {
@@ -123,7 +160,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
           unit_price: parseFloat(item.unit_price),
         }))
       }
-      onSubmit(payload)
+      onSubmit(payload, pi?.id)
     }
   }
 
@@ -148,11 +185,28 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
     }, 0).toFixed(2)
   }
 
+  const isEditMode = !!pi
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Create Proforma Invoice (PI)</DialogTitle>
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="h6">
+            {isEditMode ? 'Edit Proforma Invoice (PI)' : 'Create Proforma Invoice (PI)'}
+          </Typography>
+          {isEditMode && pi?.pi_number && (
+            <Chip label={pi.pi_number} color="primary" size="small" />
+          )}
+        </Box>
+      </DialogTitle>
       <DialogContent>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
+        {Object.keys(errors).length > 0 && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Please fix the errors in the form before submitting.
+          </Alert>
+        )}
+        
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
@@ -169,7 +223,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
               <MenuItem value="">Select Partner Vendor</MenuItem>
               {partnerVendors.map((vendor) => (
                 <MenuItem key={vendor.id} value={vendor.id}>
-                  {vendor.name}
+                  {vendor.vendor_name} ({vendor.vendor_code})
                 </MenuItem>
               ))}
             </TextField>
@@ -199,15 +253,26 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
               multiline
               rows={2}
               disabled={isLoading}
+              placeholder="Optional notes or comments"
             />
           </Grid>
         </Grid>
 
-        <Box sx={{ mt: 3, mb: 2 }}>
+        <Divider sx={{ my: 3 }} />
+
+        <Box sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Items</Typography>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+              Items
+              <Chip 
+                label={`${items.length} item${items.length !== 1 ? 's' : ''}`} 
+                size="small" 
+                sx={{ ml: 1 }} 
+              />
+            </Typography>
             <Button
               size="small"
+              variant="outlined"
               startIcon={<AddIcon />}
               onClick={addItem}
               disabled={isLoading}
@@ -218,18 +283,20 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
           
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
-              <TableHead>
+              <TableHead sx={{ bgcolor: 'grey.100' }}>
                 <TableRow>
-                  <TableCell>Medicine</TableCell>
-                  <TableCell width={120}>Quantity</TableCell>
-                  <TableCell width={120}>Unit Price</TableCell>
-                  <TableCell width={120}>Total</TableCell>
-                  <TableCell width={60}></TableCell>
+                  <TableCell width={50}>#</TableCell>
+                  <TableCell>Medicine *</TableCell>
+                  <TableCell width={120}>Quantity *</TableCell>
+                  <TableCell width={140}>Unit Price (₹) *</TableCell>
+                  <TableCell width={140}>Total (₹)</TableCell>
+                  <TableCell width={60} align="center">Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {items.map((item, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
+                    <TableCell>{index + 1}</TableCell>
                     <TableCell>
                       <TextField
                         select
@@ -238,12 +305,14 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
                         value={item.medicine_id}
                         onChange={(e) => handleItemChange(index, 'medicine_id', e.target.value)}
                         error={!!errors[`item_${index}_medicine`]}
+                        helperText={errors[`item_${index}_medicine`]}
                         disabled={isLoading}
+                        placeholder="Select medicine"
                       >
                         <MenuItem value="">Select Medicine</MenuItem>
                         {medicines.map((med) => (
                           <MenuItem key={med.id} value={med.id}>
-                            {med.medicine_name}
+                            {med.medicine_name} - {med.dosage_form}
                           </MenuItem>
                         ))}
                       </TextField>
@@ -252,28 +321,36 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
                       <TextField
                         type="number"
                         size="small"
+                        fullWidth
                         value={item.quantity}
                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                         error={!!errors[`item_${index}_quantity`]}
+                        helperText={errors[`item_${index}_quantity`]}
                         disabled={isLoading}
                         inputProps={{ min: 0, step: 1 }}
+                        placeholder="0"
                       />
                     </TableCell>
                     <TableCell>
                       <TextField
                         type="number"
                         size="small"
+                        fullWidth
                         value={item.unit_price}
                         onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
                         error={!!errors[`item_${index}_price`]}
+                        helperText={errors[`item_${index}_price`]}
                         disabled={isLoading}
                         inputProps={{ min: 0, step: 0.01 }}
+                        placeholder="0.00"
                       />
                     </TableCell>
                     <TableCell>
-                      ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+                      </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center">
                       <IconButton
                         size="small"
                         onClick={() => removeItem(index)}
@@ -285,12 +362,16 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow>
-                  <TableCell colSpan={3} align="right">
-                    <strong>Total Amount:</strong>
+                <TableRow sx={{ bgcolor: 'primary.50' }}>
+                  <TableCell colSpan={4} align="right">
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                      Total Amount:
+                    </Typography>
                   </TableCell>
                   <TableCell colSpan={2}>
-                    <strong>₹{calculateTotal()}</strong>
+                    <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                      ₹{calculateTotal()}
+                    </Typography>
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -298,10 +379,12 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false }) => {
           </TableContainer>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={isLoading}>Cancel</Button>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleClose} disabled={isLoading}>
+          Cancel
+        </Button>
         <Button onClick={handleSubmit} variant="contained" disabled={isLoading}>
-          {isLoading ? 'Creating...' : 'Create PI'}
+          {isLoading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update PI' : 'Create PI')}
         </Button>
       </DialogActions>
     </Dialog>
