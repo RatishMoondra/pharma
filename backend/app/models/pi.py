@@ -25,7 +25,6 @@ class PI(Base):
     partner_vendor: Mapped["Vendor"] = relationship("Vendor", back_populates="pis")
     creator: Mapped["User"] = relationship("User", foreign_keys="[PI.created_by]")
     items: Mapped[List["PIItem"]] = relationship("PIItem", back_populates="pi", cascade="all, delete-orphan")
-    eopa: Mapped[Optional["EOPA"]] = relationship("EOPA", back_populates="pi", uselist=False)
 
 
 class PIItem(Base):
@@ -43,3 +42,4 @@ class PIItem(Base):
     # Relationships
     pi: Mapped["PI"] = relationship("PI", back_populates="items")
     medicine: Mapped["MedicineMaster"] = relationship("MedicineMaster", back_populates="pi_items")
+    eopas: Mapped[List["EOPA"]] = relationship("EOPA", back_populates="pi_item", cascade="all, delete-orphan")

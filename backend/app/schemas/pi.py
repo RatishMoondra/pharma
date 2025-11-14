@@ -4,22 +4,29 @@ from datetime import datetime, date
 from decimal import Decimal
 
 
-class MedicineBasic(BaseModel):
-    """Basic medicine info for nested responses"""
-    id: int
-    medicine_name: str
-    dosage_form: str
-    
-    class Config:
-        from_attributes = True
-
-
 class VendorBasic(BaseModel):
     """Basic vendor info for nested responses"""
     id: int
     vendor_code: str
     vendor_name: str
     vendor_type: str
+    
+    class Config:
+        from_attributes = True
+
+
+class MedicineBasic(BaseModel):
+    """Basic medicine info for nested responses"""
+    id: int
+    medicine_name: str
+    dosage_form: str
+    unit: Optional[str] = None
+    manufacturer_vendor_id: Optional[int] = None
+    rm_vendor_id: Optional[int] = None
+    pm_vendor_id: Optional[int] = None
+    manufacturer_vendor: Optional[VendorBasic] = None
+    rm_vendor: Optional[VendorBasic] = None
+    pm_vendor: Optional[VendorBasic] = None
     
     class Config:
         from_attributes = True
@@ -35,11 +42,23 @@ class PIItemCreate(PIItemBase):
     pass
 
 
+class PIBasic(BaseModel):
+    """Basic PI info for nested responses in EOPA"""
+    id: int
+    pi_number: str
+    pi_date: date
+    partner_vendor: Optional[VendorBasic] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class PIItemResponse(PIItemBase):
     id: int
     total_price: float
     created_at: datetime
     medicine: Optional[MedicineBasic] = None
+    pi: Optional[PIBasic] = None
     
     class Config:
         from_attributes = True

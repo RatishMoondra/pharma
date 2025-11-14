@@ -6,6 +6,7 @@ import logging
 from app.database.session import get_db
 from app.schemas.pi import PICreate, PIResponse
 from app.models.pi import PI, PIItem
+from app.models.product import MedicineMaster
 from app.models.user import User, UserRole
 from app.models.vendor import Vendor, VendorType
 from app.auth.dependencies import get_current_user, require_role
@@ -91,7 +92,9 @@ async def list_pis(
 ):
     """List Proforma Invoices"""
     pis = db.query(PI).options(
-        joinedload(PI.items).joinedload(PIItem.medicine),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.manufacturer_vendor),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.rm_vendor),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.pm_vendor),
         joinedload(PI.partner_vendor)
     ).offset(skip).limit(limit).all()
     
@@ -111,7 +114,9 @@ async def get_pi(
 ):
     """Get PI by ID"""
     pi = db.query(PI).options(
-        joinedload(PI.items).joinedload(PIItem.medicine),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.manufacturer_vendor),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.rm_vendor),
+        joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.pm_vendor),
         joinedload(PI.partner_vendor)
     ).filter(PI.id == pi_id).first()
     if not pi:
