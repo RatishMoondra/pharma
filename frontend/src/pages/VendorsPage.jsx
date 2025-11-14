@@ -16,10 +16,13 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
+  TextField,
+  InputAdornment,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import SearchIcon from '@mui/icons-material/Search'
 import VendorForm from '../components/VendorForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
@@ -31,6 +34,7 @@ const VendorsPage = () => {
   const [editingVendor, setEditingVendor] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchVendors = async () => {
@@ -116,6 +120,20 @@ const VendorsPage = () => {
     return colors[type] || 'default'
   }
 
+  // Filter vendors based on search query
+  const filteredVendors = vendors.filter(vendor => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      vendor.vendor_name?.toLowerCase().includes(query) ||
+      vendor.vendor_code?.toLowerCase().includes(query) ||
+      vendor.vendor_type?.toLowerCase().includes(query) ||
+      vendor.contact_person?.toLowerCase().includes(query) ||
+      vendor.phone?.toLowerCase().includes(query) ||
+      vendor.email?.toLowerCase().includes(query)
+    )
+  })
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -129,28 +147,47 @@ const VendorsPage = () => {
         </Button>
       </Box>
 
+      <TextField
+        fullWidth
+        placeholder="Search by Vendor Name, Code, Type, Contact Person, Phone, Email..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
-      ) : vendors.length === 0 ? (
-        <Alert severity="info">No vendors found. Click "Add Vendor" to create one.</Alert>
+      ) : filteredVendors.length === 0 ? (
+        <Alert severity="info">
+          {vendors.length === 0 
+            ? 'No vendors found. Click "Add Vendor" to create one.' 
+            : 'No vendors match your search criteria.'}
+        </Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell>Vendor Name</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Contact Person</TableCell>
-                <TableCell>Phone</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>GST Number</TableCell>
-                <TableCell align="right">Actions</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor Name</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Contact Person</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Phone</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Email</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>GST Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {vendors.map((vendor) => (
+              {filteredVendors.map((vendor) => (
                 <TableRow key={vendor.id}>
                   <TableCell>{vendor.vendor_name}</TableCell>
                   <TableCell>

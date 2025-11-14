@@ -87,13 +87,13 @@ const MaterialPage = () => {
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
-                <TableRow>
-                  <TableCell>Receipt Number</TableCell>
-                  <TableCell>PO Number</TableCell>
-                  <TableCell>Vendor</TableCell>
-                  <TableCell>Receipt Date</TableCell>
-                  <TableCell>Quantity</TableCell>
-                  <TableCell>Status</TableCell>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Receipt Number</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PO Number</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Receipt Date</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Quantity</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -123,13 +123,13 @@ const MaterialPage = () => {
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell>Medicine</TableCell>
-                <TableCell>Material Type</TableCell>
-                <TableCell>Opening Balance</TableCell>
-                <TableCell>Received</TableCell>
-                <TableCell>Issued</TableCell>
-                <TableCell>Closing Balance</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Material Type</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Opening Balance</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Received</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Issued</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Closing Balance</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

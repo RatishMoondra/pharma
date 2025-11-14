@@ -22,12 +22,15 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  TextField,
+  InputAdornment,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import SearchIcon from '@mui/icons-material/Search'
 import PIForm from '../components/PIForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
@@ -203,6 +206,7 @@ const PIPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [piToDelete, setPiToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchPIs = async () => {
@@ -295,6 +299,21 @@ const PIPage = () => {
     setEditingPI(null)
   }
 
+  // Filter PIs based on search query
+  const filteredPis = pis.filter(pi => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      pi.pi_number?.toLowerCase().includes(query) ||
+      pi.partner_vendor?.vendor_name?.toLowerCase().includes(query) ||
+      pi.partner_vendor?.vendor_code?.toLowerCase().includes(query) ||
+      pi.items?.some(item => 
+        item.medicine?.medicine_name?.toLowerCase().includes(query) ||
+        item.medicine?.dosage_form?.toLowerCase().includes(query)
+      )
+    )
+  })
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -308,12 +327,31 @@ const PIPage = () => {
         </Button>
       </Box>
 
+      <TextField
+        fullWidth
+        placeholder="Search by PI Number, Vendor Name, Medicine Name..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
-      ) : pis.length === 0 ? (
-        <Alert severity="info">No PIs found. Click "Create PI" to create one.</Alert>
+      ) : filteredPis.length === 0 ? (
+        <Alert severity="info">
+          {pis.length === 0 
+            ? 'No PIs found. Click "Create PI" to create one.' 
+            : 'No PIs match your search criteria.'}
+        </Alert>
       ) : (
         <TableContainer component={Paper} elevation={2}>
           <Table>
@@ -329,7 +367,7 @@ const PIPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {pis.map((pi, index) => (
+              {filteredPis.map((pi, index) => (
                 <PIRow 
                   key={pi.id} 
                   pi={pi} 

@@ -69,11 +69,11 @@ const PORow = ({ po }) => {
               </Typography>
               <Table size="small">
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Item</TableCell>
-                    <TableCell>Quantity</TableCell>
-                    <TableCell>Unit Price</TableCell>
-                    <TableCell>Total</TableCell>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Item</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Quantity</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Unit Price</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -157,14 +157,14 @@ const POPage = () => {
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>PO Number</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Vendor</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Total Amount</TableCell>
-                <TableCell>Status</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} />
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PO Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Amount</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

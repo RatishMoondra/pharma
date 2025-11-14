@@ -17,10 +17,13 @@ import {
   CircularProgress,
   Tabs,
   Tab,
+  TextField,
+  InputAdornment,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import SearchIcon from '@mui/icons-material/Search'
 import ProductForm from '../components/ProductForm'
 import MedicineForm from '../components/MedicineForm'
 import api from '../services/api'
@@ -35,6 +38,7 @@ const ProductsPage = () => {
   const [editingItem, setEditingItem] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchProducts = async () => {
@@ -154,6 +158,32 @@ const ProductsPage = () => {
     }
   }
 
+  // Filter products based on search query
+  const filteredProducts = products.filter(product => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      product.product_name?.toLowerCase().includes(query) ||
+      product.product_code?.toLowerCase().includes(query) ||
+      product.category?.toLowerCase().includes(query)
+    )
+  })
+
+  // Filter medicines based on search query
+  const filteredMedicines = medicines.filter(medicine => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      medicine.medicine_name?.toLowerCase().includes(query) ||
+      medicine.medicine_code?.toLowerCase().includes(query) ||
+      medicine.dosage_form?.toLowerCase().includes(query) ||
+      medicine.strength?.toLowerCase().includes(query) ||
+      medicine.manufacturer_vendor?.vendor_name?.toLowerCase().includes(query) ||
+      medicine.rm_vendor?.vendor_name?.toLowerCase().includes(query) ||
+      medicine.pm_vendor?.vendor_name?.toLowerCase().includes(query)
+    )
+  })
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -167,32 +197,53 @@ const ProductsPage = () => {
         </Button>
       </Box>
 
-      <Tabs value={tab} onChange={(e, newValue) => setTab(newValue)} sx={{ mb: 3 }}>
+      <Tabs value={tab} onChange={(e, newValue) => { setTab(newValue); setSearchQuery('') }} sx={{ mb: 3 }}>
         <Tab label="Product Master" />
         <Tab label="Medicine Master" />
       </Tabs>
+
+      <TextField
+        fullWidth
+        placeholder={tab === 0 
+          ? "Search by Product Name, Code, Category..." 
+          : "Search by Medicine Name, Code, Dosage Form, Strength, Vendor..."}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
       ) : tab === 0 ? (
-        products.length === 0 ? (
-          <Alert severity="info">No products found. Click "Add Product" to create one.</Alert>
+        filteredProducts.length === 0 ? (
+          <Alert severity="info">
+            {products.length === 0 
+              ? 'No products found. Click "Add Product" to create one.' 
+              : 'No products match your search criteria.'}
+          </Alert>
         ) : (
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
-                <TableRow>
-                  <TableCell>Product Code</TableCell>
-                  <TableCell>Product Name</TableCell>
-                  <TableCell>Unit of Measure</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product Code</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product Name</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Unit of Measure</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.product_code}</TableCell>
                     <TableCell>{product.product_name}</TableCell>
@@ -226,20 +277,20 @@ const ProductsPage = () => {
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell>Medicine Name</TableCell>
-                <TableCell>Product</TableCell>
-                <TableCell>Dosage Form</TableCell>
-                <TableCell>Strength</TableCell>
-                <TableCell>Pack Size</TableCell>
-                <TableCell>Manufacturer</TableCell>
-                <TableCell>RM Vendor</TableCell>
-                <TableCell>PM Vendor</TableCell>
-                <TableCell align="right">Actions</TableCell>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine Name</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Strength</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Pack Size</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Manufacturer</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>RM Vendor</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PM Vendor</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {medicines.map((medicine) => (
+              {filteredMedicines.map((medicine) => (
                 <TableRow key={medicine.id}>
                   <TableCell>{medicine.medicine_name}</TableCell>
                   <TableCell>{medicine.product?.product_name || '-'}</TableCell>

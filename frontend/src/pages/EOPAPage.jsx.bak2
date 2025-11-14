@@ -22,8 +22,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  TextField,
-  InputAdornment,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -31,7 +29,6 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import SearchIcon from '@mui/icons-material/Search'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import EOPAForm from '../components/EOPAForm'
 import api from '../services/api'
@@ -63,9 +60,17 @@ const getVendorTypeLabel = (type) => {
   }
 }
 
-const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
+const PIItemRow = ({ piItem, eopas, onCreateEOPA, onApprove, onDelete }) => {
   const [open, setOpen] = useState(false)
-  const eopas = piItem.eopas || []
+
+  // Group EOPAs by vendor type
+  const eopaByVendorType = {
+    MANUFACTURER: eopas.find(e => e.vendor_type === 'MANUFACTURER'),
+    RM: eopas.find(e => e.vendor_type === 'RM'),
+    PM: eopas.find(e => e.vendor_type === 'PM'),
+  }
+
+  const hasEOPAs = eopas.length > 0
 
   return (
     <>
@@ -76,59 +81,39 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
         }}
       >
         <TableCell>
-          {eopas.length > 0 && (
+          {hasEOPAs && (
             <IconButton size="small" onClick={() => setOpen(!open)}>
               {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
             </IconButton>
           )}
         </TableCell>
         <TableCell>
-          <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'primary.main' }}>
-            {piItem.pi?.pi_number || '-'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {piItem.pi?.partner_vendor?.vendor_name || ''}
-          </Typography>
-        </TableCell>
-        <TableCell>
           <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-            {piItem.medicine?.medicine_name || '-'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {piItem.medicine?.dosage_form || ''}
+            {piItem.medicine?.medicine_name}
           </Typography>
         </TableCell>
+        <TableCell align="right">{piItem.quantity}</TableCell>
         <TableCell align="right">
-          <Typography variant="body2">
-            {piItem.quantity?.toLocaleString('en-IN')}
-          </Typography>
+          ₹{parseFloat(piItem.unit_price).toFixed(2)}
         </TableCell>
         <TableCell align="right">
-          <Typography variant="body2">
-            ₹{piItem.unit_price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Typography>
-        </TableCell>
-        <TableCell align="right">
-          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-            ₹{piItem.total_price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Typography>
+          ₹{parseFloat(piItem.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
         </TableCell>
         <TableCell>
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-            {eopas.length > 0 ? (
-              eopas.map(eopa => (
-                <Chip
-                  key={eopa.id}
-                  size="small"
-                  label={getVendorTypeLabel(eopa.vendor_type)}
-                  icon={getVendorTypeIcon(eopa.vendor_type)}
-                  color={
-                    eopa.status === 'APPROVED' ? 'success' :
-                    eopa.status === 'REJECTED' ? 'error' : 'warning'
-                  }
-                />
-              ))
-            ) : (
+            {eopas.map(eopa => (
+              <Chip
+                key={eopa.id}
+                size="small"
+                label={getVendorTypeLabel(eopa.vendor_type)}
+                icon={getVendorTypeIcon(eopa.vendor_type)}
+                color={
+                  eopa.status === 'APPROVED' ? 'success' :
+                  eopa.status === 'REJECTED' ? 'error' : 'warning'
+                }
+              />
+            ))}
+            {eopas.length === 0 && (
               <Chip label="No EOPAs" size="small" color="default" />
             )}
           </Box>
@@ -144,35 +129,28 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
           </Button>
         </TableCell>
       </TableRow>
-      {eopas.length > 0 && (
+      
+      {hasEOPAs && (
         <TableRow>
-          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+          <TableCell colSpan={7} sx={{ p: 0, borderBottom: 'none' }}>
             <Collapse in={open} timeout="auto" unmountOnExit>
-              <Box sx={{ margin: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" gutterBottom component="div">
-                    EOPAs for this PI Item
-                  </Typography>
-                  <Chip 
-                    label={`${eopas.length} EOPA${eopas.length !== 1 ? 's' : ''}`}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                </Box>
+              <Box sx={{ m: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  EOPAs for this PI Item ({eopas.length})
+                </Typography>
+                
                 <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={50}>#</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>EOPA Number</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor Type</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor Name</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Quantity</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Est. Unit Price</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Est. Total</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
+                      <TableRow sx={{ bgcolor: 'primary.100' }}>
+                        <TableCell><strong>EOPA Number</strong></TableCell>
+                        <TableCell><strong>Vendor Type</strong></TableCell>
+                        <TableCell><strong>Vendor Name</strong></TableCell>
+                        <TableCell align="right"><strong>Quantity</strong></TableCell>
+                        <TableCell align="right"><strong>Est. Unit Price</strong></TableCell>
+                        <TableCell align="right"><strong>Est. Total</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                        <TableCell align="right"><strong>Actions</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -184,9 +162,8 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
                             '&:hover': { bgcolor: 'primary.50' }
                           }}
                         >
-                          <TableCell>{idx + 1}</TableCell>
                           <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                            <Typography variant="body2" color="primary.main" fontWeight="medium">
                               {eopa.eopa_number}
                             </Typography>
                           </TableCell>
@@ -202,24 +179,13 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
                             <Typography variant="body2">
                               {eopa.vendor?.vendor_name || '-'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {eopa.vendor?.vendor_code || ''}
-                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">{eopa.quantity}</TableCell>
+                          <TableCell align="right">
+                            ₹{parseFloat(eopa.estimated_unit_price).toFixed(2)}
                           </TableCell>
                           <TableCell align="right">
-                            <Typography variant="body2">
-                              {eopa.quantity?.toLocaleString('en-IN')}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2">
-                              ₹{eopa.estimated_unit_price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.main' }}>
-                              ₹{eopa.estimated_total?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Typography>
+                            ₹{parseFloat(eopa.estimated_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -233,12 +199,12 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
                           </TableCell>
                           <TableCell align="right">
                             {eopa.status === 'PENDING' && (
-                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                                 <IconButton
                                   size="small"
                                   color="success"
-                                  onClick={() => onApprove(eopa)}
-                                  title="Approve EOPA"
+                                  onClick={() => onApprove(eopa.id)}
+                                  title="Approve"
                                 >
                                   <CheckCircleIcon fontSize="small" />
                                 </IconButton>
@@ -246,11 +212,14 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
                                   size="small"
                                   color="error"
                                   onClick={() => onDelete(eopa)}
-                                  title="Delete EOPA"
+                                  title="Delete"
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
                               </Box>
+                            )}
+                            {eopa.status === 'APPROVED' && (
+                              <Chip label="Approved" size="small" color="success" icon={<CheckCircleIcon />} />
                             )}
                           </TableCell>
                         </TableRow>
@@ -258,9 +227,10 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
                     </TableBody>
                   </Table>
                 </TableContainer>
+
                 {eopas.some(e => e.remarks) && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                  <Box sx={{ mt: 2, p: 1.5, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.main' }}>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">
                       REMARKS
                     </Typography>
                     {eopas.filter(e => e.remarks).map(eopa => (
@@ -279,8 +249,65 @@ const PIItemRow = ({ piItem, onCreateEOPA, onApprove, onDelete }) => {
   )
 }
 
+const PIAccordion = ({ pi, piItems, eopas, onCreateEOPA, onApprove, onDelete }) => {
+  return (
+    <Accordion sx={{ mb: 2, boxShadow: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'primary.50' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
+          <Box>
+            <Typography variant="h6" color="primary.main">
+              {pi.pi_number}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Partner Vendor: {pi.partner_vendor?.vendor_name} | Date: {new Date(pi.pi_date).toLocaleDateString()}
+            </Typography>
+          </Box>
+          <Chip 
+            label={`${piItems.length} item${piItems.length !== 1 ? 's' : ''}`}
+            color="primary"
+            size="small"
+          />
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails>
+        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'grey.200' }}>
+                <TableCell width={50} />
+                <TableCell><strong>Medicine</strong></TableCell>
+                <TableCell align="right"><strong>Quantity</strong></TableCell>
+                <TableCell align="right"><strong>PI Unit Price</strong></TableCell>
+                <TableCell align="right"><strong>PI Total</strong></TableCell>
+                <TableCell><strong>EOPA Status</strong></TableCell>
+                <TableCell align="right" width={150}><strong>Actions</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {piItems.map(piItem => {
+                const itemEopas = eopas.filter(e => e.pi_item_id === piItem.id)
+                return (
+                  <PIItemRow
+                    key={piItem.id}
+                    piItem={piItem}
+                    eopas={itemEopas}
+                    onCreateEOPA={onCreateEOPA}
+                    onApprove={onApprove}
+                    onDelete={onDelete}
+                  />
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </AccordionDetails>
+    </Accordion>
+  )
+}
+
 const EOPAPage = () => {
-  const [piItems, setPiItems] = useState([])
+  const [pis, setPis] = useState([])
+  const [eopas, setEopas] = useState([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [selectedPIItem, setSelectedPIItem] = useState(null)
@@ -289,7 +316,6 @@ const EOPAPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [eopaToDelete, setEopaToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchData = async () => {
@@ -298,40 +324,15 @@ const EOPAPage = () => {
       
       // Fetch PIs with items
       const piResponse = await api.get('/api/pi/')
-      if (!piResponse.data.success) {
-        throw new Error('Failed to fetch PIs')
+      if (piResponse.data.success) {
+        setPis(piResponse.data.data)
       }
-
-      const pis = piResponse.data.data
 
       // Fetch all EOPAs
       const eopaResponse = await api.get('/api/eopa/')
-      if (!eopaResponse.data.success) {
-        throw new Error('Failed to fetch EOPAs')
+      if (eopaResponse.data.success) {
+        setEopas(eopaResponse.data.data)
       }
-
-      const eopas = eopaResponse.data.data
-
-      // Flatten PI items and attach PI info and EOPAs
-      const allPIItems = []
-      pis.forEach(pi => {
-        if (pi.items && pi.items.length > 0) {
-          pi.items.forEach(item => {
-            allPIItems.push({
-              ...item,
-              pi: {
-                id: pi.id,
-                pi_number: pi.pi_number,
-                pi_date: pi.pi_date,
-                partner_vendor: pi.partner_vendor
-              },
-              eopas: eopas.filter(eopa => eopa.pi_item_id === item.id)
-            })
-          })
-        }
-      })
-
-      setPiItems(allPIItems)
     } catch (err) {
       handleApiError(err)
     } finally {
@@ -343,23 +344,17 @@ const EOPAPage = () => {
     fetchData()
   }, [])
 
-  const handleCreateEOPA = (piItem) => {
-    setSelectedPIItem(piItem)
-    setFormOpen(true)
-  }
-
   const handleSubmit = async (formData) => {
     try {
       setSubmitting(true)
       clearError()
       
-      const response = await api.post('/api/eopa/bulk-create', {
-        ...formData,
-        pi_item_id: selectedPIItem.id
-      })
+      // Use bulk create endpoint
+      const response = await api.post('/api/eopa/bulk-create', formData)
       
       if (response.data.success) {
-        setSuccessMessage('EOPA(s) created successfully')
+        const count = response.data.data?.length || 0
+        setSuccessMessage(`${count} EOPA(s) created successfully`)
         fetchData()
         setFormOpen(false)
         setSelectedPIItem(null)
@@ -371,20 +366,9 @@ const EOPAPage = () => {
     }
   }
 
-  const handleApprove = async (eopa) => {
-    try {
-      clearError()
-      const response = await api.post(`/api/eopa/${eopa.id}/approve`, {
-        approved: true
-      })
-      
-      if (response.data.success) {
-        setSuccessMessage('EOPA approved successfully')
-        fetchData()
-      }
-    } catch (err) {
-      handleApiError(err)
-    }
+  const handleCreateEOPA = (piItem) => {
+    setSelectedPIItem(piItem)
+    setFormOpen(true)
   }
 
   const handleDeleteClick = (eopa) => {
@@ -423,83 +407,51 @@ const EOPAPage = () => {
     setSelectedPIItem(null)
   }
 
-  // Filter PI items based on search query
-  const filteredPiItems = piItems.filter(piItem => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      piItem.pi?.pi_number?.toLowerCase().includes(query) ||
-      piItem.pi?.partner_vendor?.vendor_name?.toLowerCase().includes(query) ||
-      piItem.pi?.partner_vendor?.vendor_code?.toLowerCase().includes(query) ||
-      piItem.medicine?.medicine_name?.toLowerCase().includes(query) ||
-      piItem.medicine?.dosage_form?.toLowerCase().includes(query) ||
-      piItem.eopas?.some(eopa => 
-        eopa.eopa_number?.toLowerCase().includes(query) ||
-        eopa.vendor?.vendor_name?.toLowerCase().includes(query) ||
-        eopa.vendor?.vendor_code?.toLowerCase().includes(query)
-      )
-    )
-  })
+  const handleApprove = async (eopaId) => {
+    if (!window.confirm('Are you sure you want to approve this EOPA?')) return
+
+    try {
+      const response = await api.post(`/api/eopa/${eopaId}/approve`, { approved: true })
+      if (response.data.success) {
+        setSuccessMessage('EOPA approved successfully')
+        fetchData()
+      }
+    } catch (err) {
+      handleApiError(err)
+    }
+  }
 
   return (
     <Container maxWidth="xl">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">EOPA (Estimated Order & Price Approval)</Typography>
+        <Box>
+          <Typography variant="h4">EOPA Management</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Estimated Order & Price Approval - Organized by PI and Line Items
+          </Typography>
+        </Box>
       </Box>
-
-      <TextField
-        fullWidth
-        placeholder="Search by PI Number, EOPA Number, Vendor Name, Medicine Name..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ mb: 3 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-      />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
-      ) : filteredPiItems.length === 0 ? (
-        <Alert severity="info">
-          {piItems.length === 0 
-            ? 'No PI items found. Create a PI first.' 
-            : 'No PI items match your search criteria.'}
-        </Alert>
+      ) : pis.length === 0 ? (
+        <Alert severity="info">No PIs found. Create a PI with items to generate EOPAs.</Alert>
       ) : (
-        <TableContainer component={Paper} elevation={2}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white' }} width={50} />
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PI Number</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Quantity</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">PI Unit Price</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">PI Total</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>EOPA Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={150} align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredPiItems.map((piItem) => (
-                <PIItemRow 
-                  key={piItem.id} 
-                  piItem={piItem}
-                  onCreateEOPA={handleCreateEOPA}
-                  onApprove={handleApprove}
-                  onDelete={handleDeleteClick}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <>
+          {pis.map(pi => (
+            <PIAccordion
+              key={pi.id}
+              pi={pi}
+              piItems={pi.items || []}
+              eopas={eopas}
+              onCreateEOPA={handleCreateEOPA}
+              onApprove={handleApprove}
+              onDelete={handleDeleteClick}
+            />
+          ))}
+        </>
       )}
 
       <EOPAForm
