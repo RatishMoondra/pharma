@@ -12,6 +12,7 @@ from email import encoders
 from typing import Optional, List
 from io import BytesIO
 import os
+from sqlalchemy.orm import Session
 
 from app.models.po import PurchaseOrder
 from app.services.pdf_service import POPDFService
@@ -20,16 +21,44 @@ from app.services.pdf_service import POPDFService
 class EmailService:
     """Send emails with PO PDFs"""
     
-    def __init__(self):
-        # SMTP Configuration (from environment variables)
+    def __init__(self, db: Session = None):
+        self.db = db
+        
+        # Load configuration from database if available, otherwise use environment variables
+        if db:
+            try:
+                from app.services.configuration_service import ConfigurationService
+                config_service = ConfigurationService(db)
+                
+                # Get SMTP settings from configuration
+                smtp_host_config = config_service.get_config("smtp_host")
+                smtp_port_config = config_service.get_config("smtp_port")
+                smtp_username_config = config_service.get_config("smtp_username")
+                smtp_password_config = config_service.get_config("smtp_password")
+                email_sender_config = config_service.get_config("email_sender")
+                
+                self.smtp_host = smtp_host_config.get("value", "smtp.gmail.com")
+                self.smtp_port = smtp_port_config.get("value", 587)
+                self.smtp_username = smtp_username_config.get("value", "")
+                self.smtp_password = smtp_password_config.get("value", "")
+                self.from_email = email_sender_config.get("email", self.smtp_username)
+                self.from_name = email_sender_config.get("name", "PharmaCo Procurement")
+            except Exception:
+                # Fallback to environment variables if configuration service fails
+                self._load_from_env()
+        else:
+            self._load_from_env()
+        
+        self.pdf_service = POPDFService(db)
+    
+    def _load_from_env(self):
+        """Load SMTP configuration from environment variables"""
         self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
         self.from_email = os.getenv("FROM_EMAIL", self.smtp_username)
         self.from_name = os.getenv("FROM_NAME", "PharmaCo Procurement")
-        
-        self.pdf_service = POPDFService()
     
     def send_po_email(
         self,

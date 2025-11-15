@@ -1,10 +1,29 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import logging
+
+logger = logging.getLogger("pharma")
 
 
-def get_financial_year():
-    """Get current financial year in YY-YY format (e.g., 24-25)"""
+def get_financial_year(db: Session = None):
+    """
+    Get current financial year in YY-YY format (e.g., 24-25)
+    
+    If db session provided, reads fiscal year config from database.
+    Otherwise, calculates from current date (April = start of FY).
+    """
+    if db:
+        try:
+            # Lazy import to avoid circular dependency
+            from app.services.configuration_service import ConfigurationService
+            config_service = ConfigurationService(db)
+            fiscal_year_config = config_service.get_config("fiscal_year")
+            return fiscal_year_config.get("value", "24-25")
+        except Exception as e:
+            logger.warning(f"Failed to get fiscal year from config, using calculated: {e}")
+    
+    # Fallback: calculate from current date
     now = datetime.now()
     if now.month >= 4:  # April onwards
         return f"{now.year % 100:02d}-{(now.year + 1) % 100:02d}"
@@ -13,11 +32,16 @@ def get_financial_year():
 
 
 def generate_pi_number(db: Session) -> str:
-    """Generate PI number: PI/YY-YY/0001"""
+    """Generate PI number using configured format: PI/{FY}/{SEQ:04d}"""
     from app.models.pi import PI
+    from app.services.configuration_service import ConfigurationService  # Lazy import
     
-    fy = get_financial_year()
-    prefix = f"PI/{fy}/"
+    config_service = ConfigurationService(db)
+    numbering = config_service.get_document_numbering()
+    format_template = numbering.get("pi_format", "PI/{FY}/{SEQ:04d}")
+    
+    fy = get_financial_year(db)
+    prefix = format_template.replace("{FY}", fy).split("{SEQ")[0]
     
     # Get last number for this financial year
     last_pi = db.query(PI).filter(
@@ -34,11 +58,16 @@ def generate_pi_number(db: Session) -> str:
 
 
 def generate_eopa_number(db: Session) -> str:
-    """Generate EOPA number: EOPA/YY-YY/0001"""
+    """Generate EOPA number using configured format: EOPA/{FY}/{SEQ:04d}"""
     from app.models.eopa import EOPA
+    from app.services.configuration_service import ConfigurationService  # Lazy import
     
-    fy = get_financial_year()
-    prefix = f"EOPA/{fy}/"
+    config_service = ConfigurationService(db)
+    numbering = config_service.get_document_numbering()
+    format_template = numbering.get("eopa_format", "EOPA/{FY}/{SEQ:04d}")
+    
+    fy = get_financial_year(db)
+    prefix = format_template.replace("{FY}", fy).split("{SEQ")[0]
     
     last_eopa = db.query(EOPA).filter(
         EOPA.eopa_number.like(f"{prefix}%")
@@ -55,24 +84,35 @@ def generate_eopa_number(db: Session) -> str:
 
 def generate_po_number(db: Session, po_type: str, medicine_sequence: int = None) -> str:
     """
-    Generate PO number: PO/YY-YY/TYPE/SEQ/0001
-    Example: PO/24-25/FG/1/0001, PO/24-25/RM/2/0001
+    Generate PO number using configured format
+    Default formats:
+    - RM: PO/RM/{FY}/{SEQ:04d}
+    - PM: PO/PM/{FY}/{SEQ:04d}
+    - FG: PO/FG/{FY}/{SEQ:04d}
     
     Args:
         db: Database session
         po_type: Type of PO (FG, RM, PM)
-        medicine_sequence: Sequence number of medicine in EOPA (1, 2, 3...)
+        medicine_sequence: Sequence number of medicine in EOPA (optional, for future use)
     """
     from app.models.po import PurchaseOrder
+    from app.services.configuration_service import ConfigurationService  # Lazy import
     
-    fy = get_financial_year()
+    config_service = ConfigurationService(db)
+    numbering = config_service.get_document_numbering()
+    
+    # Get format based on PO type
+    format_key = f"po_{po_type.lower()}_format"
+    format_template = numbering.get(format_key, f"PO/{po_type}/{{FY}}/{{SEQ:04d}}")
+    
+    fy = get_financial_year(db)
     
     if medicine_sequence:
-        # New format: PO/YY-YY/TYPE/SEQ/0001
+        # New format with medicine sequence: PO/YY-YY/TYPE/SEQ/0001
         prefix = f"PO/{fy}/{po_type}/{medicine_sequence}/"
     else:
-        # Fallback to old format: PO/TYPE/YY-YY/0001
-        prefix = f"PO/{po_type}/{fy}/"
+        # Use configured format
+        prefix = format_template.replace("{FY}", fy).split("{SEQ")[0]
     
     last_po = db.query(PurchaseOrder).filter(
         PurchaseOrder.po_number.like(f"{prefix}%")

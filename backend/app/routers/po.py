@@ -298,7 +298,7 @@ async def download_po_pdf(
         raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
     
     try:
-        pdf_service = POPDFService()
+        pdf_service = POPDFService(db)  # Pass db session for config access
         pdf_buffer = pdf_service.generate_po_pdf(po)
         
         logger.info({
@@ -362,7 +362,7 @@ async def send_po_email(
         raise AppException("to_emails is required and must be a list", "ERR_VALIDATION", 400)
     
     try:
-        email_service = EmailService()
+        email_service = EmailService(db)
         result = email_service.send_po_email(
             po=po,
             to_emails=to_emails,

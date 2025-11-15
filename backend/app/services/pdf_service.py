@@ -13,24 +13,72 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from io import BytesIO
 from datetime import datetime
 from typing import Optional
+from sqlalchemy.orm import Session
 
 from app.models.po import PurchaseOrder
+from app.services.configuration_service import ConfigurationService
+import logging
+
+logger = logging.getLogger("pharma")
 
 
 class POPDFService:
     """Generate Purchase Order PDFs"""
     
-    # Company details (configure these)
-    COMPANY_NAME = "PharmaCo Industries Ltd."
-    COMPANY_ADDRESS = "123 Pharma Street, Medical District"
-    COMPANY_CITY = "Mumbai, Maharashtra 400001"
-    COMPANY_PHONE = "+91 22 1234 5678"
-    COMPANY_EMAIL = "procurement@pharmaco.com"
-    COMPANY_GST = "27AABCP1234F1Z5"
-    
-    def __init__(self):
+    def __init__(self, db: Session = None):
+        self.db = db
         self.styles = getSampleStyleSheet()
         self._create_custom_styles()
+        self._load_company_config()
+    
+    def _load_company_config(self):
+        """Load company details from configuration service"""
+        if self.db:
+            try:
+                config_service = ConfigurationService(self.db)
+                
+                # Get individual configs
+                company_name = config_service.get_config("company_name")
+                company_address = config_service.get_config("company_address")
+                currency = config_service.get_config("default_currency")
+                
+                self.COMPANY_NAME = company_name.get("value", "PharmaCo Industries Ltd.")
+                
+                # Handle address (could be structured object or string)
+                if isinstance(company_address, dict):
+                    if "street" in company_address:
+                        self.COMPANY_ADDRESS = company_address.get("street", "")
+                        self.COMPANY_CITY = f"{company_address.get('city', '')}, {company_address.get('state', '')} {company_address.get('postal_code', '')}"
+                    else:
+                        self.COMPANY_ADDRESS = company_address.get("value", "123 Pharma Street, Medical District")
+                        self.COMPANY_CITY = "Mumbai, Maharashtra 400001"
+                else:
+                    self.COMPANY_ADDRESS = "123 Pharma Street, Medical District"
+                    self.COMPANY_CITY = "Mumbai, Maharashtra 400001"
+                
+                self.CURRENCY_SYMBOL = currency.get("symbol", "₹")
+                
+                # Static fields (can be added to config later)
+                self.COMPANY_PHONE = "+91 22 1234 5678"
+                self.COMPANY_EMAIL = "procurement@pharmaco.com"
+                self.COMPANY_GST = "27AABCP1234F1Z5"
+                
+                logger.info("PDF service loaded company config from database")
+            except Exception as e:
+                logger.warning(f"Failed to load company config, using defaults: {e}")
+                self._set_default_company_info()
+        else:
+            self._set_default_company_info()
+    
+    def _set_default_company_info(self):
+        """Set default company information"""
+        self.COMPANY_NAME = "PharmaCo Industries Ltd."
+        self.COMPANY_ADDRESS = "123 Pharma Street, Medical District"
+        self.COMPANY_CITY = "Mumbai, Maharashtra 400001"
+        self.COMPANY_PHONE = "+91 22 1234 5678"
+        self.COMPANY_EMAIL = "procurement@pharmaco.com"
+        self.COMPANY_GST = "27AABCP1234F1Z5"
+        self.CURRENCY_SYMBOL = "₹"
     
     def _create_custom_styles(self):
         """Create custom paragraph styles"""
