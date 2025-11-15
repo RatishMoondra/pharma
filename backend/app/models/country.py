@@ -17,8 +17,8 @@ class Country(Base):
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
-    vendors: Mapped[list["Vendor"]] = relationship(back_populates="country", cascade="all, delete-orphan")
-    pis: Mapped[list["PI"]] = relationship(back_populates="country", cascade="all, delete-orphan")
+    vendors: Mapped[list["Vendor"]] = relationship(back_populates="country")
+    pis: Mapped[list["PI"]] = relationship(back_populates="country")
 
     def __repr__(self):
         return f"<Country(id={self.id}, code={self.country_code}, name={self.country_name}, language={self.language})>"

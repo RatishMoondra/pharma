@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 import logging
+from typing import List
 
 from app.database.session import get_db
 from app.schemas.po import POCreate, POResponse
@@ -13,6 +15,8 @@ from app.auth.dependencies import get_current_user, require_role
 from app.utils.number_generator import generate_po_number
 from app.exceptions.base import AppException
 from app.services.po_service import POGenerationService
+from app.services.pdf_service import POPDFService
+from app.services.email_service import EmailService
 
 router = APIRouter()
 logger = logging.getLogger("pharma")
@@ -271,3 +275,185 @@ async def update_po(
         "data": POResponse.model_validate(po).model_dump(),
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@router.get("/{po_id}/download-pdf", dependencies=[Depends(get_current_user)])
+async def download_po_pdf(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate and download PO PDF.
+    
+    Returns PDF file with professional letterhead and formatting.
+    """
+    # Get PO with all relationships
+    po = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.vendor),
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+    ).filter(PurchaseOrder.id == po_id).first()
+    
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    try:
+        pdf_service = POPDFService()
+        pdf_buffer = pdf_service.generate_po_pdf(po)
+        
+        logger.info({
+            "event": "PO_PDF_GENERATED",
+            "po_id": po.id,
+            "po_number": po.po_number,
+            "user": current_user.username
+        })
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={po.po_number}.pdf"
+            }
+        )
+    
+    except Exception as e:
+        logger.error({
+            "event": "PO_PDF_GENERATION_ERROR",
+            "po_id": po_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            f"Failed to generate PDF: {str(e)}",
+            "ERR_PDF_GENERATION",
+            500
+        )
+
+
+@router.post("/{po_id}/send-email", dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def send_po_email(
+    po_id: int,
+    email_data: dict,  # {"to_emails": ["vendor@example.com"], "cc_emails": [], "subject": "", "body": ""}
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Send PO email to vendor with PDF attachment.
+    
+    Args:
+        po_id: PO ID
+        email_data: dict with to_emails (required), cc_emails (optional), subject (optional), body (optional)
+    
+    Returns:
+        Success/failure status with message
+    """
+    # Get PO with all relationships
+    po = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.vendor),
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+    ).filter(PurchaseOrder.id == po_id).first()
+    
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    # Validate email data
+    to_emails = email_data.get("to_emails", [])
+    if not to_emails or not isinstance(to_emails, list):
+        raise AppException("to_emails is required and must be a list", "ERR_VALIDATION", 400)
+    
+    try:
+        email_service = EmailService()
+        result = email_service.send_po_email(
+            po=po,
+            to_emails=to_emails,
+            cc_emails=email_data.get("cc_emails"),
+            subject=email_data.get("subject"),
+            body=email_data.get("body"),
+            attach_pdf=email_data.get("attach_pdf", True)
+        )
+        
+        if result["success"]:
+            logger.info({
+                "event": "PO_EMAIL_SENT",
+                "po_id": po.id,
+                "po_number": po.po_number,
+                "to_emails": to_emails,
+                "user": current_user.username
+            })
+        else:
+            logger.warning({
+                "event": "PO_EMAIL_FAILED",
+                "po_id": po.id,
+                "po_number": po.po_number,
+                "error": result["message"],
+                "user": current_user.username
+            })
+        
+        return {
+            "success": result["success"],
+            "message": result["message"],
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    except Exception as e:
+        logger.error({
+            "event": "PO_EMAIL_ERROR",
+            "po_id": po_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            f"Failed to send email: {str(e)}",
+            "ERR_EMAIL_SEND",
+            500
+        )
+
+
+@router.post("/test-email", dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def test_email_configuration(
+    test_data: dict,  # {"email": "test@example.com"}
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test email configuration by sending a test email.
+    
+    Args:
+        test_data: dict with email address
+    
+    Returns:
+        Success/failure status
+    """
+    email = test_data.get("email")
+    if not email:
+        raise AppException("Email address is required", "ERR_VALIDATION", 400)
+    
+    try:
+        email_service = EmailService()
+        result = email_service.send_test_email(email)
+        
+        logger.info({
+            "event": "EMAIL_TEST_SENT",
+            "email": email,
+            "success": result["success"],
+            "user": current_user.username
+        })
+        
+        return {
+            "success": result["success"],
+            "message": result["message"],
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    except Exception as e:
+        logger.error({
+            "event": "EMAIL_TEST_ERROR",
+            "email": email,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            f"Email test failed: {str(e)}",
+            "ERR_EMAIL_TEST",
+            500
+        )
+

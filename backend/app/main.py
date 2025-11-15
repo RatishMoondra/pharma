@@ -7,7 +7,7 @@ import uuid
 
 from app.database.session import engine
 from app.models import base
-from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice
+from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice, analytics
 from app.routers import countries as countries_router
 from app.exceptions.handlers import app_exception_handler, validation_exception_handler
 from app.exceptions.base import AppException
@@ -66,6 +66,7 @@ app.include_router(eopa.router, prefix="/api/eopa", tags=["EOPA"])
 app.include_router(po.router, prefix="/api/po", tags=["Purchase Orders"])
 app.include_router(invoice.router, prefix="/api/invoice", tags=["Vendor Invoices"])
 app.include_router(material.router, prefix="/api/material", tags=["Material Management"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics & Insights"])
 
 @app.get("/")
 async def root():

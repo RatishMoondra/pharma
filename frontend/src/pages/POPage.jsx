@@ -46,11 +46,13 @@ import {
   Receipt as ReceiptIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  Email as EmailIcon,
 } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
-const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit }) => {
+const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, onSendEmail }) => {
   const [open, setOpen] = useState(false)
   const [tabValue, setTabValue] = useState(0)
   const [editingVendor, setEditingVendor] = useState(false)
@@ -409,11 +411,31 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit }) => {
         <TableCell align="center">
           <Chip label={po.items?.length || 0} size="small" />
         </TableCell>
+        <TableCell align="right">
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton 
+              size="small" 
+              color="error"
+              onClick={() => onDownloadPDF(po)}
+              title="Download PDF"
+            >
+              <PictureAsPdfIcon fontSize="small" />
+            </IconButton>
+            <IconButton 
+              size="small" 
+              color="primary"
+              onClick={() => onSendEmail(po)}
+              title="Send Email"
+            >
+              <EmailIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </TableCell>
       </TableRow>
 
       {/* Expandable Section with Tabs */}
       <TableRow>
-        <TableCell colSpan={8} sx={{ p: 0, borderBottom: 'none' }}>
+        <TableCell colSpan={9} sx={{ p: 0, borderBottom: 'none' }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ m: 2 }}>
               <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
@@ -887,6 +909,66 @@ const POPage = () => {
     }
   }
 
+  const handleDownloadPDF = async (po) => {
+    try {
+      clearError()
+      const response = await api.get(`/api/po/${po.id}/download-pdf`, {
+        responseType: 'blob'
+      })
+      
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${po.po_number}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      setSuccessMessage(`PDF downloaded: ${po.po_number}.pdf`)
+    } catch (err) {
+      console.error('Error downloading PDF:', err)
+      handleApiError(err)
+    }
+  }
+
+  const handleSendEmail = async (po) => {
+    try {
+      clearError()
+      
+      // Get vendor email
+      const vendorEmail = po.vendor?.email
+      if (!vendorEmail) {
+        handleApiError({ response: { data: { message: 'Vendor email not found. Please update vendor details.' } } })
+        return
+      }
+      
+      const confirmed = window.confirm(
+        `Send PO ${po.po_number} to ${po.vendor.vendor_name} (${vendorEmail})?\n\n` +
+        `The email will include the PO PDF attachment.`
+      )
+      
+      if (!confirmed) return
+      
+      const payload = {
+        to_emails: [vendorEmail],
+        attach_pdf: true
+      }
+      
+      const response = await api.post(`/api/po/${po.id}/send-email`, payload)
+      
+      if (response.data.success) {
+        setSuccessMessage(`Email sent successfully to ${vendorEmail}`)
+      } else {
+        handleApiError({ response: { data: { message: response.data.message } } })
+      }
+    } catch (err) {
+      console.error('Error sending email:', err)
+      handleApiError(err)
+    }
+  }
+
   const getPOsForEOPA = (eopaId) => {
     return pos.filter(po => po.eopa_id === eopaId)
   }
@@ -1025,6 +1107,7 @@ const POPage = () => {
                         <TableCell align="right">Ordered Qty</TableCell>
                         <TableCell align="center">Status</TableCell>
                         <TableCell align="center">Items</TableCell>
+                        <TableCell align="right">Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1035,6 +1118,8 @@ const POPage = () => {
                           vendors={vendors}
                           onVendorUpdate={handleVendorUpdate}
                           onInvoiceSubmit={handleInvoiceSubmit}
+                          onDownloadPDF={handleDownloadPDF}
+                          onSendEmail={handleSendEmail}
                         />
                       ))}
                     </TableBody>

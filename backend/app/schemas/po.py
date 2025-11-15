@@ -10,6 +10,9 @@ class VendorBasic(BaseModel):
     vendor_code: str
     vendor_name: str
     vendor_type: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    contact_person: Optional[str] = None
     
     class Config:
         from_attributes = True

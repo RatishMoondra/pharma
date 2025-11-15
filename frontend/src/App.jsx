@@ -10,6 +10,7 @@ import EOPAPage from './pages/EOPAPage'
 import POPage from './pages/POPage'
 import InvoicesPage from './pages/InvoicesPage'
 import MaterialPage from './pages/MaterialPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import PrivateRoute from './guards/PrivateRoute'
 import Layout from './components/Layout'
 
@@ -88,6 +89,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN', 'WAREHOUSE_MANAGER']}>
                 <MaterialPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="analytics" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT']}>
+                <AnalyticsPage />
               </PrivateRoute>
             } 
           />

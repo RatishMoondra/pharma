@@ -9,6 +9,7 @@ import ApprovalIcon from '@mui/icons-material/Approval'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ReceiptIcon from '@mui/icons-material/Receipt'
+import AssessmentIcon from '@mui/icons-material/Assessment'
 import { useAuth } from '../context/AuthContext'
 
 const drawerWidth = 240
@@ -28,6 +29,7 @@ const Sidebar = () => {
     { text: 'Purchase Orders', icon: <ShoppingCartIcon />, path: '/po', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
     { text: 'Invoices', icon: <ReceiptIcon />, path: '/invoices', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'] },
     { text: 'Material Management', icon: <LocalShippingIcon />, path: '/material', roles: ['ADMIN', 'WAREHOUSE_MANAGER'] },
+    { text: 'Analytics & Insights', icon: <AssessmentIcon />, path: '/analytics', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'] },
   ]
 
   const filteredMenuItems = menuItems.filter(item => 
