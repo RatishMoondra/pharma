@@ -50,14 +50,22 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   // Populate form when editing
   useEffect(() => {
     if (pi && open) {
+      console.log('Editing PI:', pi)
       // Extract country_id from pi.country or pi.country_id or partner_vendor.country_id
       const countryId = pi.country_id || pi.country?.id || pi.partner_vendor?.country_id || ''
+      console.log('Extracted country_id:', countryId, 'from PI')
       
       setFormData({
         country_id: countryId,
         partner_vendor_id: pi.partner_vendor_id || '',
         pi_date: pi.pi_date ? pi.pi_date.split('T')[0] : new Date().toISOString().split('T')[0],
         remarks: pi.remarks || '',
+      })
+      
+      console.log('Set form data:', {
+        country_id: countryId,
+        partner_vendor_id: pi.partner_vendor_id,
+        partner_vendor_name: pi.partner_vendor?.vendor_name
       })
       
       if (pi.items && pi.items.length > 0) {
@@ -68,6 +76,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
         })))
       }
     } else if (open && !pi) {
+      console.log('Creating new PI')
       // Reset form for create mode
       setFormData({
         country_id: '',
@@ -88,30 +97,44 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
     }
   }, [open])
 
-  // Filter vendors by country when country changes
+  // Filter vendors by country when country changes or vendors load
   useEffect(() => {
+    console.log('Vendor filtering triggered:', {
+      country_id: formData.country_id,
+      allVendorsCount: allVendors.length,
+      isEditing: !!pi,
+      partner_vendor_id: formData.partner_vendor_id
+    })
+    
     if (formData.country_id && allVendors.length > 0) {
+      const countryIdInt = parseInt(formData.country_id)
       const filtered = allVendors.filter(v => 
-        v.vendor_type === 'PARTNER' && v.country_id === parseInt(formData.country_id)
+        v.vendor_type === 'PARTNER' && v.country_id === countryIdInt
       )
+      console.log('Filtered partner vendors:', filtered.length, 'vendors for country', countryIdInt)
       setPartnerVendors(filtered)
       
       // Only reset partner vendor if it's not in the filtered list AND we're not editing an existing PI
-      if (formData.partner_vendor_id && !filtered.find(v => v.id === parseInt(formData.partner_vendor_id))) {
-        // Check if this is initial load (editing existing PI) or user changing country
-        if (!pi) {
-          // User is creating new PI or changing country, reset vendor selection
+      if (formData.partner_vendor_id) {
+        const currentVendor = filtered.find(v => v.id === parseInt(formData.partner_vendor_id))
+        if (!currentVendor && !pi) {
+          // User is creating new PI or changed country - vendor not in new country
+          console.log('Resetting vendor selection - not found in filtered list')
           setFormData(prev => ({ ...prev, partner_vendor_id: '' }))
+        } else if (currentVendor) {
+          console.log('Current vendor found in filtered list:', currentVendor.vendor_name)
         }
       }
     } else {
+      // No country selected or vendors not loaded yet
+      console.log('Clearing partner vendors - country or vendors not ready')
       setPartnerVendors([])
-      // Only clear vendor if not editing
+      // Only clear vendor if not editing (preserve selection during initial load)
       if (!pi && formData.country_id === '') {
         setFormData(prev => ({ ...prev, partner_vendor_id: '' }))
       }
     }
-  }, [formData.country_id, allVendors, pi])
+  }, [formData.country_id, allVendors, pi, formData.partner_vendor_id])
 
   const fetchCountries = async () => {
     try {
@@ -128,10 +151,15 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
     try {
       const response = await api.get('/api/vendors/')
       if (response.data.success) {
+        console.log('Fetched vendors:', response.data.data.length, 'vendors')
+        console.log('Partner vendors:', response.data.data.filter(v => v.vendor_type === 'PARTNER').length)
         setAllVendors(response.data.data)
+      } else {
+        console.error('Vendors API returned success=false:', response.data)
       }
     } catch (err) {
       console.error('Failed to fetch vendors:', err)
+      console.error('Error response:', err.response?.data)
     }
   }
 
@@ -284,7 +312,12 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
               value={formData.partner_vendor_id}
               onChange={handleChange}
               error={!!errors.partner_vendor_id}
-              helperText={errors.partner_vendor_id || (formData.country_id ? '' : 'Select country first')}
+              helperText={
+                errors.partner_vendor_id || 
+                (!formData.country_id ? 'Select country first' : 
+                partnerVendors.length === 0 ? 'No partner vendors found for selected country' : 
+                `${partnerVendors.length} vendor${partnerVendors.length !== 1 ? 's' : ''} available`)
+              }
               required
               disabled={isLoading || !formData.country_id}
             >
