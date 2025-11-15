@@ -10,13 +10,16 @@ import {
   Grid,
   Alert,
 } from '@mui/material'
+import api from '../services/api'
 
 const VENDOR_TYPES = ['PARTNER', 'RM', 'PM', 'MANUFACTURER']
 
 const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false }) => {
+  const [countries, setCountries] = useState([])
   const [formData, setFormData] = useState({
     vendor_name: vendor?.vendor_name || '',
     vendor_type: vendor?.vendor_type || 'PARTNER',
+    country_id: vendor?.country_id || '',
     contact_person: vendor?.contact_person || '',
     phone: vendor?.phone || '',
     email: vendor?.email || '',
@@ -26,12 +29,31 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
 
   const [errors, setErrors] = useState({})
 
+  // Fetch countries when form opens
+  useEffect(() => {
+    if (open) {
+      fetchCountries()
+    }
+  }, [open])
+
+  const fetchCountries = async () => {
+    try {
+      const response = await api.get('/api/countries/active')
+      if (response.data.success) {
+        setCountries(response.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch countries:', err)
+    }
+  }
+
   // Update form when vendor prop changes
   useEffect(() => {
     if (vendor) {
       setFormData({
         vendor_name: vendor.vendor_name || '',
         vendor_type: vendor.vendor_type || 'PARTNER',
+        country_id: vendor.country_id || '',
         contact_person: vendor.contact_person || '',
         phone: vendor.phone || '',
         email: vendor.email || '',
@@ -42,6 +64,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
       setFormData({
         vendor_name: '',
         vendor_type: 'PARTNER',
+        country_id: '',
         contact_person: '',
         phone: '',
         email: '',
@@ -65,6 +88,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
     
     if (!formData.vendor_name.trim()) newErrors.vendor_name = 'Vendor name is required'
     if (!formData.vendor_type) newErrors.vendor_type = 'Vendor type is required'
+    if (!formData.country_id) newErrors.country_id = 'Country is required'
     if (!formData.contact_person.trim()) newErrors.contact_person = 'Contact person is required'
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required'
     if (!formData.email.trim()) {
@@ -89,6 +113,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
       setFormData({
         vendor_name: '',
         vendor_type: 'PARTNER',
+        country_id: '',
         contact_person: '',
         phone: '',
         email: '',
@@ -134,6 +159,26 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
               {VENDOR_TYPES.map((type) => (
                 <MenuItem key={type} value={type}>
                   {type}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              select
+              label="Country"
+              name="country_id"
+              value={formData.country_id}
+              onChange={handleChange}
+              error={!!errors.country_id}
+              helperText={errors.country_id || 'Controls language for printing materials'}
+              required
+              disabled={isLoading}
+            >
+              {countries.map((country) => (
+                <MenuItem key={country.id} value={country.id}>
+                  {country.country_name} ({country.country_code}) - {country.language}
                 </MenuItem>
               ))}
             </TextField>

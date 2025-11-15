@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 import logging
 
@@ -56,6 +56,9 @@ async def create_vendor(
     db.commit()
     db.refresh(vendor)
     
+    # Eager load country relationship
+    vendor = db.query(Vendor).options(joinedload(Vendor.country)).filter(Vendor.id == vendor.id).first()
+    
     logger.info({
         "event": "VENDOR_CREATED",
         "vendor_id": vendor.id,
@@ -76,13 +79,18 @@ async def list_vendors(
     skip: int = 0,
     limit: int = 100,
     vendor_type: str = None,
+    country_id: int = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List vendors"""
-    query = db.query(Vendor)
+    """List vendors with optional filtering by type and country"""
+    query = db.query(Vendor).options(joinedload(Vendor.country))
+    
     if vendor_type:
         query = query.filter(Vendor.vendor_type == vendor_type)
+    
+    if country_id:
+        query = query.filter(Vendor.country_id == country_id)
     
     vendors = query.offset(skip).limit(limit).all()
     
@@ -101,7 +109,7 @@ async def get_vendor(
     db: Session = Depends(get_db)
 ):
     """Get vendor by ID"""
-    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    vendor = db.query(Vendor).options(joinedload(Vendor.country)).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise AppException("Vendor not found", "ERR_NOT_FOUND", 404)
     

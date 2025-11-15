@@ -1,6 +1,7 @@
 import { Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton, Divider } from '@mui/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import DashboardIcon from '@mui/icons-material/Dashboard'
+import PublicIcon from '@mui/icons-material/Public'
 import PeopleIcon from '@mui/icons-material/People'
 import InventoryIcon from '@mui/icons-material/Inventory'
 import DescriptionIcon from '@mui/icons-material/Description'
@@ -18,6 +19,7 @@ const Sidebar = () => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT'] },
+    { text: 'Countries', icon: <PublicIcon />, path: '/countries', roles: ['ADMIN'] },
     { text: 'Vendors', icon: <PeopleIcon />, path: '/vendors', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
     { text: 'Products', icon: <InventoryIcon />, path: '/products', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
     { text: 'Proforma Invoice (PI)', icon: <DescriptionIcon />, path: '/pi', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },

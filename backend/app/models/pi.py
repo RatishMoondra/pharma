@@ -13,6 +13,7 @@ class PI(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     pi_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     pi_date: Mapped[date] = mapped_column(Date)
+    country_id: Mapped[int] = mapped_column(ForeignKey("countries.id"), nullable=False, index=True)
     partner_vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"))
     total_amount: Mapped[float] = mapped_column(Numeric(15, 2))
     currency: Mapped[str] = mapped_column(String(10), default="INR")
@@ -22,6 +23,7 @@ class PI(Base):
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    country: Mapped["Country"] = relationship("Country", back_populates="pis")
     partner_vendor: Mapped["Vendor"] = relationship("Vendor", back_populates="pis")
     creator: Mapped["User"] = relationship("User", foreign_keys="[PI.created_by]")
     items: Mapped[List["PIItem"]] = relationship("PIItem", back_populates="pi", cascade="all, delete-orphan")

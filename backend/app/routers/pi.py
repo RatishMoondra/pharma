@@ -95,7 +95,8 @@ async def list_pis(
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.manufacturer_vendor),
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.rm_vendor),
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.pm_vendor),
-        joinedload(PI.partner_vendor)
+        joinedload(PI.country),
+        joinedload(PI.partner_vendor).joinedload(Vendor.country)
     ).offset(skip).limit(limit).all()
     
     return {
@@ -117,7 +118,8 @@ async def get_pi(
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.manufacturer_vendor),
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.rm_vendor),
         joinedload(PI.items).joinedload(PIItem.medicine).joinedload(MedicineMaster.pm_vendor),
-        joinedload(PI.partner_vendor)
+        joinedload(PI.country),
+        joinedload(PI.partner_vendor).joinedload(Vendor.country)
     ).filter(PI.id == pi_id).first()
     if not pi:
         raise AppException("PI not found", "ERR_NOT_FOUND", 404)

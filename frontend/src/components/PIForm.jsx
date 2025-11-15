@@ -27,10 +27,13 @@ import AddIcon from '@mui/icons-material/Add'
 import api from '../services/api'
 
 const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
+  const [countries, setCountries] = useState([])
+  const [allVendors, setAllVendors] = useState([])
   const [partnerVendors, setPartnerVendors] = useState([])
   const [medicines, setMedicines] = useState([])
   
   const [formData, setFormData] = useState({
+    country_id: '',
     partner_vendor_id: '',
     pi_date: new Date().toISOString().split('T')[0],
     remarks: '',
@@ -47,7 +50,11 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   // Populate form when editing
   useEffect(() => {
     if (pi && open) {
+      // Extract country_id from pi.country or pi.country_id or partner_vendor.country_id
+      const countryId = pi.country_id || pi.country?.id || pi.partner_vendor?.country_id || ''
+      
       setFormData({
+        country_id: countryId,
         partner_vendor_id: pi.partner_vendor_id || '',
         pi_date: pi.pi_date ? pi.pi_date.split('T')[0] : new Date().toISOString().split('T')[0],
         remarks: pi.remarks || '',
@@ -63,6 +70,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
     } else if (open && !pi) {
       // Reset form for create mode
       setFormData({
+        country_id: '',
         partner_vendor_id: '',
         pi_date: new Date().toISOString().split('T')[0],
         remarks: '',
@@ -74,20 +82,56 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
 
   useEffect(() => {
     if (open) {
-      fetchPartnerVendors()
+      fetchCountries()
+      fetchAllVendors()
       fetchMedicines()
     }
   }, [open])
 
-  const fetchPartnerVendors = async () => {
+  // Filter vendors by country when country changes
+  useEffect(() => {
+    if (formData.country_id && allVendors.length > 0) {
+      const filtered = allVendors.filter(v => 
+        v.vendor_type === 'PARTNER' && v.country_id === parseInt(formData.country_id)
+      )
+      setPartnerVendors(filtered)
+      
+      // Only reset partner vendor if it's not in the filtered list AND we're not editing an existing PI
+      if (formData.partner_vendor_id && !filtered.find(v => v.id === parseInt(formData.partner_vendor_id))) {
+        // Check if this is initial load (editing existing PI) or user changing country
+        if (!pi) {
+          // User is creating new PI or changing country, reset vendor selection
+          setFormData(prev => ({ ...prev, partner_vendor_id: '' }))
+        }
+      }
+    } else {
+      setPartnerVendors([])
+      // Only clear vendor if not editing
+      if (!pi && formData.country_id === '') {
+        setFormData(prev => ({ ...prev, partner_vendor_id: '' }))
+      }
+    }
+  }, [formData.country_id, allVendors, pi])
+
+  const fetchCountries = async () => {
+    try {
+      const response = await api.get('/api/countries/active')
+      if (response.data.success) {
+        setCountries(response.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch countries:', err)
+    }
+  }
+
+  const fetchAllVendors = async () => {
     try {
       const response = await api.get('/api/vendors/')
       if (response.data.success) {
-        const partners = response.data.data.filter(v => v.vendor_type === 'PARTNER')
-        setPartnerVendors(partners)
+        setAllVendors(response.data.data)
       }
     } catch (err) {
-      console.error('Failed to fetch partner vendors:', err)
+      console.error('Failed to fetch vendors:', err)
     }
   }
 
@@ -135,6 +179,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   const validate = () => {
     const newErrors = {}
     
+    if (!formData.country_id) newErrors.country_id = 'Country is required'
     if (!formData.partner_vendor_id) newErrors.partner_vendor_id = 'Partner vendor is required'
     if (!formData.pi_date) newErrors.pi_date = 'PI date is required'
 
@@ -153,6 +198,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
     if (validate()) {
       const payload = {
         ...formData,
+        country_id: parseInt(formData.country_id),
         partner_vendor_id: parseInt(formData.partner_vendor_id),
         items: items.map(item => ({
           medicine_id: parseInt(item.medicine_id),
@@ -167,6 +213,7 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
+        country_id: '',
         partner_vendor_id: '',
         pi_date: new Date().toISOString().split('T')[0],
         remarks: '',
@@ -211,14 +258,35 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
             <TextField
               fullWidth
               select
+              label="Country"
+              name="country_id"
+              value={formData.country_id}
+              onChange={handleChange}
+              error={!!errors.country_id}
+              helperText={errors.country_id || 'Select country first to filter partner vendors'}
+              required
+              disabled={isLoading}
+            >
+              <MenuItem value="">Select Country</MenuItem>
+              {countries.map((country) => (
+                <MenuItem key={country.id} value={country.id}>
+                  {country.country_name} ({country.country_code}) - {country.language}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              select
               label="Partner Vendor"
               name="partner_vendor_id"
               value={formData.partner_vendor_id}
               onChange={handleChange}
               error={!!errors.partner_vendor_id}
-              helperText={errors.partner_vendor_id}
+              helperText={errors.partner_vendor_id || (formData.country_id ? '' : 'Select country first')}
               required
-              disabled={isLoading}
+              disabled={isLoading || !formData.country_id}
             >
               <MenuItem value="">Select Partner Vendor</MenuItem>
               {partnerVendors.map((vendor) => (
@@ -242,6 +310,9 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
               disabled={isLoading}
               InputLabelProps={{ shrink: true }}
             />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            {/* Empty grid for layout balance */}
           </Grid>
           <Grid item xs={12}>
             <TextField

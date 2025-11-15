@@ -4,12 +4,26 @@ from datetime import datetime, date
 from decimal import Decimal
 
 
+class CountryBasic(BaseModel):
+    """Basic country info for nested responses"""
+    id: int
+    country_code: str
+    country_name: str
+    language: str
+    currency: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class VendorBasic(BaseModel):
     """Basic vendor info for nested responses"""
     id: int
     vendor_code: str
     vendor_name: str
     vendor_type: str
+    country_id: int
+    country: Optional[CountryBasic] = None
     
     class Config:
         from_attributes = True
@@ -47,6 +61,8 @@ class PIBasic(BaseModel):
     id: int
     pi_number: str
     pi_date: date
+    country_id: int
+    country: Optional[CountryBasic] = None
     partner_vendor: Optional[VendorBasic] = None
     
     class Config:
@@ -66,6 +82,7 @@ class PIItemResponse(PIItemBase):
 
 class PIBase(BaseModel):
     pi_date: date
+    country_id: int
     partner_vendor_id: int
     currency: str = "INR"
     remarks: Optional[str] = None
@@ -87,6 +104,7 @@ class PIResponse(PIBase):
     created_by: int
     created_at: datetime
     items: List[PIItemResponse] = []
+    country: Optional[CountryBasic] = None
     partner_vendor: Optional[VendorBasic] = None
     
     class Config:

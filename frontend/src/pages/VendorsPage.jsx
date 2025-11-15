@@ -179,6 +179,7 @@ const VendorsPage = () => {
               <TableRow sx={{ bgcolor: 'primary.main' }}>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor Name</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Country</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Contact Person</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Phone</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Email</TableCell>
@@ -196,6 +197,17 @@ const VendorsPage = () => {
                       color={getVendorTypeColor(vendor.vendor_type)}
                       size="small"
                     />
+                  </TableCell>
+                  <TableCell>
+                    {vendor.country ? (
+                      <Chip
+                        label={`${vendor.country.country_code} - ${vendor.country.language}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ) : (
+                      '-'
+                    )}
                   </TableCell>
                   <TableCell>{vendor.contact_person}</TableCell>
                   <TableCell>{vendor.phone}</TableCell>

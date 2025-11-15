@@ -8,6 +8,7 @@ import uuid
 from app.database.session import engine
 from app.models import base
 from app.routers import auth, vendors, pi, eopa, po, products, material, users
+from app.routers import countries as countries_router
 from app.exceptions.handlers import app_exception_handler, validation_exception_handler
 from app.exceptions.base import AppException
 from fastapi.exceptions import RequestValidationError
@@ -57,6 +58,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(countries_router.router)  # Already has /api/countries prefix
 app.include_router(vendors.router, prefix="/api/vendors", tags=["Vendors"])
 app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(pi.router, prefix="/api/pi", tags=["Proforma Invoice"])

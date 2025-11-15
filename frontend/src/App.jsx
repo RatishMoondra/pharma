@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
+import CountriesPage from './pages/CountriesPage'
 import VendorsPage from './pages/VendorsPage'
 import ProductsPage from './pages/ProductsPage'
 import PIPage from './pages/PIPage'
@@ -39,6 +40,14 @@ function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route 
+            path="countries" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN']}>
+                <CountriesPage />
+              </PrivateRoute>
+            } 
+          />
           <Route path="vendors" element={<VendorsPage />} />
           <Route path="products" element={<ProductsPage />} />
           <Route 
