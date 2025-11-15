@@ -35,8 +35,13 @@ backend/
     utils/            # Helpers (number_generator.py, etc.)
     exceptions/       # Custom exceptions + handlers
     logs/             # Structured JSON logs
+    seeders/          # Database seeders (users, configs, countries)
   alembic/            # Database migrations
+  database/           # SQL schema and seed files
+    pharma_schema.sql # Complete database DDL schema
+    seeds.sql         # Essential seed data (admin, countries, configs)
   tests/              # pytest test suite
+  scripts/            # Utility scripts (create_admin.py, etc.)
 
 frontend/
   src/
@@ -48,12 +53,95 @@ frontend/
     guards/           # Route guards (PrivateRoute, RoleGuard)
   tests/              # Jest + React Testing Library
 
-db/
-  pharma_schema.sql   # DDL schema
-  seeds.sql           # Sample data
 docs/
-  SOP.docx            # Standard Operating Procedures
+  *.md              # Implementation guides, testing guides, SOP
 ```
+
+## Database Schema
+
+**Location**: `backend/database/pharma_schema.sql` (complete DDL schema)
+
+The database consists of **12 main tables** organized around pharmaceutical procurement workflow:
+
+### Core Tables
+
+1. **users** - System users with role-based access control
+   - Fields: id, username, hashed_password, email, role (ADMIN, PROCUREMENT_OFFICER, WAREHOUSE_MANAGER, ACCOUNTANT), is_active, created_at
+   - Used for: Authentication, authorization, audit trail
+
+2. **country_master** - Country reference data
+   - Fields: id, country_code, country_name, region, currency
+   - Used for: Vendor country mapping, currency defaults
+
+3. **vendor** - Vendor master data (4 types: PARTNER, RM, PM, MANUFACTURER)
+   - Fields: id, vendor_code, vendor_name, vendor_type, contact_person, email, phone, address, country_id, is_active
+   - Used for: PI partner, EOPA vendor selection, PO vendor assignment
+
+4. **product_master** - Generic product catalog
+   - Fields: id, product_code, product_name, description, unit, is_active
+   - Used for: Product reference (non-medicine items)
+
+5. **medicine_master** - Medicine catalog with vendor mappings
+   - Fields: id, medicine_code, medicine_name, description, unit, manufacturer_vendor_id, rm_vendor_id, pm_vendor_id, is_active
+   - **Critical**: Links to 3 vendor types for EOPA vendor defaults (user-editable)
+   - Used for: PI items, EOPA vendor resolution, PO items
+
+### Transaction Tables
+
+6. **pi** (Proforma Invoice) - Customer purchase requests
+   - Fields: id, pi_number (UNIQUE), pi_date, partner_vendor_id (customer), remarks, created_by, created_at, updated_at
+   - Used for: Starting point of procurement workflow
+
+7. **pi_item** - Line items in PI
+   - Fields: id, pi_id, medicine_id, quantity, unit_price, total_price, remarks
+   - Used for: Individual medicine requirements in PI
+
+8. **eopa** (Estimated Order & Price Approval) - **PI-ITEM-LEVEL**
+   - Fields: id, eopa_number (UNIQUE), pi_item_id, vendor_type (MANUFACTURER/RM/PM), vendor_id, quantity, estimated_unit_price, estimated_total, status, approval_date, approved_by, remarks, created_by
+   - **Critical Architecture**: 
+     - One EOPA per PI Item per Vendor Type
+     - Each PI Item can have up to 3 EOPAs (one for each vendor type)
+     - UNIQUE constraint on (pi_item_id, vendor_type)
+     - Vendor defaults from medicine_master but is user-editable
+   - Used for: Price estimation, vendor selection, approval workflow before PO creation
+
+9. **purchase_order** - Purchase orders (3 types: RM, PM, FG)
+   - Fields: id, po_number (UNIQUE), po_date, po_type (RM/PM/FG), vendor_id, delivery_date, status (OPEN/PARTIAL/CLOSED), remarks, created_by
+   - **Critical**: POs do NOT contain pricing - pricing comes from vendor_invoice
+   - Used for: Ordering raw materials, packaging materials, finished goods
+
+10. **po_item** - Line items in PO (NO PRICING)
+    - Fields: id, po_id, medicine_id, ordered_quantity, fulfilled_quantity, unit, language (for PM), artwork_version (for PM), remarks
+    - **Critical**: No unit_price field - fulfillment driven by invoices
+    - Used for: Ordered quantities, PM specifications, fulfillment tracking
+
+### Invoice & Configuration Tables
+
+11. **vendor_invoice** - Vendor tax invoices with actual pricing
+    - Fields: id, invoice_number, po_id, invoice_date, medicine_id, shipped_quantity, unit_price, total_amount, tax_amount, discount_amount, net_amount, payment_status, payment_date, remarks, created_by
+    - **Critical**: Source of truth for pricing, drives PO fulfillment
+    - Workflow:
+      - RM Vendor sends RM Tax Invoice → updates RM PO fulfilled_qty → updates manufacturer_balance
+      - PM Vendor sends PM Tax Invoice → updates PM PO fulfilled_qty → updates manufacturer_balance
+      - Manufacturer sends FG Invoice → updates FG PO fulfilled_qty → decrements manufacturer_balance
+    - Used for: Pricing, PO fulfillment, material balance tracking, payment tracking
+
+12. **system_configuration** - Flexible configuration storage with JSONB
+    - Fields: id, config_key (UNIQUE), config_value (JSON/JSONB), description, category, is_sensitive, updated_at
+    - **Critical**: Stores all system settings (42 configs across 8 categories)
+    - Used for: Company info, workflow rules, document numbering formats, vendor rules, SMTP settings, security policies, UI preferences, integrations
+
+### Key Indexes
+
+- **Unique constraints**: pi_number, eopa_number, po_number, config_key, (pi_item_id, vendor_type)
+- **Performance indexes**: idx_users_username, idx_vendor_code, idx_medicine_code, idx_pi_number, idx_config_key, idx_config_category
+- **Foreign key indexes**: All relationship fields indexed for join performance
+
+### Schema Evolution
+
+- Use **Alembic migrations** for all schema changes
+- SQL files in `backend/database/` are for reference and fresh installations only
+- Never edit pharma_schema.sql manually - generate from Alembic models
 
 ## Core Domain Models
 
@@ -265,31 +353,49 @@ total = quantity * price  # TypeError: unsupported operand type(s) for *: 'decim
 
 Auto-generate using `backend/app/utils/number_generator.py`:
 
-```python
-# PI: PI/YY-YY/0001 (e.g., PI/24-25/0001)
-generate_pi_number()
+**CRITICAL: Integrated with Configuration Service**
 
-# EOPA: EOPA/YY-YY/0001
-generate_eopa_number()
-
-# PO: PO/{TYPE}/YY-YY/0001
-generate_po_number(po_type)  # po_type: "RM", "PM", "FG"
-```
-
-### 4. Unique Sequence Number Generation
-
-Auto-generate using `backend/app/utils/number_generator.py`:
+Number generation now reads formats from the Configuration Service, allowing runtime customization without code changes:
 
 ```python
+# Reads format from system_configuration table
+# Falls back to hardcoded defaults if config unavailable
+
 # PI: PI/YY-YY/0001 (e.g., PI/24-25/0001)
-generate_pi_number()
+generate_pi_number(db)
 
 # EOPA: EOPA/YY-YY/0001
-generate_eopa_number()
+generate_eopa_number(db)
 
 # PO: PO/{TYPE}/YY-YY/0001
-generate_po_number(po_type)  # po_type: "RM", "PM", "FG"
+generate_po_number(db, po_type)  # po_type: "RM", "PM", "FG"
 ```
+
+**Integration Pattern:**
+```python
+from app.services.configuration_service import ConfigurationService
+
+def generate_pi_number(db: Session) -> str:
+    # Try to get format from configuration
+    format_config = ConfigurationService.get_config(db, "pi_number_format", use_cache=True)
+    if format_config and format_config.config_value:
+        format_str = format_config.config_value.get("format", "PI/{FY}/{SEQ:04d}")
+    else:
+        format_str = "PI/{FY}/{SEQ:04d}"  # Fallback
+    
+    # Generate number using format
+    # ... (implementation)
+```
+
+**Configuration Keys:**
+- `pi_number_format` - PI number format
+- `eopa_number_format` - EOPA number format
+- `po_rm_number_format` - RM PO format
+- `po_pm_number_format` - PM PO format
+- `po_fg_number_format` - FG PO format
+- `grn_number_format` - GRN format
+- `dispatch_number_format` - Dispatch advice format
+- `invoice_number_format` - Vendor invoice format
 
 **CRITICAL: Preventing Duplicate Numbers in Bulk Operations**
 
@@ -1114,11 +1220,276 @@ npm test -- --coverage
 - `backend/app/auth/dependencies.py` - JWT auth & RBAC decorators
 - `backend/app/auth/utils.py` - Password hashing, token generation
 - `backend/app/exceptions/handlers.py` - Global exception handling
-- `backend/app/utils/number_generator.py` - Document number generation
+- `backend/app/utils/number_generator.py` - Document number generation (integrated with ConfigurationService)
+- `backend/app/services/configuration_service.py` - Configuration management with caching
+- `backend/app/models/configuration.py` - SystemConfiguration model
+- `backend/app/seeders/configuration_seeder.py` - 42 default configurations
 - `frontend/src/services/api.js` - Axios instance with JWT interceptors
 - `frontend/src/hooks/useApiError.js` - Centralized error handling
 - `frontend/src/context/AuthContext.jsx` - Authentication state management
 - `frontend/src/guards/PrivateRoute.jsx` - Route protection
+- `frontend/src/pages/ConfigurationPage.jsx` - Admin configuration UI
+
+## Configuration Service (Enterprise Feature)
+
+**Location**: `backend/app/services/configuration_service.py`
+
+A flexible, database-driven configuration system that eliminates hardcoded values and enables runtime customization without code changes.
+
+### Architecture
+
+**Model** (`backend/app/models/configuration.py`):
+```python
+class SystemConfiguration(Base):
+    __tablename__ = "system_configuration"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    config_value: Mapped[dict] = mapped_column(JSON)  # JSONB in PostgreSQL
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(50), index=True)
+    is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+```
+
+**Service Pattern** - In-memory caching with TTL:
+```python
+class ConfigurationService:
+    # Class-level cache (shared across instances)
+    _cache: Dict[str, SystemConfiguration] = {}
+    _cache_timestamp: Optional[datetime] = None
+    _cache_ttl_minutes: int = 5  # 5-minute TTL
+    
+    @classmethod
+    def _refresh_cache(cls, db: Session) -> None:
+        """Load all configurations into memory cache"""
+        configs = db.query(SystemConfiguration).all()
+        cls._cache = {config.config_key: config for config in configs}
+        cls._cache_timestamp = datetime.utcnow()
+    
+    @classmethod
+    def get_config(cls, db: Session, key: str, use_cache: bool = True) -> Optional[SystemConfiguration]:
+        """Retrieve configuration with optional caching"""
+        if use_cache and not cls._is_cache_stale():
+            return cls._cache.get(key)
+        # ... (DB query fallback)
+```
+
+### Configuration Categories (8 total, 42 configs)
+
+1. **System** (7 configs):
+   - `company_name` - Company name for reports/emails/PDFs
+   - `company_logo_url` - Logo URL
+   - `company_address` - Full company address (JSONB)
+   - `default_currency` - Default currency (INR, USD, etc.)
+   - `default_timezone` - Default timezone (Asia/Kolkata)
+   - `date_format` - UI date format (DD-MM-YYYY)
+   - `fiscal_year` - Current fiscal year (24-25)
+
+2. **Workflow** (7 configs):
+   - `allow_pi_edit_after_eopa` - Edit PI after EOPA created
+   - `allow_eopa_edit_after_approval` - Edit EOPA after approval
+   - `auto_close_po_on_fulfillment` - Auto-close fulfilled POs
+   - `enable_partial_dispatch` - Allow partial PO dispatch
+   - `enable_manufacturer_balance_logic` - Track material balance
+   - `enable_invoice_fulfillment` - Update PO from invoices
+   - `enable_multilingual_pm` - PM language/artwork versioning
+
+3. **Numbering** (8 configs):
+   - `pi_number_format` - PI/{FY}/{SEQ:04d}
+   - `eopa_number_format` - EOPA/{FY}/{SEQ:04d}
+   - `po_rm_number_format` - PO/RM/{FY}/{SEQ:04d}
+   - `po_pm_number_format` - PO/PM/{FY}/{SEQ:04d}
+   - `po_fg_number_format` - PO/FG/{FY}/{SEQ:04d}
+   - `grn_number_format` - GRN/{FY}/{SEQ:04d}
+   - `dispatch_number_format` - DISP/{FY}/{SEQ:04d}
+   - `invoice_number_format` - INV/{FY}/{SEQ:04d}
+
+4. **Vendor** (3 configs):
+   - `allowed_pm_languages` - EN, FR, AR, SP, HI
+   - `allowed_pm_artwork_versions` - v1.0, v1.1, v2.0, etc.
+   - `enable_vendor_fallback_logic` - Use Medicine Master defaults
+
+5. **Email** (6 configs):
+   - `smtp_host` - SMTP server host
+   - `smtp_port` - SMTP port (587)
+   - `smtp_username` - SMTP auth username (sensitive)
+   - `smtp_password` - SMTP password (sensitive)
+   - `email_sender` - Default sender email
+   - `enable_email_notifications` - Toggle notifications by event
+
+6. **Security** (3 configs):
+   - `password_policy` - Complexity requirements
+   - `jwt_token_expiry_minutes` - Token TTL (60 min)
+   - `role_permissions` - RBAC permission matrix
+
+7. **UI** (4 configs):
+   - `ui_theme` - light/dark theme
+   - `ui_primary_color` - Brand color (#1976d2)
+   - `items_per_page` - Pagination size (50)
+   - `default_language` - UI language (EN)
+
+8. **Integration** (4 configs):
+   - `erp_integration_url` - External ERP URL
+   - `erp_api_key` - ERP authentication key (sensitive)
+   - `webhook_endpoints` - Event webhook URLs
+   - `file_storage_type` - local/s3/azure
+
+### API Endpoints (9 total)
+
+**CRUD Operations** (ADMIN only):
+- `GET /api/config/` - List all configurations (with category filter, include_sensitive param)
+- `GET /api/config/{key}` - Get specific config
+- `POST /api/config/` - Create config (ADMIN only)
+- `PUT /api/config/{key}` - Update config (ADMIN only)
+- `DELETE /api/config/{key}` - Delete config (ADMIN only)
+
+**Domain-Specific Getters** (Public):
+- `GET /api/config/system/info` - System configuration (company name, currency, timezone)
+- `GET /api/config/workflow/rules` - Workflow rules (PI edit, auto-close, etc.)
+- `GET /api/config/document/numbering` - Document numbering formats
+- `GET /api/config/vendor/rules` - Vendor rules (languages, artwork versions)
+
+### Cache Performance
+
+**Benchmarked Performance:**
+- **Cached read**: 0.0000s (instant)
+- **Database read**: 0.1085s (108.5ms)
+- **Cache TTL**: 5 minutes
+- **Cache invalidation**: Automatic on create/update/delete
+
+**Cache Strategy:**
+- Class-level variables ensure shared state across service instances
+- Single cache for all 42 configurations
+- Stale cache detection via timestamp comparison
+- Manual refresh on write operations
+- Graceful fallback to DB if cache unavailable
+
+### Service Integration Patterns
+
+**1. Number Generator Integration:**
+```python
+# backend/app/utils/number_generator.py
+from app.services.configuration_service import ConfigurationService
+
+def generate_pi_number(db: Session) -> str:
+    format_config = ConfigurationService.get_config(db, "pi_number_format", use_cache=True)
+    format_str = format_config.config_value.get("format", "PI/{FY}/{SEQ:04d}") if format_config else "PI/{FY}/{SEQ:04d}"
+    # ... generate number using format
+```
+
+**2. PDF Service Integration:**
+```python
+# backend/app/services/pdf_service.py
+class POPDFService:
+    def __init__(self, db: Session):
+        self.db = db
+        # Load company info from configuration
+        company_name_config = ConfigurationService.get_config(db, "company_name")
+        self.company_name = company_name_config.config_value.get("value", "Pharma Co. Ltd.") if company_name_config else "Pharma Co. Ltd."
+        # ... (similar for address, currency)
+```
+
+**3. Email Service Integration:**
+```python
+# backend/app/services/email_service.py
+class EmailService:
+    def __init__(self, db: Session):
+        self.db = db
+        # Load SMTP settings from configuration
+        smtp_host_config = ConfigurationService.get_config(db, "smtp_host")
+        self.smtp_host = smtp_host_config.config_value.get("value") if smtp_host_config else os.getenv("SMTP_HOST")
+        # ... (similar for port, username, password, sender)
+```
+
+**Common Integration Pattern:**
+1. Accept `db: Session` parameter in service constructors
+2. Use `ConfigurationService.get_config(db, key, use_cache=True)` to fetch config
+3. Extract value from `config.config_value` (JSONB field)
+4. Provide fallback defaults for graceful degradation
+5. Use lazy imports to avoid circular dependencies
+
+### Lazy Imports (Avoiding Circular Dependencies)
+
+When ConfigurationService is used in modules that are imported by main.py (like number_generator.py), use lazy imports:
+
+```python
+# ❌ WRONG: Top-level import causes circular dependency
+from app.services.configuration_service import ConfigurationService
+
+def generate_pi_number(db: Session) -> str:
+    config = ConfigurationService.get_config(db, "pi_number_format")
+    # ...
+
+# ✅ CORRECT: Lazy import inside function
+def generate_pi_number(db: Session) -> str:
+    from app.services.configuration_service import ConfigurationService
+    config = ConfigurationService.get_config(db, "pi_number_format")
+    # ...
+```
+
+### Frontend Admin UI
+
+**Location**: `frontend/src/pages/ConfigurationPage.jsx`
+
+**Features:**
+- 8 category tabs (System, Workflow, Numbering, Vendor, Email, Security, UI, Integration)
+- Inline editing with JSON validation
+- Sensitive data masking (show/hide toggle for passwords, API keys)
+- Refresh button to reload from server
+- Save confirmation dialog
+- Success/error snackbars for user feedback
+- User-friendly value formatting:
+  - `{value: "X"}` displays as `X`
+  - `{enabled: true}` displays as `✓ Enabled`
+  - Arrays → comma-separated list
+  - Objects → readable key-value pairs
+
+**Access Control:**
+- Route protected by PrivateRoute with `allowedRoles={['ADMIN']}`
+- Only ADMIN users can view/edit configurations
+- Sidebar menu item: "Settings" under Admin section
+
+### Seeding Default Configurations
+
+**Script**: `backend/app/seeders/configuration_seeder.py`
+
+**Usage:**
+```python
+from app.seeders.configuration_seeder import seed_all
+
+# Seed all 42 default configurations
+seed_all()
+```
+
+**Idempotent Design:**
+- Checks for existing configs before creating (by config_key)
+- Safe to run multiple times
+- Updates description if config exists but description changed
+
+**Seeder Functions:**
+- `seed_system_config()` - 7 system configs
+- `seed_workflow_rules()` - 7 workflow configs
+- `seed_document_numbering()` - 8 numbering formats
+- `seed_vendor_rules()` - 3 vendor configs
+- `seed_email_config()` - 6 email settings
+- `seed_security_config()` - 3 security policies
+- `seed_ui_config()` - 4 UI preferences
+- `seed_integration_config()` - 4 integration settings
+- `seed_all()` - Runs all seeders
+
+### Best Practices
+
+1. **Always use cache for read-heavy operations** (`use_cache=True`)
+2. **Pass db session to services** that need configuration
+3. **Provide fallback defaults** for graceful degradation
+4. **Use lazy imports** in utils/ modules to avoid circular dependencies
+5. **Mark sensitive configs** with `is_sensitive=True` (passwords, API keys)
+6. **Use JSONB structure** for complex config values (objects, arrays)
+7. **Invalidate cache** automatically on write operations
+8. **Document config keys** in seeder with clear descriptions
+9. **Group related configs** by category for better organization
+10. **Test configuration changes** before deploying to production
 
 ## AI Assistant Guidelines
 

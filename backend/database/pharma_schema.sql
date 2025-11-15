@@ -1,316 +1,301 @@
--- PHARMA WORKFLOW DATABASE SCHEMA
--- Database: pharma_db
--- This schema matches the actual PostgreSQL database created by Alembic migrations
+--
+-- PostgreSQL Database Schema for Pharma Procurement System
+-- Updated: 2025-11-15
+-- 
+-- This schema reflects the complete database structure including:
+-- - User management with role-based access control
+-- - Country master data
+-- - Vendor management (PARTNER, RM, PM, MANUFACTURER)
+-- - Product and Medicine master data with vendor mappings
+-- - PI (Proforma Invoice) workflow
+-- - EOPA (PI-Item-Level) with vendor type selection
+-- - Purchase Orders (RM/PM/FG) without pricing
+-- - Vendor Invoices with fulfillment tracking
+-- - System Configuration with JSONB storage
+--
 
--- Drop existing tables if they exist (in reverse order of dependencies)
-DROP TABLE IF EXISTS warehouse_grn CASCADE;
-DROP TABLE IF EXISTS dispatch_advice CASCADE;
-DROP TABLE IF EXISTS material_receipts CASCADE;
-DROP TABLE IF EXISTS material_balance CASCADE;
-DROP TABLE IF EXISTS po_items CASCADE;
-DROP TABLE IF EXISTS purchase_orders CASCADE;
-DROP TABLE IF EXISTS eopa_items CASCADE;
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+-- Drop existing tables (order matters due to foreign keys)
+DROP TABLE IF EXISTS vendor_invoice CASCADE;
+DROP TABLE IF EXISTS po_item CASCADE;
+DROP TABLE IF EXISTS purchase_order CASCADE;
 DROP TABLE IF EXISTS eopa CASCADE;
-DROP TABLE IF EXISTS pi_items CASCADE;
+DROP TABLE IF EXISTS pi_item CASCADE;
 DROP TABLE IF EXISTS pi CASCADE;
 DROP TABLE IF EXISTS medicine_master CASCADE;
 DROP TABLE IF EXISTS product_master CASCADE;
-DROP TABLE IF EXISTS vendors CASCADE;
+DROP TABLE IF EXISTS vendor CASCADE;
+DROP TABLE IF EXISTS country_master CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS system_configuration CASCADE;
+DROP TABLE IF EXISTS alembic_version CASCADE;
 
--- Drop existing types if they exist
-DROP TYPE IF EXISTS userrole CASCADE;
-DROP TYPE IF EXISTS vendortype CASCADE;
-DROP TYPE IF EXISTS potype CASCADE;
-DROP TYPE IF EXISTS postatus CASCADE;
-DROP TYPE IF EXISTS eopastatus CASCADE;
-
--- Create custom enum types
-CREATE TYPE userrole AS ENUM ('ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT');
-CREATE TYPE vendortype AS ENUM ('PARTNER', 'RM', 'PM', 'MANUFACTURER');
-CREATE TYPE potype AS ENUM ('RM', 'PM', 'FG');
-CREATE TYPE postatus AS ENUM ('OPEN', 'CLOSED', 'CANCELLED');
-CREATE TYPE eopastatus AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
-
--- ============================================================================
--- USERS TABLE
--- ============================================================================
+--
+-- Table: users
+-- Purpose: User authentication and role-based access control
+--
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    role userrole NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    email VARCHAR(100) UNIQUE NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT')),
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- VENDORS TABLE
--- ============================================================================
-CREATE TABLE vendors (
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
+
+--
+-- Table: country_master
+-- Purpose: Country reference data
+--
+CREATE TABLE country_master (
+    id SERIAL PRIMARY KEY,
+    country_code VARCHAR(3) UNIQUE NOT NULL,
+    country_name VARCHAR(100) NOT NULL,
+    region VARCHAR(50),
+    currency VARCHAR(3),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_country_code ON country_master(country_code);
+
+--
+-- Table: vendor
+-- Purpose: Vendor/supplier management with country linkage
+--
+CREATE TABLE vendor (
     id SERIAL PRIMARY KEY,
     vendor_code VARCHAR(50) UNIQUE NOT NULL,
-    vendor_name VARCHAR(200) NOT NULL,
-    vendor_type vendortype NOT NULL,
+    vendor_name VARCHAR(255) NOT NULL,
+    vendor_type VARCHAR(50) NOT NULL CHECK (vendor_type IN ('PARTNER', 'RM', 'PM', 'MANUFACTURER')),
     contact_person VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(20),
     address TEXT,
-    gst_number VARCHAR(15),
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    country_id INTEGER REFERENCES country_master(id),
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- PRODUCT MASTER TABLE
--- ============================================================================
+CREATE INDEX idx_vendor_code ON vendor(vendor_code);
+CREATE INDEX idx_vendor_type ON vendor(vendor_type);
+CREATE INDEX idx_vendor_country ON vendor(country_id);
+
+--
+-- Table: product_master
+-- Purpose: Product catalog
+--
 CREATE TABLE product_master (
     id SERIAL PRIMARY KEY,
     product_code VARCHAR(50) UNIQUE NOT NULL,
-    product_name VARCHAR(200) NOT NULL,
+    product_name VARCHAR(255) NOT NULL,
     description TEXT,
-    unit_of_measure VARCHAR(20) DEFAULT 'UNIT' NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    unit VARCHAR(20),
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- MEDICINE MASTER TABLE (Links Product to Vendor)
--- ============================================================================
+CREATE INDEX idx_product_code ON product_master(product_code);
+
+--
+-- Table: medicine_master
+-- Purpose: Medicine catalog with vendor mappings for manufacturer, RM, PM
+--
 CREATE TABLE medicine_master (
     id SERIAL PRIMARY KEY,
     medicine_code VARCHAR(50) UNIQUE NOT NULL,
-    medicine_name VARCHAR(200) NOT NULL,
-    product_id INT NOT NULL REFERENCES product_master(id),
-    vendor_id INT NOT NULL REFERENCES vendors(id),
-    strength VARCHAR(50),
-    dosage_form VARCHAR(50),
-    pack_size VARCHAR(50),
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    medicine_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    unit VARCHAR(20),
+    manufacturer_vendor_id INTEGER REFERENCES vendor(id),
+    rm_vendor_id INTEGER REFERENCES vendor(id),
+    pm_vendor_id INTEGER REFERENCES vendor(id),
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- PI (PROFORMA INVOICE) TABLE
--- ============================================================================
+CREATE INDEX idx_medicine_code ON medicine_master(medicine_code);
+CREATE INDEX idx_medicine_manufacturer ON medicine_master(manufacturer_vendor_id);
+CREATE INDEX idx_medicine_rm ON medicine_master(rm_vendor_id);
+CREATE INDEX idx_medicine_pm ON medicine_master(pm_vendor_id);
+
+--
+-- Table: pi (Proforma Invoice)
+-- Purpose: Customer order workflow entry point
+--
 CREATE TABLE pi (
     id SERIAL PRIMARY KEY,
     pi_number VARCHAR(50) UNIQUE NOT NULL,
     pi_date DATE NOT NULL,
-    partner_vendor_id INT NOT NULL REFERENCES vendors(id),
-    total_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
-    currency VARCHAR(10) DEFAULT 'INR' NOT NULL,
+    partner_vendor_id INTEGER REFERENCES vendor(id) NOT NULL,
     remarks TEXT,
-    created_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- PI ITEMS TABLE
--- ============================================================================
-CREATE TABLE pi_items (
+CREATE INDEX idx_pi_number ON pi(pi_number);
+CREATE INDEX idx_pi_partner ON pi(partner_vendor_id);
+CREATE INDEX idx_pi_date ON pi(pi_date);
+
+--
+-- Table: pi_item
+-- Purpose: Line items for PI with pricing
+--
+CREATE TABLE pi_item (
     id SERIAL PRIMARY KEY,
-    pi_id INT NOT NULL REFERENCES pi(id) ON DELETE CASCADE,
-    medicine_id INT NOT NULL REFERENCES medicine_master(id),
-    quantity NUMERIC(15,3) NOT NULL,
-    unit_price NUMERIC(15,2) NOT NULL,
-    total_price NUMERIC(15,2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    pi_id INTEGER REFERENCES pi(id) ON DELETE CASCADE NOT NULL,
+    medicine_id INTEGER REFERENCES medicine_master(id) NOT NULL,
+    quantity NUMERIC(15, 3) NOT NULL,
+    unit_price NUMERIC(15, 2),
+    total_price NUMERIC(15, 2),
+    remarks TEXT,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- EOPA (ESTIMATED ORDER & PRICE APPROVAL) TABLE
--- ============================================================================
+CREATE INDEX idx_pi_item_pi ON pi_item(pi_id);
+CREATE INDEX idx_pi_item_medicine ON pi_item(medicine_id);
+
+--
+-- Table: eopa (Estimated Order & Price Approval)
+-- Purpose: PI-Item-Level EOPA with vendor type selection
+-- Architecture: Each PI Item can have up to 3 EOPAs (MANUFACTURER, RM, PM)
+--
 CREATE TABLE eopa (
     id SERIAL PRIMARY KEY,
     eopa_number VARCHAR(50) UNIQUE NOT NULL,
-    eopa_date DATE NOT NULL,
-    pi_id INT NOT NULL UNIQUE REFERENCES pi(id),
-    status eopastatus NOT NULL DEFAULT 'PENDING',
-    total_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    pi_item_id INTEGER REFERENCES pi_item(id) ON DELETE CASCADE NOT NULL,
+    vendor_type VARCHAR(50) NOT NULL CHECK (vendor_type IN ('MANUFACTURER', 'RM', 'PM')),
+    vendor_id INTEGER REFERENCES vendor(id) NOT NULL,
+    quantity NUMERIC(15, 3) NOT NULL,
+    estimated_unit_price NUMERIC(15, 2),
+    estimated_total NUMERIC(15, 2),
+    status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    approval_date DATE,
+    approved_by INTEGER REFERENCES users(id),
     remarks TEXT,
-    approved_by INT REFERENCES users(id),
-    approved_at TIMESTAMP,
-    created_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_eopa_pi_item_vendor_type UNIQUE (pi_item_id, vendor_type)
 );
 
--- ============================================================================
--- EOPA ITEMS TABLE
--- ============================================================================
-CREATE TABLE eopa_items (
-    id SERIAL PRIMARY KEY,
-    eopa_id INT NOT NULL REFERENCES eopa(id) ON DELETE CASCADE,
-    medicine_id INT NOT NULL REFERENCES medicine_master(id),
-    quantity NUMERIC(15,3) NOT NULL,
-    unit_price NUMERIC(15,2) NOT NULL,
-    total_price NUMERIC(15,2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE INDEX idx_eopa_number ON eopa(eopa_number);
+CREATE INDEX idx_eopa_pi_item ON eopa(pi_item_id);
+CREATE INDEX idx_eopa_vendor_type ON eopa(vendor_type);
+CREATE INDEX idx_eopa_vendor ON eopa(vendor_id);
+CREATE INDEX idx_eopa_status ON eopa(status);
 
--- ============================================================================
--- PURCHASE ORDERS TABLE (RM/PM/FG)
--- ============================================================================
-CREATE TABLE purchase_orders (
+--
+-- Table: purchase_order
+-- Purpose: Purchase Orders (RM/PM/FG) WITHOUT pricing
+-- Pricing comes from vendor tax invoices
+--
+CREATE TABLE purchase_order (
     id SERIAL PRIMARY KEY,
     po_number VARCHAR(50) UNIQUE NOT NULL,
     po_date DATE NOT NULL,
-    po_type potype NOT NULL,
-    eopa_id INT NOT NULL REFERENCES eopa(id),
-    vendor_id INT NOT NULL REFERENCES vendors(id),
-    status postatus NOT NULL DEFAULT 'OPEN',
-    total_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    po_type VARCHAR(10) NOT NULL CHECK (po_type IN ('RM', 'PM', 'FG')),
+    vendor_id INTEGER REFERENCES vendor(id),
     delivery_date DATE,
+    status VARCHAR(50) DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'PARTIAL', 'CLOSED', 'CANCELLED')),
     remarks TEXT,
-    created_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- PURCHASE ORDER ITEMS TABLE
--- ============================================================================
-CREATE TABLE po_items (
-    id SERIAL PRIMARY KEY,
-    po_id INT NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
-    medicine_id INT NOT NULL REFERENCES medicine_master(id),
-    quantity NUMERIC(15,3) NOT NULL,
-    unit_price NUMERIC(15,2) NOT NULL,
-    total_price NUMERIC(15,2) NOT NULL,
-    received_quantity NUMERIC(15,3) DEFAULT 0 NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE INDEX idx_po_number ON purchase_order(po_number);
+CREATE INDEX idx_po_type ON purchase_order(po_type);
+CREATE INDEX idx_po_vendor ON purchase_order(vendor_id);
+CREATE INDEX idx_po_status ON purchase_order(status);
+CREATE INDEX idx_po_date ON purchase_order(po_date);
 
--- ============================================================================
--- MATERIAL RECEIPTS TABLE
--- ============================================================================
-CREATE TABLE material_receipts (
+--
+-- Table: po_item
+-- Purpose: PO line items WITHOUT pricing (only quantities)
+--
+CREATE TABLE po_item (
     id SERIAL PRIMARY KEY,
-    receipt_number VARCHAR(50) UNIQUE NOT NULL,
-    receipt_date DATE NOT NULL,
-    po_id INT NOT NULL REFERENCES purchase_orders(id),
-    medicine_id INT NOT NULL REFERENCES medicine_master(id),
-    quantity_received NUMERIC(15,3) NOT NULL,
-    batch_number VARCHAR(50),
+    po_id INTEGER REFERENCES purchase_order(id) ON DELETE CASCADE NOT NULL,
+    medicine_id INTEGER REFERENCES medicine_master(id) NOT NULL,
+    ordered_quantity NUMERIC(15, 3) NOT NULL,
+    fulfilled_quantity NUMERIC(15, 3) DEFAULT 0,
+    unit VARCHAR(20),
+    language VARCHAR(10),
+    artwork_version VARCHAR(20),
     remarks TEXT,
-    received_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- MATERIAL BALANCE TABLE (Inventory at Warehouse)
--- ============================================================================
-CREATE TABLE material_balance (
-    id SERIAL PRIMARY KEY,
-    medicine_id INT NOT NULL UNIQUE REFERENCES medicine_master(id),
-    available_quantity NUMERIC(15,3) NOT NULL DEFAULT 0,
-    last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE INDEX idx_po_item_po ON po_item(po_id);
+CREATE INDEX idx_po_item_medicine ON po_item(medicine_id);
 
--- ============================================================================
--- DISPATCH ADVICE TABLE (From Manufacturer/Vendor)
--- ============================================================================
-CREATE TABLE dispatch_advice (
+--
+-- Table: vendor_invoice
+-- Purpose: Vendor tax invoices with pricing and fulfillment tracking
+-- Updates PO fulfilled_quantity when invoice is created
+--
+CREATE TABLE vendor_invoice (
     id SERIAL PRIMARY KEY,
-    dispatch_number VARCHAR(50) UNIQUE NOT NULL,
-    dispatch_date DATE NOT NULL,
-    medicine_id INT NOT NULL REFERENCES medicine_master(id),
-    quantity_dispatched NUMERIC(15,3) NOT NULL,
-    destination VARCHAR(200) NOT NULL,
+    invoice_number VARCHAR(100) UNIQUE NOT NULL,
+    po_id INTEGER REFERENCES purchase_order(id) NOT NULL,
+    invoice_date DATE NOT NULL,
+    medicine_id INTEGER REFERENCES medicine_master(id) NOT NULL,
+    shipped_quantity NUMERIC(15, 3) NOT NULL,
+    unit_price NUMERIC(15, 2) NOT NULL,
+    total_amount NUMERIC(15, 2) NOT NULL,
+    tax_amount NUMERIC(15, 2),
+    discount_amount NUMERIC(15, 2),
+    net_amount NUMERIC(15, 2),
+    payment_status VARCHAR(50) DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING', 'PAID', 'PARTIAL')),
+    payment_date DATE,
     remarks TEXT,
-    dispatched_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- WAREHOUSE GRN (GOODS RECEIPT NOTE) TABLE
--- ============================================================================
-CREATE TABLE warehouse_grn (
+CREATE INDEX idx_vendor_invoice_number ON vendor_invoice(invoice_number);
+CREATE INDEX idx_vendor_invoice_po ON vendor_invoice(po_id);
+CREATE INDEX idx_vendor_invoice_date ON vendor_invoice(invoice_date);
+CREATE INDEX idx_vendor_invoice_payment_status ON vendor_invoice(payment_status);
+
+--
+-- Table: system_configuration
+-- Purpose: Store all system settings with JSONB for flexibility
+-- Categories: system, workflow, numbering, vendor, email, security, ui, integration
+--
+CREATE TABLE system_configuration (
     id SERIAL PRIMARY KEY,
-    grn_number VARCHAR(50) UNIQUE NOT NULL,
-    grn_date DATE NOT NULL,
-    dispatch_advice_id INT NOT NULL REFERENCES dispatch_advice(id),
-    quantity_received NUMERIC(15,3) NOT NULL,
-    remarks TEXT,
-    received_by INT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    config_key VARCHAR(255) UNIQUE NOT NULL,
+    config_value JSON NOT NULL,
+    description TEXT,
+    category VARCHAR(50) NOT NULL CHECK (category IN ('system', 'workflow', 'numbering', 'vendor', 'email', 'security', 'ui', 'integration')),
+    is_sensitive BOOLEAN DEFAULT false NOT NULL,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- INDEXES FOR BETTER QUERY PERFORMANCE
--- ============================================================================
-CREATE INDEX idx_vendors_type ON vendors(vendor_type);
-CREATE INDEX idx_vendors_code ON vendors(vendor_code);
-CREATE INDEX idx_vendors_active ON vendors(is_active);
+CREATE INDEX idx_config_key ON system_configuration(config_key);
+CREATE INDEX idx_config_category ON system_configuration(category);
 
-CREATE INDEX idx_product_master_code ON product_master(product_code);
-CREATE INDEX idx_product_master_active ON product_master(is_active);
+--
+-- Table: alembic_version
+-- Purpose: Track database migrations
+--
+CREATE TABLE alembic_version (
+    version_num VARCHAR(32) PRIMARY KEY
+);
 
-CREATE INDEX idx_medicine_master_code ON medicine_master(medicine_code);
-CREATE INDEX idx_medicine_master_product ON medicine_master(product_id);
-CREATE INDEX idx_medicine_master_vendor ON medicine_master(vendor_id);
-CREATE INDEX idx_medicine_master_active ON medicine_master(is_active);
-
-CREATE INDEX idx_pi_number ON pi(pi_number);
-CREATE INDEX idx_pi_partner_vendor ON pi(partner_vendor_id);
-CREATE INDEX idx_pi_created_by ON pi(created_by);
-CREATE INDEX idx_pi_date ON pi(pi_date);
-
-CREATE INDEX idx_pi_items_pi ON pi_items(pi_id);
-CREATE INDEX idx_pi_items_medicine ON pi_items(medicine_id);
-
-CREATE INDEX idx_eopa_number ON eopa(eopa_number);
-CREATE INDEX idx_eopa_pi ON eopa(pi_id);
-CREATE INDEX idx_eopa_status ON eopa(status);
-CREATE INDEX idx_eopa_created_by ON eopa(created_by);
-
-CREATE INDEX idx_eopa_items_eopa ON eopa_items(eopa_id);
-CREATE INDEX idx_eopa_items_medicine ON eopa_items(medicine_id);
-
-CREATE INDEX idx_po_number ON purchase_orders(po_number);
-CREATE INDEX idx_po_eopa ON purchase_orders(eopa_id);
-CREATE INDEX idx_po_vendor ON purchase_orders(vendor_id);
-CREATE INDEX idx_po_type ON purchase_orders(po_type);
-CREATE INDEX idx_po_status ON purchase_orders(status);
-CREATE INDEX idx_po_created_by ON purchase_orders(created_by);
-
-CREATE INDEX idx_po_items_po ON po_items(po_id);
-CREATE INDEX idx_po_items_medicine ON po_items(medicine_id);
-
-CREATE INDEX idx_material_receipts_number ON material_receipts(receipt_number);
-CREATE INDEX idx_material_receipts_po ON material_receipts(po_id);
-CREATE INDEX idx_material_receipts_medicine ON material_receipts(medicine_id);
-CREATE INDEX idx_material_receipts_date ON material_receipts(receipt_date);
-
-CREATE INDEX idx_material_balance_medicine ON material_balance(medicine_id);
-
-CREATE INDEX idx_dispatch_advice_number ON dispatch_advice(dispatch_number);
-CREATE INDEX idx_dispatch_advice_medicine ON dispatch_advice(medicine_id);
-CREATE INDEX idx_dispatch_advice_date ON dispatch_advice(dispatch_date);
-
-CREATE INDEX idx_warehouse_grn_number ON warehouse_grn(grn_number);
-CREATE INDEX idx_warehouse_grn_dispatch ON warehouse_grn(dispatch_advice_id);
-CREATE INDEX idx_warehouse_grn_date ON warehouse_grn(grn_date);
-
--- ============================================================================
--- COMMENTS FOR DOCUMENTATION
--- ============================================================================
-COMMENT ON TABLE users IS 'System users with role-based access control';
-COMMENT ON TABLE vendors IS 'Vendors: PARTNER, RM (Raw Material), PM (Packing Material), MANUFACTURER';
-COMMENT ON TABLE product_master IS 'Generic product catalog';
-COMMENT ON TABLE medicine_master IS 'Specific medicines mapped to products and vendors';
-COMMENT ON TABLE pi IS 'Proforma Invoices from partner vendors';
-COMMENT ON TABLE eopa IS 'Estimated Order & Price Approval - links PI to POs';
-COMMENT ON TABLE purchase_orders IS 'Purchase Orders branched into RM/PM/FG types';
-COMMENT ON TABLE material_receipts IS 'Material receipts against purchase orders';
-COMMENT ON TABLE material_balance IS 'Real-time inventory balance';
-COMMENT ON TABLE dispatch_advice IS 'Dispatch notifications from vendors/manufacturers';
-COMMENT ON TABLE warehouse_grn IS 'Goods Receipt Notes at warehouse';
+-- End of schema
