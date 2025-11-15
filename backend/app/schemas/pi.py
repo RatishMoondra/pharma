@@ -4,6 +4,13 @@ from datetime import datetime, date
 from decimal import Decimal
 
 
+class PIStatus(str):
+    """PI Status enum for Pydantic"""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class CountryBasic(BaseModel):
     """Basic country info for nested responses"""
     id: int
@@ -101,6 +108,9 @@ class PIResponse(PIBase):
     id: int
     pi_number: str
     total_amount: float
+    status: str  # PIStatus
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
     created_by: int
     created_at: datetime
     items: List[PIItemResponse] = []
@@ -109,3 +119,9 @@ class PIResponse(PIBase):
     
     class Config:
         from_attributes = True
+
+
+class PIApprovalSchema(BaseModel):
+    """Schema for approving/rejecting PI"""
+    approved: bool
+    remarks: Optional[str] = None

@@ -16,12 +16,37 @@ logger = logging.getLogger("pharma")
 @router.post("/login", response_model=dict)
 async def login(credentials: LoginSchema, db: Session = Depends(get_db)):
     """User login"""
-    logger.info({"event": "LOGIN_ATTEMPT", "username": credentials.username})
+    logger.info({
+        "event": "LOGIN_ATTEMPT", 
+        "username": credentials.username,
+        "username_length": len(credentials.username),
+        "password_length": len(credentials.password)
+    })
     
     user = db.query(User).filter(User.username == credentials.username).first()
     
-    if not user or not verify_password(credentials.password, user.hashed_password):
-        logger.warning({"event": "LOGIN_FAILED", "username": credentials.username})
+    if not user:
+        logger.warning({
+            "event": "LOGIN_FAILED", 
+            "reason": "USER_NOT_FOUND",
+            "username": credentials.username
+        })
+        raise AppException("Invalid credentials", "ERR_AUTH_FAILED", 401)
+    
+    password_match = verify_password(credentials.password, user.hashed_password)
+    logger.info({
+        "event": "PASSWORD_VERIFICATION",
+        "username": credentials.username,
+        "password_match": password_match,
+        "user_active": user.is_active
+    })
+    
+    if not password_match:
+        logger.warning({
+            "event": "LOGIN_FAILED",
+            "reason": "INVALID_PASSWORD",
+            "username": credentials.username
+        })
         raise AppException("Invalid credentials", "ERR_AUTH_FAILED", 401)
     
     if not user.is_active:

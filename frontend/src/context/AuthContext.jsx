@@ -22,17 +22,27 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const login = async (credentials) => {
-    const response = await api.post('/api/auth/login', credentials)
-    
-    if (response.data.success) {
-      const { access_token, user: userData } = response.data.data
-      setToken(access_token)
-      setUser(userData)
-      localStorage.setItem('token', access_token)
-      localStorage.setItem('user', JSON.stringify(userData))
-      return true
+    try {
+      console.log('Login attempt with:', { username: credentials.username })
+      const response = await api.post('/api/auth/login', credentials)
+      console.log('Login response:', response.data)
+      
+      if (response.data.success) {
+        const { access_token, user: userData } = response.data.data
+        setToken(access_token)
+        setUser(userData)
+        localStorage.setItem('token', access_token)
+        localStorage.setItem('user', JSON.stringify(userData))
+        console.log('Login successful, user:', userData)
+        return true
+      }
+      console.log('Login failed: response not successful')
+      return false
+    } catch (error) {
+      console.error('Login error:', error)
+      console.error('Error response:', error.response?.data)
+      throw error
     }
-    return false
   }
 
   const logout = () => {

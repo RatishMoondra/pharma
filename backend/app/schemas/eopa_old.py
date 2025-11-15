@@ -59,53 +59,31 @@ class PIItemBasic(BaseModel):
         from_attributes = True
 
 
-# EOPA Item schemas
-class EOPAItemCreate(BaseModel):
-    """Create EOPA item"""
+class EOPACreate(BaseModel):
+    """Create EOPA from PI item - vendor-agnostic"""
     pi_item_id: int
     quantity: float = Field(..., gt=0)
     estimated_unit_price: float = Field(..., gt=0)
-
-
-class EOPAItemResponse(BaseModel):
-    """EOPA item response"""
-    id: int
-    eopa_id: int
-    pi_item_id: int
-    quantity: float
-    estimated_unit_price: float
-    estimated_total: float
-    created_by: int
-    created_at: datetime
-    updated_at: datetime
-    
-    # Nested PI item with medicine details
-    pi_item: Optional[PIItemBasic] = None
-    
-    class Config:
-        from_attributes = True
-
-
-# Main EOPA schemas
-class EOPACreate(BaseModel):
-    """Create EOPA from PI - vendor-agnostic"""
-    pi_id: int
-    items: List[EOPAItemCreate]
     remarks: Optional[str] = None
 
 
 class EOPAUpdate(BaseModel):
-    """Update EOPA remarks"""
+    """Update EOPA - only medicine/product details, no vendor fields"""
+    quantity: Optional[float] = Field(None, gt=0)
+    estimated_unit_price: Optional[float] = Field(None, gt=0)
     remarks: Optional[str] = None
 
 
 class EOPAResponse(BaseModel):
-    """EOPA response - vendor-agnostic approval layer (ONE per PI)"""
+    """EOPA response - vendor-agnostic approval layer"""
     id: int
     eopa_number: str
     eopa_date: date
-    pi_id: int
+    pi_item_id: int
     status: EOPAStatus
+    quantity: float
+    estimated_unit_price: float
+    estimated_total: float
     remarks: Optional[str] = None
     approved_by: Optional[int] = None
     approved_at: Optional[datetime] = None
@@ -113,9 +91,8 @@ class EOPAResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    # Nested relationships
-    items: List[EOPAItemResponse] = []
-    pi: Optional[PIBasicForEOPA] = None
+    # Nested relationships (NO vendor - vendor resolution happens during PO generation)
+    pi_item: Optional[PIItemBasic] = None
     
     class Config:
         from_attributes = True
@@ -123,4 +100,16 @@ class EOPAResponse(BaseModel):
 
 class EOPAApproveSchema(BaseModel):
     approved: bool
+    remarks: Optional[str] = None
+
+
+class EOPABulkCreateRequest(BaseModel):
+    """
+    DEPRECATED: This schema is no longer needed with vendor-agnostic EOPA.
+    Use EOPACreate instead - one EOPA per PI item.
+    Vendor selection happens during PO generation from Medicine Master.
+    """
+    pi_item_id: int
+    quantity: float = Field(..., gt=0)
+    estimated_unit_price: float = Field(..., gt=0)
     remarks: Optional[str] = None

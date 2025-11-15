@@ -1,9 +1,16 @@
-from sqlalchemy import String, ForeignKey, Numeric, Date, Text
+from sqlalchemy import String, ForeignKey, Numeric, Date, Text, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date
 from typing import List, Optional
+import enum
 
 from app.models.base import Base
+
+
+class PIStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 class PI(Base):
@@ -17,7 +24,10 @@ class PI(Base):
     partner_vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id"))
     total_amount: Mapped[float] = mapped_column(Numeric(15, 2))
     currency: Mapped[str] = mapped_column(String(10), default="INR")
+    status: Mapped[PIStatus] = mapped_column(SQLEnum(PIStatus), default=PIStatus.PENDING)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    approved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -26,7 +36,9 @@ class PI(Base):
     country: Mapped["Country"] = relationship("Country", back_populates="pis")
     partner_vendor: Mapped["Vendor"] = relationship("Vendor", back_populates="pis")
     creator: Mapped["User"] = relationship("User", foreign_keys="[PI.created_by]")
+    approver: Mapped[Optional["User"]] = relationship("User", foreign_keys="[PI.approved_by]")
     items: Mapped[List["PIItem"]] = relationship("PIItem", back_populates="pi", cascade="all, delete-orphan")
+    eopas: Mapped[List["EOPA"]] = relationship("EOPA", back_populates="pi", cascade="all, delete-orphan")
 
 
 class PIItem(Base):
@@ -44,4 +56,3 @@ class PIItem(Base):
     # Relationships
     pi: Mapped["PI"] = relationship("PI", back_populates="items")
     medicine: Mapped["MedicineMaster"] = relationship("MedicineMaster", back_populates="pi_items")
-    eopas: Mapped[List["EOPA"]] = relationship("EOPA", back_populates="pi_item", cascade="all, delete-orphan")

@@ -31,11 +31,13 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CancelIcon from '@mui/icons-material/Cancel'
 import PIForm from '../components/PIForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
-const PIRow = ({ pi, onEdit, onDelete }) => {
+const PIRow = ({ pi, onEdit, onDelete, onApprove }) => {
   const [open, setOpen] = useState(false)
 
   return (
@@ -73,17 +75,44 @@ const PIRow = ({ pi, onEdit, onDelete }) => {
         <TableCell>
           <Chip
             label={pi.status || 'PENDING'}
-            color={pi.status === 'APPROVED' ? 'success' : 'warning'}
+            color={
+              pi.status === 'APPROVED' ? 'success' : 
+              pi.status === 'REJECTED' ? 'error' : 
+              'warning'
+            }
             size="small"
           />
         </TableCell>
         <TableCell align="right">
+          {pi.status === 'PENDING' && (
+            <>
+              <IconButton
+                size="small"
+                color="success"
+                onClick={() => onApprove(pi, true)}
+                sx={{ mr: 1 }}
+                title="Approve PI (Auto-generates EOPAs)"
+              >
+                <CheckCircleIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => onApprove(pi, false)}
+                sx={{ mr: 1 }}
+                title="Reject PI"
+              >
+                <CancelIcon fontSize="small" />
+              </IconButton>
+            </>
+          )}
           <IconButton
             size="small"
             color="primary"
             onClick={() => onEdit(pi)}
             sx={{ mr: 1 }}
             title="Edit PI"
+            disabled={pi.status === 'APPROVED' || pi.status === 'REJECTED'}
           >
             <EditIcon fontSize="small" />
           </IconButton>
@@ -92,6 +121,7 @@ const PIRow = ({ pi, onEdit, onDelete }) => {
             color="error"
             onClick={() => onDelete(pi)}
             title="Delete PI"
+            disabled={pi.status === 'APPROVED'}
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -188,6 +218,41 @@ const PIRow = ({ pi, onEdit, onDelete }) => {
                   </Typography>
                 </Box>
               )}
+              {pi.status === 'APPROVED' && pi.approved_at && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderLeft: 4, borderColor: 'success.main', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    APPROVAL INFORMATION
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <strong>Approved At:</strong> {new Date(pi.approved_at).toLocaleString()}
+                  </Typography>
+                  {pi.approved_by && (
+                    <Typography variant="body2">
+                      <strong>Approved By:</strong> User ID {pi.approved_by}
+                    </Typography>
+                  )}
+                  {pi.eopa_numbers && pi.eopa_numbers.length > 0 && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      <strong>Auto-generated EOPAs:</strong> {pi.eopa_numbers.join(', ')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              {pi.status === 'REJECTED' && pi.approved_at && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'error.50', borderLeft: 4, borderColor: 'error.main', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    REJECTION INFORMATION
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <strong>Rejected At:</strong> {new Date(pi.approved_at).toLocaleString()}
+                  </Typography>
+                  {pi.approved_by && (
+                    <Typography variant="body2">
+                      <strong>Rejected By:</strong> User ID {pi.approved_by}
+                    </Typography>
+                  )}
+                </Box>
+              )}
             </Box>
           </Collapse>
         </TableCell>
@@ -207,6 +272,11 @@ const PIPage = () => {
   const [piToDelete, setPiToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false)
+  const [piToApprove, setPiToApprove] = useState(null)
+  const [approvalAction, setApprovalAction] = useState(true)
+  const [approvalRemarks, setApprovalRemarks] = useState('')
+  const [approving, setApproving] = useState(false)
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchPIs = async () => {
@@ -299,6 +369,52 @@ const PIPage = () => {
     setEditingPI(null)
   }
 
+  const handleApprovalClick = (pi, approve) => {
+    setPiToApprove(pi)
+    setApprovalAction(approve)
+    setApprovalRemarks('')
+    setApprovalDialogOpen(true)
+  }
+
+  const handleApprovalConfirm = async () => {
+    if (!piToApprove) return
+    
+    try {
+      setApproving(true)
+      clearError()
+      
+      const response = await api.post(`/api/pi/${piToApprove.id}/approve`, {
+        approved: approvalAction,
+        remarks: approvalRemarks || undefined
+      })
+      
+      if (response.data.success) {
+        const action = approvalAction ? 'approved' : 'rejected'
+        let message = `PI ${action} successfully`
+        
+        if (approvalAction && response.data.data.eopa_number) {
+          message += ` - EOPA ${response.data.data.eopa_number} created with ${piToApprove.items?.length || 0} line items`
+        }
+        
+        setSuccessMessage(message)
+        fetchPIs()
+        setApprovalDialogOpen(false)
+        setPiToApprove(null)
+        setApprovalRemarks('')
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  const handleApprovalCancel = () => {
+    setApprovalDialogOpen(false)
+    setPiToApprove(null)
+    setApprovalRemarks('')
+  }
+
   // Filter PIs based on search query
   const filteredPis = pis.filter(pi => {
     if (!searchQuery) return true
@@ -373,6 +489,7 @@ const PIPage = () => {
                   pi={pi} 
                   onEdit={handleEdit}
                   onDelete={handleDeleteClick}
+                  onApprove={handleApprovalClick}
                 />
               ))}
             </TableBody>
@@ -410,6 +527,51 @@ const PIPage = () => {
             disabled={deleting}
           >
             {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={approvalDialogOpen}
+        onClose={handleApprovalCancel}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {approvalAction ? 'Approve' : 'Reject'} PI
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Are you sure you want to {approvalAction ? 'approve' : 'reject'} PI <strong>{piToApprove?.pi_number}</strong>?
+          </DialogContentText>
+          {approvalAction && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Auto-EOPA Generation:</strong> Approving this PI will automatically create ONE EOPA with {piToApprove?.items?.length || 0} line items.
+              </Typography>
+            </Alert>
+          )}
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Remarks (Optional)"
+            value={approvalRemarks}
+            onChange={(e) => setApprovalRemarks(e.target.value)}
+            placeholder="Add any remarks about this decision..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleApprovalCancel} disabled={approving}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleApprovalConfirm} 
+            color={approvalAction ? 'success' : 'error'}
+            variant="contained"
+            disabled={approving}
+          >
+            {approving ? 'Processing...' : (approvalAction ? 'Approve' : 'Reject')}
           </Button>
         </DialogActions>
       </Dialog>
