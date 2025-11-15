@@ -27,6 +27,10 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Checkbox,
+  Select,
+  MenuItem,
+  FormControl,
 } from '@mui/material'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
@@ -35,6 +39,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import SearchIcon from '@mui/icons-material/Search'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import InfoIcon from '@mui/icons-material/Info'
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
@@ -302,6 +307,13 @@ const EOPAPage = () => {
   const [eopaToApprove, setEopaToApprove] = useState(null)
   const [approving, setApproving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // PO Review Dialog states
+  const [poReviewDialogOpen, setPoReviewDialogOpen] = useState(false)
+  const [eopaForPO, setEopaForPO] = useState(null)
+  const [poPreview, setPoPreview] = useState([])
+  const [generatingPO, setGeneratingPO] = useState(false)
+  
   const { error, handleApiError, clearError } = useApiError()
 
   const fetchData = async () => {
@@ -337,6 +349,114 @@ const EOPAPage = () => {
     setApproveDialogOpen(true)
   }
 
+  const handleGeneratePO = async (eopa) => {
+    // Prepare PO preview data with selection capability
+    const poItems = []
+    
+    eopa.items?.forEach((eopaItem, index) => {
+      const medicine = eopaItem.pi_item?.medicine
+      const quantity = parseFloat(eopaItem.quantity || 0)
+      const sequence = index + 1
+      
+      // FG PO (same quantity as EOPA)
+      poItems.push({
+        type: 'FG',
+        sequence,
+        medicine_name: medicine?.medicine_name || 'Unknown',
+        eopa_quantity: quantity,
+        po_quantity: quantity,
+        unit: 'pcs',  // Default unit for FG
+        vendor: medicine?.manufacturer_vendor?.vendor_name || 'NOT ASSIGNED',
+        eopa_item_id: eopaItem.id,
+        selected: false  // User can select which items to generate
+      })
+      
+      // RM PO (needs conversion - user to edit)
+      poItems.push({
+        type: 'RM',
+        sequence,
+        medicine_name: medicine?.medicine_name || 'Unknown',
+        eopa_quantity: quantity,
+        po_quantity: quantity, // Default to same, user can edit
+        unit: 'kg',  // Default unit for RM
+        vendor: medicine?.rm_vendor?.vendor_name || 'NOT ASSIGNED',
+        eopa_item_id: eopaItem.id,
+        selected: false
+      })
+      
+      // PM PO (needs conversion - user to edit)
+      poItems.push({
+        type: 'PM',
+        sequence,
+        medicine_name: medicine?.medicine_name || 'Unknown',
+        eopa_quantity: quantity,
+        po_quantity: quantity, // Default to same, user can edit
+        unit: 'boxes',  // Default unit for PM
+        vendor: medicine?.pm_vendor?.vendor_name || 'NOT ASSIGNED',
+        eopa_item_id: eopaItem.id,
+        selected: false
+      })
+    })
+    
+    setEopaForPO(eopa)
+    setPoPreview(poItems)
+    setPoReviewDialogOpen(true)
+  }
+
+  const handlePOQuantityChange = (index, field, value) => {
+    const updated = [...poPreview]
+    if (field === 'quantity') {
+      updated[index].po_quantity = parseFloat(value) || 0
+    } else if (field === 'unit') {
+      updated[index].unit = value
+    } else if (field === 'selected') {
+      updated[index].selected = value
+    }
+    setPoPreview(updated)
+  }
+
+  const handleConfirmGeneratePO = async () => {
+    if (!eopaForPO) return
+    
+    const selectedPOs = poPreview.filter(po => po.selected)
+    if (selectedPOs.length === 0) {
+      handleApiError({ response: { data: { message: 'Please select at least one PO to generate' } } })
+      return
+    }
+    
+    try {
+      setGeneratingPO(true)
+      clearError()
+      
+      const response = await api.post(`/api/po/generate-from-eopa/${eopaForPO.id}`, {
+        po_quantities: selectedPOs.map(po => ({
+          eopa_item_id: po.eopa_item_id,
+          po_type: po.type,
+          quantity: po.po_quantity,
+          unit: po.unit
+        }))
+      })
+      
+      if (response.data.success) {
+        setSuccessMessage(`Successfully generated ${response.data.data.total_pos_created} PO(s) from EOPA ${eopaForPO.eopa_number}`)
+        fetchData()
+        setPoReviewDialogOpen(false)
+        setEopaForPO(null)
+        setPoPreview([])
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setGeneratingPO(false)
+    }
+  }
+
+  const handleCancelGeneratePO = () => {
+    setPoReviewDialogOpen(false)
+    setEopaForPO(null)
+    setPoPreview([])
+  }
+
   const handleApproveConfirm = async () => {
     if (!eopaToApprove) return
     
@@ -344,7 +464,9 @@ const EOPAPage = () => {
       setApproving(true)
       clearError()
       
-      const response = await api.post(`/api/eopa/${eopaToApprove.id}/approve`)
+      const response = await api.post(`/api/eopa/${eopaToApprove.id}/approve`, {
+        approved: true
+      })
       if (response.data.success) {
         setSuccessMessage('EOPA approved successfully')
         fetchData()
@@ -599,6 +721,19 @@ const EOPAPage = () => {
                       </Button>
                     </Box>
                   )}
+                  {eopa.status === 'APPROVED' && (
+                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<ShoppingCartIcon />}
+                        onClick={() => handleGeneratePO(eopa)}
+                        size="small"
+                      >
+                        Generate Purchase Orders
+                      </Button>
+                    </Box>
+                  )}
                 </AccordionDetails>
               </Accordion>
             )
@@ -628,6 +763,164 @@ const EOPAPage = () => {
             disabled={approving}
           >
             {approving ? 'Approving...' : 'Approve'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* PO Review Dialog */}
+      <Dialog
+        open={poReviewDialogOpen}
+        onClose={handleCancelGeneratePO}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          Review & Edit Purchase Orders
+          <Typography variant="caption" display="block" color="text.secondary">
+            EOPA: {eopaForPO?.eopa_number}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Select which POs to generate:</strong> Check the items you want to create. 
+            Adjust RM/PM quantities based on conversion ratios (e.g., if 10 tablets need 25 kg powder, adjust accordingly).
+          </Alert>
+          
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'grey.100' }}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={poPreview?.length > 0 && poPreview.every(po => po.selected)}
+                      indeterminate={poPreview?.length > 0 && poPreview.some(po => po.selected) && !poPreview.every(po => po.selected)}
+                      onChange={(e) => {
+                        const updated = poPreview.map(po => ({ ...po, selected: e.target.checked }))
+                        setPoPreview(updated)
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>PO Type</TableCell>
+                  <TableCell>Medicine</TableCell>
+                  <TableCell>Vendor</TableCell>
+                  <TableCell align="right">EOPA Qty (FG)</TableCell>
+                  <TableCell align="right" width="120px">PO Quantity *</TableCell>
+                  <TableCell width="100px">Unit</TableCell>
+                  <TableCell>Notes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(poPreview || []).map((po, index) => (
+                  <TableRow 
+                    key={index}
+                    sx={{ 
+                      bgcolor: po.type === 'FG' ? 'primary.50' : 
+                               po.type === 'RM' ? 'success.50' : 'warning.50',
+                      opacity: po.selected ? 1 : 0.6
+                    }}
+                  >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={po.selected}
+                        onChange={(e) => handlePOQuantityChange(index, 'selected', e.target.checked)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        icon={getVendorTypeIcon(po.type === 'FG' ? 'MANUFACTURER' : po.type)}
+                        label={po.type}
+                        size="small"
+                        color={po.type === 'FG' ? 'primary' : po.type === 'RM' ? 'success' : 'warning'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{po.medicine_name}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={!po.vendor || po.vendor === 'NOT ASSIGNED' ? 'error' : 'inherit'}>
+                        {po.vendor}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">
+                        {po.eopa_quantity.toLocaleString('en-IN')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={po.po_quantity}
+                        onChange={(e) => handlePOQuantityChange(index, 'quantity', e.target.value)}
+                        inputProps={{ min: 0, step: 0.001 }}
+                        fullWidth
+                        disabled={po.type === 'FG' || !po.selected} // FG qty should match EOPA
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <FormControl fullWidth size="small" disabled={!po.selected}>
+                        <Select
+                          value={po.unit || ''}
+                          onChange={(e) => handlePOQuantityChange(index, 'unit', e.target.value)}
+                          displayEmpty
+                        >
+                          <MenuItem value="pcs">pcs (pieces)</MenuItem>
+                          <MenuItem value="kg">kg (kilograms)</MenuItem>
+                          <MenuItem value="g">g (grams)</MenuItem>
+                          <MenuItem value="mg">mg (milligrams)</MenuItem>
+                          <MenuItem value="L">L (liters)</MenuItem>
+                          <MenuItem value="ml">ml (milliliters)</MenuItem>
+                          <MenuItem value="boxes">boxes</MenuItem>
+                          <MenuItem value="bottles">bottles</MenuItem>
+                          <MenuItem value="labels">labels</MenuItem>
+                          <MenuItem value="cartons">cartons</MenuItem>
+                          <MenuItem value="strips">strips</MenuItem>
+                          <MenuItem value="vials">vials</MenuItem>
+                          <MenuItem value="ampoules">ampoules</MenuItem>
+                          <MenuItem value="capsules">capsules</MenuItem>
+                          <MenuItem value="tablets">tablets</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      {po.type === 'FG' && (
+                        <Typography variant="caption" color="text.secondary">
+                          Same as EOPA
+                        </Typography>
+                      )}
+                      {po.type === 'RM' && (
+                        <Typography variant="caption" color="text.secondary">
+                          Raw material (kg, liters, etc.)
+                        </Typography>
+                      )}
+                      {po.type === 'PM' && (
+                        <Typography variant="caption" color="text.secondary">
+                          Packing (boxes, bottles, labels, etc.)
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+            Total POs selected: {(poPreview || []).filter(po => po.selected).length} / {(poPreview || []).length}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelGeneratePO} disabled={generatingPO}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmGeneratePO} 
+            color="primary"
+            variant="contained"
+            disabled={generatingPO}
+            startIcon={<ShoppingCartIcon />}
+          >
+            {generatingPO ? 'Generating...' : 'Generate POs'}
           </Button>
         </DialogActions>
       </Dialog>

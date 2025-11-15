@@ -1,0 +1,200 @@
+"""
+Invoice Router - API Endpoints for Vendor Tax Invoice Processing
+
+Endpoints:
+- POST /invoice/vendor/{po_id} - Process vendor invoice (RM/PM/FG)
+- GET /invoice/po/{po_id} - Get all invoices for a PO
+- GET /invoice/{invoice_number} - Get invoice by number
+"""
+from fastapi import APIRouter, Depends, Path
+from sqlalchemy.orm import Session
+from typing import List
+import logging
+
+from app.database.session import get_db
+from app.schemas.invoice import InvoiceCreate, InvoiceResponse
+from app.services.invoice_service import InvoiceService
+from app.models.user import User, UserRole
+from app.auth.dependencies import get_current_user, require_role
+
+router = APIRouter()
+logger = logging.getLogger("pharma")
+
+
+@router.post(
+    "/vendor/{po_id}",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.WAREHOUSE_MANAGER]))]
+)
+async def process_vendor_invoice(
+    po_id: int = Path(description="Purchase Order ID"),
+    invoice_data: InvoiceCreate = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Process a vendor tax invoice (RM, PM, or FG).
+    
+    This endpoint:
+    1. Records the actual pricing from vendor
+    2. Updates PO fulfillment quantities
+    3. Updates PO status (OPEN → PARTIAL → CLOSED)
+    4. For RM/PM: Updates manufacturer's material balance
+    
+    Business Rules:
+    - POs contain only quantities
+    - Invoices provide actual pricing (source of truth)
+    - Invoice receipt drives PO fulfillment
+    - RM/PM invoices update manufacturer stock
+    """
+    service = InvoiceService(db)
+    result = service.process_vendor_invoice(po_id, invoice_data, current_user.id)
+    
+    return {
+        "success": True,
+        "message": f"Invoice {invoice_data.invoice_number} processed successfully",
+        "data": result
+    }
+
+
+@router.get(
+    "/po/{po_id}",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.WAREHOUSE_MANAGER, UserRole.ACCOUNTANT]))]
+)
+async def get_po_invoices(
+    po_id: int = Path(description="Purchase Order ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all invoices for a Purchase Order.
+    
+    Returns:
+        List of invoices with line items and pricing details
+    """
+    service = InvoiceService(db)
+    invoices = service.get_po_invoices(po_id)
+    
+    return {
+        "success": True,
+        "data": [InvoiceResponse.from_orm(inv) for inv in invoices]
+    }
+
+
+@router.get(
+    "/number/{invoice_number}",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.WAREHOUSE_MANAGER, UserRole.ACCOUNTANT]))]
+)
+async def get_invoice_by_number(
+    invoice_number: str = Path(description="Invoice Number"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get invoice details by invoice number.
+    
+    Returns:
+        Invoice with PO details, vendor info, and line items
+    """
+    service = InvoiceService(db)
+    invoice = service.get_invoice_by_number(invoice_number)
+    
+    return {
+        "success": True,
+        "data": InvoiceResponse.from_orm(invoice)
+    }
+
+
+@router.get(
+    "/",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.ACCOUNTANT]))]
+)
+async def get_all_invoices(
+    db: Session = Depends(get_db)
+):
+    """
+    Get all vendor invoices with PO and vendor details.
+    
+    Returns:
+        List of all invoices with line items, PO info, and vendor details
+    """
+    service = InvoiceService(db)
+    invoices = service.get_all_invoices()
+    
+    return {
+        "success": True,
+        "data": [InvoiceResponse.from_orm(inv) for inv in invoices]
+    }
+
+
+@router.put(
+    "/{invoice_id}",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))]
+)
+async def update_invoice(
+    invoice_id: int = Path(description="Invoice ID"),
+    invoice_data: InvoiceCreate = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing invoice.
+    Only PENDING invoices can be updated.
+    """
+    service = InvoiceService(db)
+    result = service.update_invoice(invoice_id, invoice_data, current_user.id)
+    
+    return {
+        "success": True,
+        "message": f"Invoice {invoice_data.invoice_number} updated successfully",
+        "data": result
+    }
+
+
+@router.delete(
+    "/{invoice_id}",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN]))]
+)
+async def delete_invoice(
+    invoice_id: int = Path(description="Invoice ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete an invoice.
+    Only ADMIN can delete invoices.
+    """
+    service = InvoiceService(db)
+    service.delete_invoice(invoice_id, current_user.id)
+    
+    return {
+        "success": True,
+        "message": "Invoice deleted successfully"
+    }
+
+
+@router.post(
+    "/{invoice_id}/process",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))]
+)
+async def process_invoice(
+    invoice_id: int = Path(description="Invoice ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark invoice as PROCESSED.
+    Once processed, invoice cannot be edited.
+    """
+    service = InvoiceService(db)
+    result = service.process_invoice(invoice_id, current_user.id)
+    
+    return {
+        "success": True,
+        "message": "Invoice processed successfully",
+        "data": result
+    }

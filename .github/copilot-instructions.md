@@ -1238,3 +1238,43 @@ db.flush()  # Critical: updates sequence before next generation
 6. **Show contextual information** (PI number, partner) in nested forms
 7. **Use Material-UI Select** for editable dropdowns, not Typography
 8. **Test with multiple vendor types** to catch bulk operation issues
+
+Copilot must implement Purchase Orders WITHOUT price information.
+
+1. PO only contains:
+   - medicine_id
+   - quantity
+   - language (for PM)
+   - artwork_version (for PM)
+   - vendor_id
+   - po_type (RM, PM, FG)
+
+2. All pricing comes from Vendor Tax Invoices:
+   - RM Vendor sends RM Tax Invoice
+   - PM Vendor sends PM Tax Invoice
+   - Manufacturer sends Final FG Tax Invoice after dispatch
+
+3. PO fulfillment is driven by invoices:
+   fulfilled_qty += invoice.shipped_qty
+
+4. PO Status Rules:
+   If fulfilled_qty == ordered_qty → status = CLOSED
+   If fulfilled_qty < ordered_qty → status = PARTIAL
+   If fulfilled_qty == 0 → status = OPEN
+
+5. Manufacturer Material Balance Logic:
+   - Before creating RM or PM PO:
+       effective_qty = required_qty - manufacturer_balance
+       If effective_qty <= 0 → do not raise PO
+   - After invoice:
+       manufacturer_balance += received_qty
+   - After FG dispatch:
+       manufacturer_balance -= consumed_qty
+
+6. Copilot must auto-generate:
+   - invoice table + invoice processing services
+   - /invoice/vendor/{po_id} endpoint
+   - /invoice/manufacturer/{po_id} endpoint
+   - PO update logic
+   - material_balance updates
+   - logs for every event

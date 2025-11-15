@@ -35,3 +35,4 @@ class Vendor(Base):
     country: Mapped["Country"] = relationship("Country", back_populates="vendors")
     pis: Mapped[List["PI"]] = relationship("PI", back_populates="partner_vendor")
     purchase_orders: Mapped[List["PurchaseOrder"]] = relationship("PurchaseOrder", back_populates="vendor")
+    invoices: Mapped[List["VendorInvoice"]] = relationship("VendorInvoice", back_populates="vendor")

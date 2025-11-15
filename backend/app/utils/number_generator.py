@@ -53,12 +53,26 @@ def generate_eopa_number(db: Session) -> str:
     return f"{prefix}{new_num:04d}"
 
 
-def generate_po_number(db: Session, po_type: str) -> str:
-    """Generate PO number: PO/{TYPE}/YY-YY/0001"""
+def generate_po_number(db: Session, po_type: str, medicine_sequence: int = None) -> str:
+    """
+    Generate PO number: PO/YY-YY/TYPE/SEQ/0001
+    Example: PO/24-25/FG/1/0001, PO/24-25/RM/2/0001
+    
+    Args:
+        db: Database session
+        po_type: Type of PO (FG, RM, PM)
+        medicine_sequence: Sequence number of medicine in EOPA (1, 2, 3...)
+    """
     from app.models.po import PurchaseOrder
     
     fy = get_financial_year()
-    prefix = f"PO/{po_type}/{fy}/"
+    
+    if medicine_sequence:
+        # New format: PO/YY-YY/TYPE/SEQ/0001
+        prefix = f"PO/{fy}/{po_type}/{medicine_sequence}/"
+    else:
+        # Fallback to old format: PO/TYPE/YY-YY/0001
+        prefix = f"PO/{po_type}/{fy}/"
     
     last_po = db.query(PurchaseOrder).filter(
         PurchaseOrder.po_number.like(f"{prefix}%")

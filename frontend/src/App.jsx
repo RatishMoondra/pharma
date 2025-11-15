@@ -8,6 +8,7 @@ import ProductsPage from './pages/ProductsPage'
 import PIPage from './pages/PIPage'
 import EOPAPage from './pages/EOPAPage'
 import POPage from './pages/POPage'
+import InvoicesPage from './pages/InvoicesPage'
 import MaterialPage from './pages/MaterialPage'
 import PrivateRoute from './guards/PrivateRoute'
 import Layout from './components/Layout'
@@ -71,6 +72,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
                 <POPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="invoices" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT']}>
+                <InvoicesPage />
               </PrivateRoute>
             } 
           />

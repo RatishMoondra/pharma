@@ -8,6 +8,7 @@ import DescriptionIcon from '@mui/icons-material/Description'
 import ApprovalIcon from '@mui/icons-material/Approval'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import LocalShippingIcon from '@mui/icons-material/LocalShipping'
+import ReceiptIcon from '@mui/icons-material/Receipt'
 import { useAuth } from '../context/AuthContext'
 
 const drawerWidth = 240
@@ -25,6 +26,7 @@ const Sidebar = () => {
     { text: 'Proforma Invoice (PI)', icon: <DescriptionIcon />, path: '/pi', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
     { text: 'EOPA', icon: <ApprovalIcon />, path: '/eopa', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
     { text: 'Purchase Orders', icon: <ShoppingCartIcon />, path: '/po', roles: ['ADMIN', 'PROCUREMENT_OFFICER'] },
+    { text: 'Invoices', icon: <ReceiptIcon />, path: '/invoices', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'] },
     { text: 'Material Management', icon: <LocalShippingIcon />, path: '/material', roles: ['ADMIN', 'WAREHOUSE_MANAGER'] },
   ]
 
