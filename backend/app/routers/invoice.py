@@ -77,7 +77,7 @@ async def get_po_invoices(
     
     return {
         "success": True,
-        "data": [InvoiceResponse.from_orm(inv) for inv in invoices]
+        "data": [InvoiceResponse.model_validate(inv).model_dump() for inv in invoices]
     }
 
 
@@ -101,7 +101,7 @@ async def get_invoice_by_number(
     
     return {
         "success": True,
-        "data": InvoiceResponse.from_orm(invoice)
+        "data": InvoiceResponse.model_validate(invoice).model_dump()
     }
 
 
@@ -124,7 +124,7 @@ async def get_all_invoices(
     
     return {
         "success": True,
-        "data": [InvoiceResponse.from_orm(inv) for inv in invoices]
+        "data": [InvoiceResponse.model_validate(inv).model_dump() for inv in invoices]
     }
 
 

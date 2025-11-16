@@ -279,13 +279,12 @@ const ProductsPage = () => {
             <TableHead>
               <TableRow sx={{ bgcolor: 'primary.main' }}>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine Name</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>HSN Code</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Strength</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Pack Size</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Units</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Manufacturer</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>RM Vendor</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PM Vendor</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -293,13 +292,16 @@ const ProductsPage = () => {
               {filteredMedicines.map((medicine) => (
                 <TableRow key={medicine.id}>
                   <TableCell>{medicine.medicine_name}</TableCell>
+                  <TableCell>{medicine.hsn_code || '-'}</TableCell>
                   <TableCell>{medicine.product?.product_name || '-'}</TableCell>
                   <TableCell>{medicine.dosage_form}</TableCell>
                   <TableCell>{medicine.strength || '-'}</TableCell>
-                  <TableCell>{medicine.pack_size || '-'}</TableCell>
+                  <TableCell>
+                    {medicine.primary_unit && medicine.secondary_unit && medicine.conversion_factor
+                      ? `${medicine.conversion_factor} ${medicine.primary_unit}/${medicine.secondary_unit}`
+                      : medicine.primary_unit || '-'}
+                  </TableCell>
                   <TableCell>{medicine.manufacturer_vendor?.vendor_name || '-'}</TableCell>
-                  <TableCell>{medicine.rm_vendor?.vendor_name || '-'}</TableCell>
-                  <TableCell>{medicine.pm_vendor?.vendor_name || '-'}</TableCell>
                   <TableCell align="right">
                     <IconButton
                       size="small"

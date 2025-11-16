@@ -361,7 +361,21 @@ const InvoicesPage = () => {
       tax_amount: 0,
       total_amount: 0,
       remarks: '',
-      items: [{ medicine_id: '', shipped_quantity: 0, unit_price: 0, tax_rate: 0, batch_number: '', expiry_date: '' }]
+      freight_charges: 0,
+      insurance_charges: 0,
+      currency_code: 'INR',
+      exchange_rate: 1.0,
+      items: [{ 
+        medicine_id: '', 
+        shipped_quantity: 0, 
+        unit_price: 0, 
+        tax_rate: 0, 
+        hsn_code: '',
+        gst_rate: 0,
+        batch_number: '', 
+        manufacturing_date: '',
+        expiry_date: '' 
+      }]
     })
     setCreateDialogOpen(true)
   }
@@ -409,7 +423,17 @@ const InvoicesPage = () => {
   const handleCreateAddItem = () => {
     setCreateFormData({
       ...createFormData,
-      items: [...createFormData.items, { medicine_id: '', shipped_quantity: 0, unit_price: 0, tax_rate: 0, batch_number: '', expiry_date: '' }]
+      items: [...createFormData.items, { 
+        medicine_id: '', 
+        shipped_quantity: 0, 
+        unit_price: 0, 
+        tax_rate: 0, 
+        hsn_code: '',
+        gst_rate: 0,
+        batch_number: '', 
+        manufacturing_date: '',
+        expiry_date: '' 
+      }]
     })
   }
 
@@ -1192,10 +1216,13 @@ const InvoicesPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Medicine *</TableCell>
+                    <TableCell>HSN Code</TableCell>
                     <TableCell>Qty *</TableCell>
                     <TableCell>Unit Price *</TableCell>
                     <TableCell>Tax %</TableCell>
+                    <TableCell>GST %</TableCell>
                     <TableCell>Batch #</TableCell>
+                    <TableCell>Mfg Date</TableCell>
                     <TableCell>Expiry</TableCell>
                     <TableCell align="right">Total</TableCell>
                     <TableCell>Action</TableCell>
@@ -1217,6 +1244,15 @@ const InvoicesPage = () => {
                             ))}
                           </Select>
                         </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          placeholder="HSN"
+                          value={item.hsn_code}
+                          onChange={(e) => handleCreateItemChange(index, 'hsn_code', e.target.value)}
+                          sx={{ width: 100 }}
+                        />
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -1250,10 +1286,32 @@ const InvoicesPage = () => {
                       </TableCell>
                       <TableCell>
                         <TextField
+                          type="number"
+                          size="small"
+                          placeholder="GST %"
+                          value={item.gst_rate}
+                          onChange={(e) => handleCreateItemChange(index, 'gst_rate', e.target.value)}
+                          inputProps={{ min: 0, max: 100, step: 0.01 }}
+                          sx={{ width: 80 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
                           size="small"
                           value={item.batch_number}
                           onChange={(e) => handleCreateItemChange(index, 'batch_number', e.target.value)}
                           sx={{ width: 120 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="date"
+                          size="small"
+                          placeholder="Mfg Date"
+                          value={item.manufacturing_date}
+                          onChange={(e) => handleCreateItemChange(index, 'manufacturing_date', e.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ width: 140 }}
                         />
                       </TableCell>
                       <TableCell>

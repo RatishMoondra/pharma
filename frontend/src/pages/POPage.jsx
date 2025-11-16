@@ -458,11 +458,15 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
                     <TableHead>
                       <TableRow>
                         <TableCell>Medicine</TableCell>
+                        <TableCell>HSN Code</TableCell>
+                        <TableCell>Pack Size</TableCell>
                         <TableCell>Dosage Form</TableCell>
                         <TableCell align="right">Ordered Qty</TableCell>
                         <TableCell>Unit</TableCell>
                         <TableCell align="right">Fulfilled Qty</TableCell>
                         <TableCell align="center">Status</TableCell>
+                        {po.po_type === 'PM' && <TableCell>Artwork</TableCell>}
+                        {po.po_type === 'RM' && <TableCell>Quality Specs</TableCell>}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -482,6 +486,20 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
                             <TableCell>
                               <Typography variant="body2" fontWeight="medium">
                                 {item.medicine?.medicine_name || 'N/A'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={item.hsn_code || item.medicine?.hsn_code || 'N/A'} 
+                                size="small" 
+                                color="info"
+                                variant="outlined"
+                                sx={{ fontSize: '0.7rem' }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary">
+                                {item.pack_size || item.medicine?.pack_size || '-'}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -520,6 +538,50 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
                                 }
                               />
                             </TableCell>
+                            {po.po_type === 'PM' && (
+                              <TableCell>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                  {item.language && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Lang: {item.language}
+                                    </Typography>
+                                  )}
+                                  {item.artwork_version && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Ver: {item.artwork_version}
+                                    </Typography>
+                                  )}
+                                  {item.gsm && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      GSM: {item.gsm}
+                                    </Typography>
+                                  )}
+                                  {item.ply && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Ply: {item.ply}
+                                    </Typography>
+                                  )}
+                                  {!item.language && !item.artwork_version && !item.gsm && !item.ply && '-'}
+                                </Box>
+                              </TableCell>
+                            )}
+                            {po.po_type === 'RM' && (
+                              <TableCell>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                  {item.specification_reference && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Spec: {item.specification_reference}
+                                    </Typography>
+                                  )}
+                                  {item.test_method && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Test: {item.test_method}
+                                    </Typography>
+                                  )}
+                                  {!item.specification_reference && !item.test_method && '-'}
+                                </Box>
+                              </TableCell>
+                            )}
                           </TableRow>
                         )
                       })}

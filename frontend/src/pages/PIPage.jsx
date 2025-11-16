@@ -148,6 +148,8 @@ const PIRow = ({ pi, onEdit, onDelete, onApprove }) => {
                     <TableRow sx={{ bgcolor: 'primary.main' }}>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }} width={50}>#</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>HSN Code</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Pack Size</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Quantity</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Unit Price</TableCell>
@@ -167,6 +169,19 @@ const PIRow = ({ pi, onEdit, onDelete, onApprove }) => {
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                             {item.medicine?.medicine_name || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={item.hsn_code || item.medicine?.hsn_code || 'N/A'} 
+                            size="small" 
+                            color="info"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.pack_size || item.medicine?.pack_size || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>

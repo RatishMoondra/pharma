@@ -27,6 +27,13 @@ class Vendor(Base):
     phone: Mapped[str] = mapped_column(String(20), nullable=True)
     address: Mapped[str] = mapped_column(Text, nullable=True)
     gst_number: Mapped[str] = mapped_column(String(15), nullable=True)
+    
+    # New fields for compliance and credit management
+    drug_license_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    gmp_certified: Mapped[bool] = mapped_column(default=False)
+    iso_certified: Mapped[bool] = mapped_column(default=False)
+    credit_days: Mapped[Optional[int]] = mapped_column(nullable=True)
+    
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)

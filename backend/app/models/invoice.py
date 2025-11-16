@@ -9,6 +9,7 @@ Key Business Rules:
 """
 from sqlalchemy import String, ForeignKey, Numeric, Date, Text, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from decimal import Decimal
 from datetime import datetime, date
 from typing import List, Optional
 import enum
@@ -61,6 +62,13 @@ class VendorInvoice(Base):
     tax_amount: Mapped[float] = mapped_column(Numeric(15, 2), default=0)
     total_amount: Mapped[float] = mapped_column(Numeric(15, 2))
     
+    # New fields for enhanced tax compliance and international invoicing
+    freight_charges: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    insurance_charges: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    currency_code: Mapped[str] = mapped_column(String(10), default="INR")
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 6), nullable=True, default=1.000000)
+    base_currency_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)  # Amount in base currency (INR)
+    
     # Status tracking
     status: Mapped[InvoiceStatus] = mapped_column(SQLEnum(InvoiceStatus), default=InvoiceStatus.PENDING)
     
@@ -106,12 +114,16 @@ class VendorInvoiceItem(Base):
     unit_price: Mapped[float] = mapped_column(Numeric(15, 2))
     total_price: Mapped[float] = mapped_column(Numeric(15, 2))
     
-    # Tax details
+    # Tax details and compliance
     tax_rate: Mapped[float] = mapped_column(Numeric(5, 2), default=0)  # e.g., 18.00 for 18% GST
     tax_amount: Mapped[float] = mapped_column(Numeric(15, 2), default=0)
+    hsn_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)  # Tax compliance
+    gst_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)  # GST rate (can differ from tax_rate)
+    gst_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)  # Calculated GST amount
     
-    # Batch tracking
-    batch_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Batch tracking (pharma compliance)
+    batch_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    manufacturing_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

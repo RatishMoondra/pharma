@@ -343,13 +343,45 @@ class POGenerationService:
             else:
                 effective_qty = Decimal(str(eopa_item.quantity))
             
-            # Create PO item (QUANTITY ONLY + UNIT)
+            # Auto-populate HSN code and pack_size from PI item (with medicine fallback)
+            pi_item = eopa_item.pi_item
+            hsn_code = pi_item.hsn_code if pi_item.hsn_code else medicine.hsn_code
+            pack_size = pi_item.pack_size if pi_item.pack_size else None
+            
+            # Set conditional fields based on PO type
+            artwork_file_url = None
+            artwork_approval_ref = None
+            specification_reference = None
+            test_method = None
+            language = None
+            artwork_version = None
+            
+            if po_type == POType.PM:
+                # PM PO: Add artwork fields if available from EOPA or PI
+                language = getattr(eopa_item, 'language', None) or 'EN'
+                artwork_version = getattr(eopa_item, 'artwork_version', None) or 'v1.0'
+            elif po_type == POType.RM:
+                # RM PO: Add quality specification fields
+                specification_reference = getattr(medicine, 'specification_reference', None)
+                test_method = getattr(medicine, 'test_method', None)
+            
+            # Create PO item (QUANTITY ONLY + UNIT + HSN + conditional fields)
             po_item = POItem(
                 po_id=po.id,
                 medicine_id=medicine.id,
                 ordered_quantity=effective_qty,
                 fulfilled_quantity=Decimal("0.00"),
-                unit=unit  # Save unit (kg, liters, boxes, pcs, etc.)
+                unit=unit,  # Save unit (kg, liters, boxes, pcs, etc.)
+                hsn_code=hsn_code,
+                pack_size=pack_size,
+                # PM-specific fields
+                language=language,
+                artwork_version=artwork_version,
+                artwork_file_url=artwork_file_url,
+                artwork_approval_ref=artwork_approval_ref,
+                # RM-specific fields
+                specification_reference=specification_reference,
+                test_method=test_method
             )
             
             self.db.add(po_item)

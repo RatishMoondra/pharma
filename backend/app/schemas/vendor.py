@@ -15,6 +15,11 @@ class VendorBase(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     gst_number: Optional[str] = None
+    # New fields for compliance and credit management
+    drug_license_number: Optional[str] = None
+    gmp_certified: bool = False
+    iso_certified: bool = False
+    credit_days: Optional[int] = None
 
 
 class VendorCreate(BaseModel):
@@ -26,6 +31,11 @@ class VendorCreate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     gst_number: Optional[str] = None
+    # New fields for compliance and credit management
+    drug_license_number: Optional[str] = None
+    gmp_certified: bool = False
+    iso_certified: bool = False
+    credit_days: Optional[int] = None
 
 
 class VendorUpdate(BaseModel):
@@ -37,6 +47,11 @@ class VendorUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     gst_number: Optional[str] = None
+    # New fields for compliance and credit management
+    drug_license_number: Optional[str] = None
+    gmp_certified: Optional[bool] = None
+    iso_certified: Optional[bool] = None
+    credit_days: Optional[int] = None
     is_active: Optional[bool] = None
 
 

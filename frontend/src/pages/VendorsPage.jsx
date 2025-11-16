@@ -23,6 +23,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import VendorForm from '../components/VendorForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
@@ -183,7 +184,8 @@ const VendorsPage = () => {
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Contact Person</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Phone</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Email</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>GST Number</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Certifications</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Credit Days</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -212,7 +214,28 @@ const VendorsPage = () => {
                   <TableCell>{vendor.contact_person}</TableCell>
                   <TableCell>{vendor.phone}</TableCell>
                   <TableCell>{vendor.email}</TableCell>
-                  <TableCell>{vendor.gst_number || '-'}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      {vendor.gmp_certified && (
+                        <Chip
+                          icon={<CheckCircleIcon />}
+                          label="GMP"
+                          color="success"
+                          size="small"
+                        />
+                      )}
+                      {vendor.iso_certified && (
+                        <Chip
+                          icon={<CheckCircleIcon />}
+                          label="ISO"
+                          color="info"
+                          size="small"
+                        />
+                      )}
+                      {!vendor.gmp_certified && !vendor.iso_certified && '-'}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{vendor.credit_days ? `${vendor.credit_days} days` : '-'}</TableCell>
                   <TableCell align="right">
                     <IconButton
                       size="small"

@@ -54,14 +54,25 @@ async def create_pi(
     db.add(pi)
     db.flush()
     
-    # Create PI items
+    # Create PI items with HSN auto-population
     for item_data in pi_data.items:
+        # Auto-populate HSN code and pack_size from medicine_master
+        medicine = db.query(MedicineMaster).filter(MedicineMaster.id == item_data.medicine_id).first()
+        if not medicine:
+            raise AppException(f"Medicine {item_data.medicine_id} not found", "ERR_NOT_FOUND", 404)
+        
+        # Use provided values if present, otherwise use medicine defaults
+        hsn_code = item_data.hsn_code if item_data.hsn_code else medicine.hsn_code
+        pack_size = item_data.pack_size if item_data.pack_size else medicine.pack_size
+        
         pi_item = PIItem(
             pi_id=pi.id,
             medicine_id=item_data.medicine_id,
             quantity=item_data.quantity,
             unit_price=item_data.unit_price,
-            total_price=item_data.quantity * item_data.unit_price
+            total_price=item_data.quantity * item_data.unit_price,
+            hsn_code=hsn_code,
+            pack_size=pack_size
         )
         db.add(pi_item)
     

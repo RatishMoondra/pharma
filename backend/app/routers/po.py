@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 import logging
+import time
 from typing import List
 
 from app.database.session import get_db
@@ -154,13 +155,15 @@ async def create_po(
 @router.get("/", response_model=dict)
 async def list_pos(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,  # Reduced default limit from 100 to 50
     po_type: POType = None,
     eopa_id: int = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List Purchase Orders with optional filters"""
+    start_time = time.time()
+    
     query = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
         joinedload(PurchaseOrder.eopa),
@@ -173,12 +176,22 @@ async def list_pos(
     if eopa_id:
         query = query.filter(PurchaseOrder.eopa_id == eopa_id)
     
-    pos = query.offset(skip).limit(limit).all()
+    # Order by most recent first
+    pos = query.order_by(PurchaseOrder.created_at.desc()).offset(skip).limit(limit).all()
+    
+    query_time = time.time() - start_time
+    logger.info(f"PO query took {query_time:.2f}s, fetched {len(pos)} records")
+    
+    # Convert to response
+    response_data = [POResponse.model_validate(po).model_dump() for po in pos]
+    
+    total_time = time.time() - start_time
+    logger.info(f"PO list endpoint total time: {total_time:.2f}s")
     
     return {
         "success": True,
         "message": "Purchase Orders retrieved successfully",
-        "data": [POResponse.model_validate(po).model_dump() for po in pos],
+        "data": response_data,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 

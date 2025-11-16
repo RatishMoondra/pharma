@@ -57,6 +57,9 @@ class PIItemBase(BaseModel):
     medicine_id: int
     quantity: float = Field(..., gt=0)
     unit_price: float = Field(..., gt=0)
+    # New fields for tax compliance (auto-populated from medicine_master, user-editable)
+    hsn_code: Optional[str] = None
+    pack_size: Optional[str] = None
 
 
 class PIItemCreate(PIItemBase):
@@ -79,6 +82,8 @@ class PIBasic(BaseModel):
 class PIItemResponse(PIItemBase):
     id: int
     total_price: float
+    hsn_code: Optional[str] = None
+    pack_size: Optional[str] = None
     created_at: datetime
     medicine: Optional[MedicineBasic] = None
     pi: Optional[PIBasic] = None

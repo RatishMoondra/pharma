@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
+from decimal import Decimal
 
 
 class ProductMasterBase(BaseModel):
@@ -8,6 +9,8 @@ class ProductMasterBase(BaseModel):
     product_name: str
     description: Optional[str] = None
     unit_of_measure: str
+    # New field for tax compliance
+    hsn_code: Optional[str] = None
 
 
 class ProductMasterCreate(ProductMasterBase):
@@ -18,6 +21,7 @@ class ProductMasterUpdate(BaseModel):
     product_name: Optional[str] = None
     description: Optional[str] = None
     unit_of_measure: Optional[str] = None
+    hsn_code: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -47,6 +51,16 @@ class MedicineMasterCreate(BaseModel):
     dosage_form: str
     strength: Optional[str] = None
     pack_size: Optional[str] = None
+    # New fields for tax compliance and packaging
+    hsn_code: Optional[str] = None
+    primary_unit: Optional[str] = None
+    secondary_unit: Optional[str] = None
+    conversion_factor: Optional[float] = None
+    primary_packaging: Optional[str] = None
+    secondary_packaging: Optional[str] = None
+    units_per_pack: Optional[int] = None
+    regulatory_approvals: Optional[Dict[str, Any]] = None
+    # Vendor mappings
     manufacturer_vendor_id: Optional[int] = None
     rm_vendor_id: Optional[int] = None
     pm_vendor_id: Optional[int] = None
@@ -59,6 +73,20 @@ class MedicineMasterUpdate(BaseModel):
     strength: Optional[str] = None
     dosage_form: Optional[str] = None
     pack_size: Optional[str] = None
+    composition: Optional[str] = None
+    # New fields for tax compliance and packaging
+    hsn_code: Optional[str] = None
+    primary_unit: Optional[str] = None
+    secondary_unit: Optional[str] = None
+    conversion_factor: Optional[float] = None
+    primary_packaging: Optional[str] = None
+    secondary_packaging: Optional[str] = None
+    units_per_pack: Optional[int] = None
+    regulatory_approvals: Optional[Dict[str, Any]] = None
+    # Vendor mappings
+    manufacturer_vendor_id: Optional[int] = None
+    rm_vendor_id: Optional[int] = None
+    pm_vendor_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -81,6 +109,16 @@ class MedicineMasterResponse(BaseModel):
     dosage_form: str
     strength: Optional[str] = None
     pack_size: Optional[str] = None
+    # New fields for tax compliance and packaging
+    hsn_code: Optional[str] = None
+    primary_unit: Optional[str] = None
+    secondary_unit: Optional[str] = None
+    conversion_factor: Optional[Decimal] = None
+    primary_packaging: Optional[str] = None
+    secondary_packaging: Optional[str] = None
+    units_per_pack: Optional[int] = None
+    regulatory_approvals: Optional[Dict[str, Any]] = None
+    # Vendor mappings
     manufacturer_vendor_id: Optional[int] = None
     rm_vendor_id: Optional[int] = None
     pm_vendor_id: Optional[int] = None

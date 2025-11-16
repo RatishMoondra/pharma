@@ -10,7 +10,7 @@ KEY BUSINESS RULES:
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
 
 from app.models.invoice import VendorInvoice, VendorInvoiceItem, InvoiceType, InvoiceStatus
@@ -100,7 +100,7 @@ class InvoiceService:
             # Determine invoice type from PO type
             invoice_type = InvoiceType(po.po_type.value)
             
-            # Create invoice
+            # Create invoice with new fields
             invoice = VendorInvoice(
                 invoice_number=invoice_data.invoice_number,
                 invoice_date=invoice_data.invoice_date,
@@ -110,6 +110,15 @@ class InvoiceService:
                 subtotal=Decimal(str(invoice_data.subtotal)),
                 tax_amount=Decimal(str(invoice_data.tax_amount)),
                 total_amount=Decimal(str(invoice_data.total_amount)),
+                # New fields for international invoicing
+                freight_charges=Decimal(str(invoice_data.freight_charges)) if invoice_data.freight_charges else None,
+                insurance_charges=Decimal(str(invoice_data.insurance_charges)) if invoice_data.insurance_charges else None,
+                currency_code=invoice_data.currency_code,
+                exchange_rate=Decimal(str(invoice_data.exchange_rate)) if invoice_data.exchange_rate else Decimal("1.000000"),
+                base_currency_amount=self._calculate_base_currency_amount(
+                    Decimal(str(invoice_data.total_amount)),
+                    Decimal(str(invoice_data.exchange_rate)) if invoice_data.exchange_rate else Decimal("1.000000")
+                ),
                 # FG-specific fields
                 dispatch_note_number=invoice_data.dispatch_note_number,
                 dispatch_date=invoice_data.dispatch_date,
@@ -128,12 +137,30 @@ class InvoiceService:
             total_shipped_qty = Decimal("0.00")
             
             for item_data in invoice_data.items:
+                # Auto-populate HSN code from medicine if not provided
+                medicine = self.db.query(MedicineMaster).filter(MedicineMaster.id == item_data.medicine_id).first()
+                hsn_code = item_data.hsn_code if item_data.hsn_code else (medicine.hsn_code if medicine else None)
+                
                 # Calculate tax amount for item
                 item_subtotal = Decimal(str(item_data.shipped_quantity)) * Decimal(str(item_data.unit_price))
                 item_tax = item_subtotal * (Decimal(str(item_data.tax_rate)) / Decimal("100"))
+                
+                # Calculate GST amount if GST rate provided (separate from general tax)
+                gst_amount = None
+                if item_data.gst_rate:
+                    gst_amount = item_subtotal * (Decimal(str(item_data.gst_rate)) / Decimal("100"))
+                
                 item_total = item_subtotal + item_tax
                 
-                # Create invoice item
+                # Batch tracking validation (pharma compliance)
+                if item_data.batch_number and item_data.manufacturing_date and item_data.expiry_date:
+                    self._validate_batch_dates(
+                        item_data.manufacturing_date,
+                        item_data.expiry_date,
+                        po.shelf_life_minimum if hasattr(po, 'shelf_life_minimum') else None
+                    )
+                
+                # Create invoice item with all new fields
                 invoice_item = VendorInvoiceItem(
                     invoice_id=invoice.id,
                     medicine_id=item_data.medicine_id,
@@ -142,7 +169,12 @@ class InvoiceService:
                     total_price=item_total,
                     tax_rate=Decimal(str(item_data.tax_rate)),
                     tax_amount=item_tax,
+                    # New fields
+                    hsn_code=hsn_code,
+                    gst_rate=Decimal(str(item_data.gst_rate)) if item_data.gst_rate else None,
+                    gst_amount=gst_amount,
                     batch_number=item_data.batch_number,
+                    manufacturing_date=item_data.manufacturing_date,
                     expiry_date=item_data.expiry_date,
                     remarks=item_data.remarks
                 )
@@ -542,3 +574,62 @@ class InvoiceService:
             )
         
         return invoice
+    
+    def _calculate_base_currency_amount(self, amount: Decimal, exchange_rate: Decimal) -> Decimal:
+        """
+        Calculate base currency (INR) amount from foreign currency.
+        
+        Args:
+            amount: Amount in foreign currency
+            exchange_rate: Exchange rate to INR
+            
+        Returns:
+            Amount in INR
+        """
+        return amount * exchange_rate
+    
+    def _validate_batch_dates(
+        self,
+        manufacturing_date: date,
+        expiry_date: date,
+        shelf_life_minimum: Optional[int] = None
+    ) -> None:
+        """
+        Validate batch tracking dates (pharma compliance).
+        
+        Rules:
+        1. Expiry date must be after manufacturing date
+        2. If shelf_life_minimum is set, expiry must be at least that many days from manufacturing
+        
+        Args:
+            manufacturing_date: Manufacturing date
+            expiry_date: Expiry date
+            shelf_life_minimum: Minimum shelf life in days (from PO)
+            
+        Raises:
+            AppException if validation fails
+        """
+        if expiry_date <= manufacturing_date:
+            raise AppException(
+                f"Expiry date ({expiry_date}) must be after manufacturing date ({manufacturing_date})",
+                "ERR_INVALID_BATCH_DATES",
+                400
+            )
+        
+        if shelf_life_minimum:
+            from datetime import timedelta
+            min_expiry_date = manufacturing_date + timedelta(days=shelf_life_minimum)
+            if expiry_date < min_expiry_date:
+                raise AppException(
+                    f"Expiry date ({expiry_date}) does not meet minimum shelf life requirement "
+                    f"({shelf_life_minimum} days from manufacturing date)",
+                    "ERR_INSUFFICIENT_SHELF_LIFE",
+                    400
+                )
+        
+        logger.info({
+            "event": "BATCH_DATES_VALIDATED",
+            "manufacturing_date": str(manufacturing_date),
+            "expiry_date": str(expiry_date),
+            "shelf_life_minimum": shelf_life_minimum
+        })

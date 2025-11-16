@@ -6,6 +6,7 @@ from app.models.product import ProductMaster, MedicineMaster
 from app.models.pi import PI, PIItem
 from app.models.eopa import EOPA, EOPAItem
 from app.models.po import PurchaseOrder, POItem, POStatus, POType
+from app.models.po_terms import POTermsConditions
 from app.models.material import MaterialReceipt, MaterialBalance
 from app.models.invoice import VendorInvoice, VendorInvoiceItem, InvoiceType, InvoiceStatus
 
@@ -24,6 +25,7 @@ __all__ = [
     "POItem",
     "POStatus",
     "POType",
+    "POTermsConditions",
     "MaterialReceipt",
     "MaterialBalance",
     "VendorInvoice",

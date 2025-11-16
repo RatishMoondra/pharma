@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
+from decimal import Decimal
 from app.models.po import POType, POStatus
 
 
@@ -44,8 +45,40 @@ class POItemResponse(BaseModel):
     ordered_quantity: float
     fulfilled_quantity: float
     unit: Optional[str] = None  # kg, liters, boxes, labels, etc.
+    
+    # Tax compliance
+    hsn_code: Optional[str] = None
+    gst_rate: Optional[Decimal] = None
+    pack_size: Optional[str] = None
+    
+    # Artwork specifications (for PM)
+    artwork_file_url: Optional[str] = None
+    artwork_approval_ref: Optional[str] = None
     language: Optional[str] = None
     artwork_version: Optional[str] = None
+    gsm: Optional[Decimal] = None
+    ply: Optional[int] = None
+    box_dimensions: Optional[str] = None
+    color_spec: Optional[str] = None
+    printing_instructions: Optional[str] = None
+    die_cut_info: Optional[str] = None
+    plate_charges: Optional[Decimal] = None
+    
+    # Quality specs (for RM)
+    specification_reference: Optional[str] = None
+    test_method: Optional[str] = None
+    
+    # Delivery
+    delivery_schedule_type: Optional[str] = None
+    delivery_date: Optional[date] = None
+    delivery_window_start: Optional[date] = None
+    delivery_window_end: Optional[date] = None
+    
+    # Tolerances
+    quantity_tolerance_percentage: Optional[Decimal] = None
+    price_tolerance_percentage: Optional[Decimal] = None
+    discount_percentage: Optional[Decimal] = None
+    
     created_at: datetime
     medicine: Optional[MedicineBasic] = None
     
@@ -58,6 +91,34 @@ class POBase(BaseModel):
     po_type: POType
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
+    
+    # Quality requirements
+    require_coa: bool = False
+    require_bmr: bool = False
+    require_msds: bool = False
+    sample_quantity: Optional[float] = None
+    shelf_life_minimum: Optional[int] = None
+    
+    # Shipping and billing
+    ship_to: Optional[str] = None
+    bill_to: Optional[str] = None
+    buyer_reference_no: Optional[str] = None
+    buyer_contact_person: Optional[str] = None
+    transport_mode: Optional[str] = None
+    freight_terms: Optional[str] = None
+    payment_terms: Optional[str] = None
+    currency_code: Optional[str] = "INR"
+    
+    # Amendment tracking
+    amendment_number: int = 0
+    amendment_date: Optional[date] = None
+    original_po_id: Optional[int] = None
+    
+    # Approval workflow
+    prepared_by: Optional[int] = None
+    checked_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    verified_by: Optional[int] = None
 
 
 class POCreate(BaseModel):
@@ -65,12 +126,58 @@ class POCreate(BaseModel):
     po_type: POType
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
+    
+    # Quality requirements
+    require_coa: bool = False
+    require_bmr: bool = False
+    require_msds: bool = False
+    sample_quantity: Optional[float] = None
+    shelf_life_minimum: Optional[int] = None
+    
+    # Shipping and billing
+    ship_to: Optional[str] = None
+    bill_to: Optional[str] = None
+    buyer_reference_no: Optional[str] = None
+    buyer_contact_person: Optional[str] = None
+    transport_mode: Optional[str] = None
+    freight_terms: Optional[str] = None
+    payment_terms: Optional[str] = None
+    currency_code: Optional[str] = "INR"
+    
+    # Approval workflow
+    prepared_by: Optional[int] = None
+    checked_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    verified_by: Optional[int] = None
 
 
 class POUpdate(BaseModel):
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
     status: Optional[POStatus] = None
+    
+    # Quality requirements
+    require_coa: Optional[bool] = None
+    require_bmr: Optional[bool] = None
+    require_msds: Optional[bool] = None
+    sample_quantity: Optional[float] = None
+    shelf_life_minimum: Optional[int] = None
+    
+    # Shipping and billing
+    ship_to: Optional[str] = None
+    bill_to: Optional[str] = None
+    buyer_reference_no: Optional[str] = None
+    buyer_contact_person: Optional[str] = None
+    transport_mode: Optional[str] = None
+    freight_terms: Optional[str] = None
+    payment_terms: Optional[str] = None
+    currency_code: Optional[str] = None
+    
+    # Approval workflow
+    prepared_by: Optional[int] = None
+    checked_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    verified_by: Optional[int] = None
 
 
 class POResponse(POBase):

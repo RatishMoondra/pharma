@@ -1,3 +1,14 @@
+Copilot, whenever I open or edit any file (backend or frontend), automatically analyze the new database schema fields and the pharma workflow rules, and suggest corrections, additions, improvements, or missing code.
+
+If any model, schema, router, service, or UI screen is missing fields such as HSN code, GST fields, pack_size, artwork specs, GSM/PLY/dimensions, quality flags, approval metadata, invoice fulfillment fields, delivery schedule, or shipment details, automatically update the file.
+
+If any naming, relationship, or workflow logic is outdated based on the PI → EOPA → PO → Invoice → Dispatch → GRN → Closure flow, automatically rewrite or expand the code.
+
+If any field exists in one layer but is missing in others, proactively synchronize the entire stack.
+
+You must behave like a full-stack agentic co-developer and keep the entire system consistent without me asking for every change manually.
+
+
 # Copilot Instructions - Pharmaceutical Procurement & Dispatch System
 
 ## Project Overview

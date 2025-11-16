@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
+from decimal import Decimal
 import logging
 
 from app.database.session import get_db
@@ -83,7 +84,7 @@ async def create_medicine_master(
     if not product:
         raise AppException("Product not found. Please select a valid product.", "ERR_VALIDATION", 400)
     
-    # Create medicine
+    # Create medicine with all new fields
     medicine = MedicineMaster(
         medicine_code=medicine_code,
         product_id=medicine_data.product_id,
@@ -92,6 +93,16 @@ async def create_medicine_master(
         dosage_form=medicine_data.dosage_form,
         strength=medicine_data.strength,
         pack_size=medicine_data.pack_size,
+        # New fields for tax compliance and packaging
+        hsn_code=medicine_data.hsn_code,
+        primary_unit=medicine_data.primary_unit,
+        secondary_unit=medicine_data.secondary_unit,
+        conversion_factor=Decimal(str(medicine_data.conversion_factor)) if medicine_data.conversion_factor else None,
+        primary_packaging=medicine_data.primary_packaging,
+        secondary_packaging=medicine_data.secondary_packaging,
+        units_per_pack=medicine_data.units_per_pack,
+        regulatory_approvals=medicine_data.regulatory_approvals,
+        # Vendor mappings
         manufacturer_vendor_id=medicine_data.manufacturer_vendor_id,
         rm_vendor_id=medicine_data.rm_vendor_id,
         pm_vendor_id=medicine_data.pm_vendor_id
@@ -156,13 +167,23 @@ async def update_medicine(
         if not product:
             raise AppException("Product not found. Please select a valid product.", "ERR_VALIDATION", 400)
     
-    # Update fields
+    # Update fields (all including new ones)
     medicine.product_id = medicine_data.product_id
     medicine.medicine_name = medicine_data.medicine_name
     medicine.composition = medicine_data.composition
     medicine.dosage_form = medicine_data.dosage_form
     medicine.strength = medicine_data.strength
     medicine.pack_size = medicine_data.pack_size
+    # New fields
+    medicine.hsn_code = medicine_data.hsn_code
+    medicine.primary_unit = medicine_data.primary_unit
+    medicine.secondary_unit = medicine_data.secondary_unit
+    medicine.conversion_factor = Decimal(str(medicine_data.conversion_factor)) if medicine_data.conversion_factor else None
+    medicine.primary_packaging = medicine_data.primary_packaging
+    medicine.secondary_packaging = medicine_data.secondary_packaging
+    medicine.units_per_pack = medicine_data.units_per_pack
+    medicine.regulatory_approvals = medicine_data.regulatory_approvals
+    # Vendor mappings
     medicine.manufacturer_vendor_id = medicine_data.manufacturer_vendor_id
     medicine.rm_vendor_id = medicine_data.rm_vendor_id
     medicine.pm_vendor_id = medicine_data.pm_vendor_id

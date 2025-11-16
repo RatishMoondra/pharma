@@ -51,6 +51,11 @@ class PIItem(Base):
     quantity: Mapped[float] = mapped_column(Numeric(15, 3))
     unit_price: Mapped[float] = mapped_column(Numeric(15, 2))
     total_price: Mapped[float] = mapped_column(Numeric(15, 2))
+    
+    # New fields for tax compliance (auto-populated from medicine_master, user-editable)
+    hsn_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    pack_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     
     # Relationships

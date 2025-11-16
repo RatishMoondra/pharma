@@ -25,6 +25,10 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
     email: vendor?.email || '',
     address: vendor?.address || '',
     gst_number: vendor?.gst_number || '',
+    drug_license_number: vendor?.drug_license_number || '',
+    gmp_certified: vendor?.gmp_certified || false,
+    iso_certified: vendor?.iso_certified || false,
+    credit_days: vendor?.credit_days || '',
   })
 
   const [errors, setErrors] = useState({})
@@ -59,6 +63,10 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         email: vendor.email || '',
         address: vendor.address || '',
         gst_number: vendor.gst_number || '',
+        drug_license_number: vendor.drug_license_number || '',
+        gmp_certified: vendor.gmp_certified || false,
+        iso_certified: vendor.iso_certified || false,
+        credit_days: vendor.credit_days || '',
       })
     } else {
       setFormData({
@@ -70,6 +78,10 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         email: '',
         address: '',
         gst_number: '',
+        drug_license_number: '',
+        gmp_certified: false,
+        iso_certified: false,
+        credit_days: '',
       })
     }
   }, [vendor])
@@ -119,6 +131,10 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         email: '',
         address: '',
         gst_number: '',
+        drug_license_number: '',
+        gmp_certified: false,
+        iso_certified: false,
+        credit_days: '',
       })
       setErrors({})
       onClose()
@@ -231,6 +247,58 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
               value={formData.gst_number}
               onChange={handleChange}
               disabled={isLoading}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Drug License Number"
+              name="drug_license_number"
+              value={formData.drug_license_number}
+              onChange={handleChange}
+              disabled={isLoading}
+              helperText="For pharmaceutical compliance"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              select
+              label="GMP Certified"
+              name="gmp_certified"
+              value={formData.gmp_certified}
+              onChange={(e) => setFormData(prev => ({ ...prev, gmp_certified: e.target.value === 'true' }))}
+              disabled={isLoading}
+            >
+              <MenuItem value={false}>No</MenuItem>
+              <MenuItem value={true}>Yes</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              select
+              label="ISO Certified"
+              name="iso_certified"
+              value={formData.iso_certified}
+              onChange={(e) => setFormData(prev => ({ ...prev, iso_certified: e.target.value === 'true' }))}
+              disabled={isLoading}
+            >
+              <MenuItem value={false}>No</MenuItem>
+              <MenuItem value={true}>Yes</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Credit Days"
+              name="credit_days"
+              type="number"
+              value={formData.credit_days}
+              onChange={handleChange}
+              disabled={isLoading}
+              helperText="Payment credit period"
+              inputProps={{ min: 0 }}
             />
           </Grid>
           <Grid item xs={12}>

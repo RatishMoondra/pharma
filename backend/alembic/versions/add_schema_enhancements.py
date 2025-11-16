@@ -138,14 +138,8 @@ def upgrade():
     op.add_column('po_items', sa.Column('discount_percentage', sa.Numeric(5, 2), nullable=True))
     
     # ========================================
-    # 7. VENDOR_INVOICES TABLE ENHANCEMENTS (11 fields)
+    # 7. VENDOR_INVOICES TABLE ENHANCEMENTS (8 fields on header table)
     # ========================================
-    # Tax Compliance
-    op.add_column('vendor_invoices', sa.Column('hsn_code', sa.String(20), nullable=True))
-    op.add_column('vendor_invoices', sa.Column('gst_rate', sa.Numeric(5, 2), nullable=True))
-    op.add_column('vendor_invoices', sa.Column('gst_amount', sa.Numeric(15, 2), nullable=True))
-    op.create_index('idx_vendor_invoice_hsn', 'vendor_invoices', ['hsn_code'])
-    
     # Freight & Insurance
     op.add_column('vendor_invoices', sa.Column('freight_charges', sa.Numeric(15, 2), nullable=True))
     op.add_column('vendor_invoices', sa.Column('insurance_charges', sa.Numeric(15, 2), nullable=True))
@@ -155,14 +149,23 @@ def upgrade():
     op.add_column('vendor_invoices', sa.Column('exchange_rate', sa.Numeric(15, 6), nullable=True))
     op.add_column('vendor_invoices', sa.Column('base_currency_amount', sa.Numeric(15, 2), nullable=True))
     
-    # Batch Tracking (CRITICAL for pharma compliance)
-    op.add_column('vendor_invoices', sa.Column('batch_number', sa.String(100), nullable=True))
-    op.add_column('vendor_invoices', sa.Column('manufacturing_date', sa.Date(), nullable=True))
-    op.add_column('vendor_invoices', sa.Column('expiry_date', sa.Date(), nullable=True))
-    op.create_index('idx_vendor_invoice_batch', 'vendor_invoices', ['batch_number'])
+    # ========================================
+    # 8. VENDOR_INVOICE_ITEMS TABLE ENHANCEMENTS (6 fields on line items)
+    # ========================================
+    # Tax Compliance (per item)
+    op.add_column('vendor_invoice_items', sa.Column('hsn_code', sa.String(20), nullable=True))
+    op.add_column('vendor_invoice_items', sa.Column('gst_rate', sa.Numeric(5, 2), nullable=True))
+    op.add_column('vendor_invoice_items', sa.Column('gst_amount', sa.Numeric(15, 2), nullable=True))
+    op.create_index('idx_vendor_invoice_item_hsn', 'vendor_invoice_items', ['hsn_code'])
+    
+    # Batch Tracking (CRITICAL for pharma compliance - per item)
+    op.add_column('vendor_invoice_items', sa.Column('batch_number', sa.String(50), nullable=True))
+    op.add_column('vendor_invoice_items', sa.Column('manufacturing_date', sa.Date(), nullable=True))
+    op.add_column('vendor_invoice_items', sa.Column('expiry_date', sa.Date(), nullable=True))
+    op.create_index('idx_vendor_invoice_item_batch', 'vendor_invoice_items', ['batch_number'])
     
     # ========================================
-    # 8. NEW TABLE: PO_TERMS_CONDITIONS
+    # 9. NEW TABLE: PO_TERMS_CONDITIONS
     # ========================================
     op.create_table(
         'po_terms_conditions',
@@ -189,21 +192,25 @@ def downgrade():
     op.drop_table('po_terms_conditions')
     
     # ========================================
+    # Remove vendor_invoice_items enhancements
+    # ========================================
+    op.drop_index('idx_vendor_invoice_item_batch', 'vendor_invoice_items')
+    op.drop_index('idx_vendor_invoice_item_hsn', 'vendor_invoice_items')
+    op.drop_column('vendor_invoice_items', 'expiry_date')
+    op.drop_column('vendor_invoice_items', 'manufacturing_date')
+    op.drop_column('vendor_invoice_items', 'batch_number')
+    op.drop_column('vendor_invoice_items', 'gst_amount')
+    op.drop_column('vendor_invoice_items', 'gst_rate')
+    op.drop_column('vendor_invoice_items', 'hsn_code')
+    
+    # ========================================
     # Remove vendor_invoices enhancements
     # ========================================
-    op.drop_index('idx_vendor_invoice_batch', 'vendor_invoices')
-    op.drop_index('idx_vendor_invoice_hsn', 'vendor_invoices')
-    op.drop_column('vendor_invoices', 'expiry_date')
-    op.drop_column('vendor_invoices', 'manufacturing_date')
-    op.drop_column('vendor_invoices', 'batch_number')
     op.drop_column('vendor_invoices', 'base_currency_amount')
     op.drop_column('vendor_invoices', 'exchange_rate')
     op.drop_column('vendor_invoices', 'currency_code')
     op.drop_column('vendor_invoices', 'insurance_charges')
     op.drop_column('vendor_invoices', 'freight_charges')
-    op.drop_column('vendor_invoices', 'gst_amount')
-    op.drop_column('vendor_invoices', 'gst_rate')
-    op.drop_column('vendor_invoices', 'hsn_code')
     
     # ========================================
     # Remove po_items enhancements
