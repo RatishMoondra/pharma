@@ -5,17 +5,22 @@ Endpoints:
 - POST /invoice/vendor/{po_id} - Process vendor invoice (RM/PM/FG)
 - GET /invoice/po/{po_id} - Get all invoices for a PO
 - GET /invoice/{invoice_number} - Get invoice by number
+- GET /invoice/{invoice_id}/download-pdf - Generate and download invoice PDF
 """
 from fastapi import APIRouter, Depends, Path
-from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import logging
 
 from app.database.session import get_db
 from app.schemas.invoice import InvoiceCreate, InvoiceResponse
 from app.services.invoice_service import InvoiceService
+from app.services.invoice_pdf_service import InvoicePDFService
 from app.models.user import User, UserRole
+from app.models.invoice import VendorInvoice, VendorInvoiceItem
 from app.auth.dependencies import get_current_user, require_role
+from app.exceptions.base import AppException
 
 router = APIRouter()
 logger = logging.getLogger("pharma")
@@ -198,3 +203,61 @@ async def process_invoice(
         "message": "Invoice processed successfully",
         "data": result
     }
+
+
+@router.get("/{invoice_id}/download-pdf", dependencies=[Depends(get_current_user)])
+async def download_invoice_pdf(
+    invoice_id: int = Path(description="Invoice ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate and download Invoice PDF.
+    
+    Returns PDF file with professional letterhead and formatting.
+    Includes batch tracking, GST details, and dispatch info (for FG invoices).
+    """
+    # Get Invoice with all relationships
+    invoice = db.query(VendorInvoice).options(
+        joinedload(VendorInvoice.vendor),
+        joinedload(VendorInvoice.purchase_order),
+        joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine)
+    ).filter(VendorInvoice.id == invoice_id).first()
+    
+    if not invoice:
+        raise AppException("Invoice not found", "ERR_NOT_FOUND", 404)
+    
+    try:
+        pdf_service = InvoicePDFService(db)  # Pass db session for config access
+        pdf_buffer = pdf_service.generate_invoice_pdf(invoice)
+        
+        logger.info({
+            "event": "INVOICE_PDF_GENERATED",
+            "invoice_id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "user": current_user.username
+        })
+        
+        # Clean filename (remove special characters)
+        filename = invoice.invoice_number.replace('/', '_')
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}.pdf"
+            }
+        )
+    
+    except Exception as e:
+        logger.error({
+            "event": "INVOICE_PDF_GENERATION_ERROR",
+            "invoice_id": invoice_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            f"Failed to generate PDF: {str(e)}",
+            "ERR_PDF_GENERATION",
+            500
+        )

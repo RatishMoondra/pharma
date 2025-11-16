@@ -33,11 +33,12 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
+import DownloadIcon from '@mui/icons-material/Download'
 import PIForm from '../components/PIForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
-const PIRow = ({ pi, onEdit, onDelete, onApprove }) => {
+const PIRow = ({ pi, onEdit, onDelete, onApprove, onDownloadPDF }) => {
   const [open, setOpen] = useState(false)
 
   return (
@@ -106,6 +107,15 @@ const PIRow = ({ pi, onEdit, onDelete, onApprove }) => {
               </IconButton>
             </>
           )}
+          <IconButton
+            size="small"
+            color="info"
+            onClick={() => onDownloadPDF(pi)}
+            sx={{ mr: 1 }}
+            title="Download PDF"
+          >
+            <DownloadIcon fontSize="small" />
+          </IconButton>
           <IconButton
             size="small"
             color="primary"
@@ -374,6 +384,28 @@ const PIPage = () => {
     setPiToDelete(null)
   }
 
+  const handleDownloadPDF = async (pi) => {
+    try {
+      const response = await api.get(`/api/pi/${pi.id}/download-pdf`, {
+        responseType: 'blob'
+      })
+
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${pi.pi_number}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+
+      setSuccessMessage(`PDF downloaded: ${pi.pi_number}.pdf`)
+    } catch (err) {
+      console.error('Error downloading PDF:', err)
+      handleApiError(err)
+    }
+  }
+
   const handleCreateNew = () => {
     setEditingPI(null)
     setFormOpen(true)
@@ -505,6 +537,7 @@ const PIPage = () => {
                   onEdit={handleEdit}
                   onDelete={handleDeleteClick}
                   onApprove={handleApprovalClick}
+                  onDownloadPDF={handleDownloadPDF}
                 />
               ))}
             </TableBody>

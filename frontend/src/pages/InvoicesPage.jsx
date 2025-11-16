@@ -38,6 +38,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import WarehouseIcon from '@mui/icons-material/Warehouse'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DownloadIcon from '@mui/icons-material/Download'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
 import BusinessIcon from '@mui/icons-material/Business'
@@ -47,7 +48,7 @@ import { useApiError } from '../hooks/useApiError'
 import { useAuth } from '../context/AuthContext'
 
 // Invoice Row Component with Expandable Items
-const InvoiceRow = ({ invoice, onEdit, onDelete, canEdit, canDelete, getInvoiceTypeColor }) => {
+const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDelete, getInvoiceTypeColor }) => {
   const [open, setOpen] = useState(false)
 
   const getVendorTypeIcon = (type) => {
@@ -115,6 +116,11 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, canEdit, canDelete, getInvoiceT
         </TableCell>
         <TableCell align="center">
           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+            <Tooltip title="Download PDF">
+              <IconButton size="small" color="info" onClick={() => onDownloadPDF(invoice)}>
+                <DownloadIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             {canEdit(invoice) && (
               <Tooltip title="Edit Invoice">
                 <IconButton size="small" color="primary" onClick={() => onEdit(invoice)}>
@@ -684,6 +690,30 @@ const InvoicesPage = () => {
     setInvoiceToDelete(null)
   }
 
+  const handleDownloadPDF = async (invoice) => {
+    try {
+      const response = await api.get(`/api/invoice/${invoice.id}/download-pdf`, {
+        responseType: 'blob'
+      })
+
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      // Clean filename (remove special characters)
+      const filename = invoice.invoice_number.replace(/\//g, '_')
+      link.setAttribute('download', `${filename}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+
+      setSuccessMessage(`PDF downloaded: ${invoice.invoice_number}.pdf`)
+    } catch (err) {
+      console.error('Error downloading PDF:', err)
+      handleApiError(err)
+    }
+  }
+
   const handleProcessInvoice = async (invoice) => {
     try {
       const response = await api.post(`/api/invoice/${invoice.id}/process`)
@@ -809,6 +839,7 @@ const InvoicesPage = () => {
                   invoice={invoice}
                   onEdit={handleEditClick}
                   onDelete={handleDeleteClick}
+                  onDownloadPDF={handleDownloadPDF}
                   canEdit={canEdit}
                   canDelete={canDelete}
                   getInvoiceTypeColor={getInvoiceTypeColor}

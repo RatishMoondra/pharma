@@ -135,7 +135,26 @@ class POPDFService:
         
         # Add PO details and vendor info side-by-side
         elements.append(self._build_po_header(po))
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 12))
+        
+        # Add shipping and billing addresses if available
+        if po.ship_to or po.bill_to:
+            elements.append(self._build_shipping_billing(po))
+            elements.append(Spacer(1, 12))
+        
+        # Add payment and transport terms
+        elements.append(self._build_payment_transport_terms(po))
+        elements.append(Spacer(1, 12))
+        
+        # Add quality requirements for RM/PM
+        if po.po_type.value in ['RM', 'PM'] and (po.require_coa or po.require_bmr or po.require_msds):
+            elements.append(self._build_quality_requirements(po))
+            elements.append(Spacer(1, 12))
+        
+        # Add approval metadata if available
+        if po.prepared_by or po.checked_by or po.approved_by:
+            elements.append(self._build_approval_metadata(po))
+            elements.append(Spacer(1, 12))
         
         # Add items table
         elements.append(Paragraph("ORDER DETAILS", self.styles['SectionHeader']))
@@ -144,7 +163,7 @@ class POPDFService:
         elements.append(Spacer(1, 20))
         
         # Add terms and conditions
-        elements.extend(self._build_terms_and_conditions())
+        elements.extend(self._build_terms_and_conditions(po))
         
         # Add signature section
         elements.extend(self._build_signature_section())
@@ -194,8 +213,17 @@ class POPDFService:
             ['<b>PO Number:</b>', po.po_number],
             ['<b>PO Date:</b>', po.po_date.strftime('%d-%b-%Y')],
             ['<b>PO Type:</b>', po.po_type.value],
+            ['<b>Status:</b>', po.status.value],
             ['<b>Delivery Date:</b>', po.delivery_date.strftime('%d-%b-%Y') if po.delivery_date else 'N/A'],
         ]
+        
+        # Add amendment info if applicable
+        if po.amendment_number > 0:
+            po_details.append(['<b>Amendment:</b>', f"#{po.amendment_number} ({po.amendment_date.strftime('%d-%b-%Y') if po.amendment_date else 'N/A'})"])
+        
+        # Add buyer reference if available
+        if po.buyer_reference_no:
+            po_details.append(['<b>Buyer Ref:</b>', po.buyer_reference_no])
         
         # Right column: Vendor details
         vendor_details = [
@@ -204,6 +232,10 @@ class POPDFService:
             ['<b>Contact:</b>', vendor.contact_person if vendor else 'N/A'],
             ['<b>Phone:</b>', vendor.phone if vendor else 'N/A'],
         ]
+        
+        # Add contact person if available
+        if po.buyer_contact_person:
+            vendor_details.append(['<b>Buyer Contact:</b>', po.buyer_contact_person])
         
         # Combine into two-column layout
         data = []
@@ -237,47 +269,88 @@ class POPDFService:
         return table
     
     def _build_items_table(self, po: PurchaseOrder):
-        """Build items table"""
-        # Table header
-        data = [['Sr.', 'Medicine Name', 'Ordered Qty', 'Unit', 'Remarks']]
+        """Build items table with conditional columns based on PO type"""
         
-        # Table data
-        for idx, item in enumerate(po.items, 1):
-            # Build remarks from available fields
-            remarks_parts = []
-            if hasattr(item, 'unit') and item.unit:
-                remarks_parts.append(f"Unit: {item.unit}")
-            if hasattr(item, 'language') and item.language:
-                remarks_parts.append(f"Lang: {item.language}")
-            if hasattr(item, 'artwork_version') and item.artwork_version:
-                remarks_parts.append(f"Artwork: {item.artwork_version}")
+        # Determine columns based on PO type
+        if po.po_type.value == 'PM':  # Packing Material
+            # PM-specific table with artwork specs
+            data = [['Sr.', 'Medicine Name', 'HSN', 'Qty', 'Unit', 'Language', 'Artwork\nVersion', 'GSM/PLY', 'Dimensions', 'Delivery']]
             
-            remarks = ', '.join(remarks_parts) if remarks_parts else '-'
+            for idx, item in enumerate(po.items, 1):
+                # GSM/PLY info
+                gsm_ply = []
+                if item.gsm:
+                    gsm_ply.append(f"GSM:{float(item.gsm):.0f}")
+                if item.ply:
+                    gsm_ply.append(f"PLY:{item.ply}")
+                gsm_ply_str = '\n'.join(gsm_ply) if gsm_ply else '-'
+                
+                data.append([
+                    str(idx),
+                    item.medicine.medicine_name if item.medicine else 'N/A',
+                    item.hsn_code or '-',
+                    f"{float(item.ordered_quantity):.2f}",
+                    item.unit or 'pcs',
+                    item.language or '-',
+                    item.artwork_version or '-',
+                    gsm_ply_str,
+                    item.box_dimensions or '-',
+                    item.delivery_date.strftime('%d-%b-%Y') if item.delivery_date else '-'
+                ])
             
-            data.append([
-                str(idx),
-                item.medicine.medicine_name if item.medicine else 'N/A',
-                f"{float(item.ordered_quantity):.2f}",
-                item.unit or 'pcs',
-                remarks
-            ])
+            table = Table(data, colWidths=[0.3*inch, 1.8*inch, 0.6*inch, 0.7*inch, 0.5*inch, 0.6*inch, 0.7*inch, 0.7*inch, 0.9*inch, 0.8*inch])
+            
+        elif po.po_type.value == 'RM':  # Raw Material
+            # RM-specific table with quality specs
+            data = [['Sr.', 'Medicine Name', 'HSN', 'Qty', 'Unit', 'Specification', 'Test Method', 'Pack Size', 'Delivery']]
+            
+            for idx, item in enumerate(po.items, 1):
+                data.append([
+                    str(idx),
+                    item.medicine.medicine_name if item.medicine else 'N/A',
+                    item.hsn_code or '-',
+                    f"{float(item.ordered_quantity):.2f}",
+                    item.unit or 'kg',
+                    item.specification_reference or '-',
+                    (item.test_method[:30] + '...') if item.test_method and len(item.test_method) > 30 else (item.test_method or '-'),
+                    item.pack_size or '-',
+                    item.delivery_date.strftime('%d-%b-%Y') if item.delivery_date else '-'
+                ])
+            
+            table = Table(data, colWidths=[0.3*inch, 2*inch, 0.6*inch, 0.7*inch, 0.5*inch, 0.8*inch, 1.2*inch, 0.7*inch, 0.8*inch])
+            
+        else:  # FG or general
+            # Standard table for Finished Goods
+            data = [['Sr.', 'Medicine Name', 'HSN', 'Ordered Qty', 'Fulfilled Qty', 'Unit', 'Pack Size', 'Delivery Date']]
+            
+            for idx, item in enumerate(po.items, 1):
+                data.append([
+                    str(idx),
+                    item.medicine.medicine_name if item.medicine else 'N/A',
+                    item.hsn_code or '-',
+                    f"{float(item.ordered_quantity):.2f}",
+                    f"{float(item.fulfilled_quantity):.2f}",
+                    item.unit or 'pcs',
+                    item.pack_size or '-',
+                    item.delivery_date.strftime('%d-%b-%Y') if item.delivery_date else '-'
+                ])
+            
+            table = Table(data, colWidths=[0.3*inch, 2.2*inch, 0.6*inch, 1*inch, 1*inch, 0.5*inch, 0.8*inch, 0.9*inch])
         
-        # Create table
-        table = Table(data, colWidths=[0.5*inch, 3*inch, 1.2*inch, 0.8*inch, 1.8*inch])
+        # Common table styling
         table.setStyle(TableStyle([
             # Header row
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1976d2')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
             
             # Data rows
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
             ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # Sr. No.
-            ('ALIGN', (2, 1), (3, -1), 'CENTER'),  # Qty, Unit
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             
             # Grid
@@ -285,30 +358,168 @@ class POPDFService:
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
             
             # Padding
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
             ('TOPPADDING', (0, 1), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ]))
         
         return table
     
-    def _build_terms_and_conditions(self):
+    def _build_shipping_billing(self, po: PurchaseOrder):
+        """Build shipping and billing addresses"""
+        data = []
+        
+        if po.ship_to:
+            data.append(['<b>Ship To:</b>', po.ship_to])
+        
+        if po.bill_to:
+            data.append(['<b>Bill To:</b>', po.bill_to])
+        
+        table = Table(data, colWidths=[1.2*inch, 6*inch])
+        table.setStyle(TableStyle([
+            ('FONT', (0, 0), (0, -1), 'Helvetica-Bold', 9),
+            ('FONT', (1, 0), (1, -1), 'Helvetica', 9),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        
+        return table
+    
+    def _build_payment_transport_terms(self, po: PurchaseOrder):
+        """Build payment and transport terms"""
+        data = [['<b>COMMERCIAL TERMS</b>', '']]
+        
+        if po.payment_terms:
+            data.append(['Payment Terms:', po.payment_terms])
+        
+        if po.transport_mode:
+            data.append(['Transport Mode:', po.transport_mode])
+        
+        if po.freight_terms:
+            data.append(['Freight Terms:', po.freight_terms])
+        
+        if po.currency_code:
+            data.append(['Currency:', po.currency_code])
+        
+        table = Table(data, colWidths=[1.5*inch, 5.5*inch])
+        table.setStyle(TableStyle([
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e3f2fd')),
+            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            
+            # Data rows
+            ('FONT', (0, 1), (0, -1), 'Helvetica-Bold', 9),
+            ('FONT', (1, 1), (1, -1), 'Helvetica', 9),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        
+        return table
+    
+    def _build_quality_requirements(self, po: PurchaseOrder):
+        """Build quality requirements section"""
+        requirements = []
+        
+        if po.require_coa:
+            requirements.append('✓ Certificate of Analysis (CoA)')
+        if po.require_bmr:
+            requirements.append('✓ Batch Manufacturing Record (BMR)')
+        if po.require_msds:
+            requirements.append('✓ Material Safety Data Sheet (MSDS)')
+        if po.sample_quantity:
+            requirements.append(f'✓ Sample Quantity: {float(po.sample_quantity):.2f}')
+        if po.shelf_life_minimum:
+            requirements.append(f'✓ Minimum Shelf Life: {po.shelf_life_minimum} days')
+        
+        data = [['<b>QUALITY REQUIREMENTS</b>']]
+        for req in requirements:
+            data.append([req])
+        
+        table = Table(data, colWidths=[7*inch])
+        table.setStyle(TableStyle([
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fff3e0')),
+            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            
+            # Data rows
+            ('FONT', (0, 1), (-1, -1), 'Helvetica', 9),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        
+        return table
+    
+    def _build_approval_metadata(self, po: PurchaseOrder):
+        """Build approval workflow metadata"""
+        data = [['<b>APPROVAL WORKFLOW</b>', '', '', '']]
+        
+        approval_row = []
+        
+        if po.preparer:
+            approval_row.append(f"Prepared by:\n{po.preparer.username}")
+        if po.checker:
+            approval_row.append(f"Checked by:\n{po.checker.username}")
+        if po.approver:
+            approval_row.append(f"Approved by:\n{po.approver.username}")
+        if po.verifier:
+            approval_row.append(f"Verified by:\n{po.verifier.username}")
+        
+        # Pad with empty cells if less than 4 approvers
+        while len(approval_row) < 4:
+            approval_row.append('')
+        
+        data.append(approval_row)
+        
+        table = Table(data, colWidths=[1.75*inch, 1.75*inch, 1.75*inch, 1.75*inch])
+        table.setStyle(TableStyle([
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f5e9')),
+            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 10),
+            ('SPAN', (0, 0), (-1, 0)),
+            ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            
+            # Data row
+            ('FONT', (0, 1), (-1, 1), 'Helvetica', 8),
+            ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+            ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
+            ('TOPPADDING', (0, 1), (-1, 1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, 1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+        
+        return table
+    
+    def _build_terms_and_conditions(self, po: PurchaseOrder = None):
         """Build terms and conditions section"""
         elements = []
         
         elements.append(Paragraph("TERMS & CONDITIONS", self.styles['SectionHeader']))
         
-        terms = [
-            "1. Please confirm acceptance of this Purchase Order within 24 hours.",
-            "2. Delivery must be made on or before the specified delivery date.",
-            "3. All items must conform to the specifications mentioned.",
-            "4. Invoice must reference the PO number.",
-            "5. Payment terms: Net 30 days from invoice date.",
-            "6. All goods must be accompanied by test certificates and CoA where applicable.",
-            "7. Prices are firm and not subject to escalation.",
-            "8. Goods must be properly packed to avoid damage during transit."
-        ]
+        # Try to load from database if PO has terms_conditions
+        if po and hasattr(po, 'terms_conditions') and po.terms_conditions:
+            terms = [f"{idx + 1}. {tc.term_text}" for idx, tc in enumerate(po.terms_conditions)]
+        else:
+            # Default terms
+            terms = [
+                "1. Please confirm acceptance of this Purchase Order within 24 hours.",
+                "2. Delivery must be made on or before the specified delivery date.",
+                "3. All items must conform to the specifications mentioned.",
+                "4. Invoice must reference the PO number.",
+                "5. Payment terms: Net 30 days from invoice date.",
+                "6. All goods must be accompanied by test certificates and CoA where applicable.",
+                "7. Prices are firm and not subject to escalation.",
+                "8. Goods must be properly packed to avoid damage during transit."
+            ]
         
         terms_style = ParagraphStyle(
             name='Terms',

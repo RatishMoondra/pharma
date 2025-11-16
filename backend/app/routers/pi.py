@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, date
 from decimal import Decimal
@@ -11,9 +12,11 @@ from app.models.eopa import EOPA
 from app.models.product import MedicineMaster
 from app.models.user import User, UserRole
 from app.models.vendor import Vendor, VendorType
+from app.models.country import Country
 from app.auth.dependencies import get_current_user, require_role
 from app.utils.number_generator import generate_pi_number, generate_eopa_number
 from app.exceptions.base import AppException
+from app.services.pi_pdf_service import PIPDFService
 
 router = APIRouter()
 logger = logging.getLogger("pharma")
@@ -364,3 +367,58 @@ async def delete_pi(
         "data": None,
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@router.get("/{pi_id}/download-pdf", dependencies=[Depends(get_current_user)])
+async def download_pi_pdf(
+    pi_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate and download PI PDF.
+    
+    Returns PDF file with professional letterhead and formatting.
+    """
+    # Get PI with all relationships
+    pi = db.query(PI).options(
+        joinedload(PI.partner_vendor),
+        joinedload(PI.country),
+        joinedload(PI.items).joinedload(PIItem.medicine),
+        joinedload(PI.approver)
+    ).filter(PI.id == pi_id).first()
+    
+    if not pi:
+        raise AppException("Proforma Invoice not found", "ERR_NOT_FOUND", 404)
+    
+    try:
+        pdf_service = PIPDFService(db)  # Pass db session for config access
+        pdf_buffer = pdf_service.generate_pi_pdf(pi)
+        
+        logger.info({
+            "event": "PI_PDF_GENERATED",
+            "pi_id": pi.id,
+            "pi_number": pi.pi_number,
+            "user": current_user.username
+        })
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={pi.pi_number}.pdf"
+            }
+        )
+    
+    except Exception as e:
+        logger.error({
+            "event": "PI_PDF_GENERATION_ERROR",
+            "pi_id": pi_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            f"Failed to generate PDF: {str(e)}",
+            "ERR_PDF_GENERATION",
+            500
+        )

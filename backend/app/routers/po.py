@@ -301,10 +301,15 @@ async def download_po_pdf(
     
     Returns PDF file with professional letterhead and formatting.
     """
-    # Get PO with all relationships
+    # Get PO with all relationships (including approval workflow and terms)
     po = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.preparer),
+        joinedload(PurchaseOrder.checker),
+        joinedload(PurchaseOrder.approver),
+        joinedload(PurchaseOrder.verifier),
+        joinedload(PurchaseOrder.terms_conditions)
     ).filter(PurchaseOrder.id == po_id).first()
     
     if not po:
