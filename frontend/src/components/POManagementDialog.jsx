@@ -30,6 +30,8 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import CheckIcon from '@mui/icons-material/Check'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
@@ -75,6 +77,8 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
       if (mode === 'generate') {
         console.log('▶️ Calling fetchGenerateData...')
         fetchGenerateData()
+        // Also fetch existing POs to show them in generate mode
+        fetchExistingPOs()
       } else if (mode === 'delete') {
         console.log('▶️ Calling fetchExistingPOs...')
         fetchExistingPOs()
@@ -337,7 +341,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
     }
   }
   
-  const handleAddLineItem = (poType) => {
+  const handleAddLineItem = (poType, vendorIndex) => {
     let newItem
     
     if (poType === 'RM') {
@@ -370,24 +374,17 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
     }
     
     if (poType === 'RM') {
-      // Add to first RM vendor or create new vendor group
-      if (rmPOs.length > 0) {
-        const updated = [...rmPOs]
-        updated[0].items.push(newItem)
-        setRmPOs(updated)
-      }
+      const updated = [...rmPOs]
+      updated[vendorIndex].items.push(newItem)
+      setRmPOs(updated)
     } else if (poType === 'PM') {
-      if (pmPOs.length > 0) {
-        const updated = [...pmPOs]
-        updated[0].items.push(newItem)
-        setPmPOs(updated)
-      }
+      const updated = [...pmPOs]
+      updated[vendorIndex].items.push(newItem)
+      setPmPOs(updated)
     } else if (poType === 'FG') {
-      if (fgPOs.length > 0) {
-        const updated = [...fgPOs]
-        updated[0].items.push(newItem)
-        setFgPOs(updated)
-      }
+      const updated = [...fgPOs]
+      updated[vendorIndex].items.push(newItem)
+      setFgPOs(updated)
     }
   }
   
@@ -399,12 +396,12 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
       // Update name when ID changes
       if (poType === 'RM' && field === 'raw_material_id') {
         const rawMaterial = rawMaterials.find(rm => rm.id === value)
-        updated[vendorIndex].items[itemIndex].raw_material_name = rawMaterial?.raw_material_name || ''
-        updated[vendorIndex].items[itemIndex].raw_material_code = rawMaterial?.raw_material_code || ''
+        updated[vendorIndex].items[itemIndex].raw_material_name = rawMaterial?.rm_name || ''
+        updated[vendorIndex].items[itemIndex].raw_material_code = rawMaterial?.rm_code || ''
       } else if (poType === 'PM' && field === 'packing_material_id') {
         const packingMaterial = packingMaterials.find(pm => pm.id === value)
-        updated[vendorIndex].items[itemIndex].packing_material_name = packingMaterial?.packing_material_name || ''
-        updated[vendorIndex].items[itemIndex].packing_material_code = packingMaterial?.packing_material_code || ''
+        updated[vendorIndex].items[itemIndex].packing_material_name = packingMaterial?.pm_name || ''
+        updated[vendorIndex].items[itemIndex].packing_material_code = packingMaterial?.pm_code || ''
       } else if (poType === 'FG' && field === 'medicine_id') {
         const medicine = medicines.find(m => m.id === value)
         updated[vendorIndex].items[itemIndex].medicine_name = medicine?.medicine_name || ''
@@ -467,34 +464,72 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
         return
       }
       
-      // Generate POs for each selected vendor
-      const generatePromises = selectedVendors.map(async (vendorGroup) => {
-        const selectedItems = vendorGroup.items.filter(item => item.selected && item.medicine_id)
-        
-        if (selectedItems.length === 0) return null
-        
-        const payload = {
-          eopa_id: eopa.id,
-          vendor_id: vendorGroup.vendor_id,
-          po_type: currentTab,
-          items: selectedItems.map(item => ({
-            medicine_id: item.medicine_id,
-            ordered_quantity: parseFloat(item.quantity),
-            unit: item.unit
-          }))
-        }
-        
-        return api.post('/api/po/generate-from-eopa', payload)
-      })
+      // Route to specific endpoint based on tab
+      let generateResponse
       
-      await Promise.all(generatePromises.filter(p => p !== null))
+      if (currentTab === 'RM') {
+        // RM POs: Use explosion-based endpoint (generates ALL RM POs at once)
+        console.log('🔧 Calling RM explosion endpoint')
+        generateResponse = await api.post(`/api/po/generate-rm-pos/${eopa.id}`)
+      } else if (currentTab === 'PM') {
+        // PM POs: Use explosion-based endpoint (generates ALL PM POs at once)
+        console.log('🔧 Calling PM explosion endpoint')
+        generateResponse = await api.post(`/api/po/generate-pm-pos/${eopa.id}`)
+      } else {
+        // FG POs: Generate per vendor-medicine using /api/po/generate-po-by-vendor
+        console.log('🔧 Generating FG POs per vendor')
+        const generatePromises = selectedVendors.map(async (vendorGroup) => {
+          const selectedItems = vendorGroup.items.filter(item => item.selected && item.medicine_id)
+          
+          if (selectedItems.length === 0) return null
+          
+          const payload = {
+            eopa_id: eopa.id,
+            vendor_id: vendorGroup.vendor_id,
+            po_type: currentTab,
+            items: selectedItems.map(item => ({
+              medicine_id: item.medicine_id,
+              ordered_quantity: parseFloat(item.quantity),
+              unit: item.unit
+            }))
+          }
+          
+          return api.post('/api/po/generate-po-by-vendor', payload)
+        })
+        
+        await Promise.all(generatePromises.filter(p => p !== null))
+      }
       
       onSuccess(`Successfully generated ${selectedVendors.length} ${currentTab} PO(s)`)
       onClose()
       
     } catch (err) {
       console.error('Failed to generate POs:', err)
-      alert(err.response?.data?.message || 'Failed to generate POs')
+      const errorMsg = err.response?.data?.message || 'Failed to generate POs'
+      const errorCode = err.response?.data?.error_code
+      
+      // If duplicate PO error, show existing PO numbers
+      if (errorCode === 'ERR_DUPLICATE_PO') {
+        // Fetch existing POs to show numbers
+        try {
+          const existingRes = await api.get(`/api/po/by-eopa/${eopa.id}`)
+          const existingPOs = existingRes.data.data || []
+          const poNumbers = existingPOs
+            .filter(po => po.po_type === currentTab)
+            .map(po => po.po_number)
+            .join(', ')
+          
+          if (poNumbers) {
+            alert(`${errorMsg}\n\nExisting ${currentTab} POs: ${poNumbers}\n\nPlease delete them first if you want to regenerate.`)
+          } else {
+            alert(errorMsg)
+          }
+        } catch {
+          alert(errorMsg)
+        }
+      } else {
+        alert(errorMsg)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -540,6 +575,12 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
     else if (poType === 'FG') setExistingFgPOs(toggleSelection(existingFgPOs))
   }
   
+  // Helper to find existing PO for a vendor
+  const getExistingPOForVendor = (poType, vendorId) => {
+    const existingList = poType === 'RM' ? existingRmPOs : poType === 'PM' ? existingPmPOs : existingFgPOs
+    return existingList.find(po => po.vendor_id === vendorId)
+  }
+  
   const renderGenerateTab = (poType, posList) => {
     if (loading) {
       return (
@@ -559,39 +600,121 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
     
     return (
       <Box sx={{ mt: 2 }}>
-        <Alert severity="success" sx={{ mb: 2 }}>
-          <strong>Ready to generate {poType} POs!</strong> The system has automatically detected {posList.length} vendor(s) 
-          from your medicines. Review quantities and click "Generate {poType} POs" to create all POs at once.
-        </Alert>
+        {/* Show existing POs if any */}
+        {((poType === 'RM' && existingRmPOs.length > 0) ||
+          (poType === 'PM' && existingPmPOs.length > 0) ||
+          (poType === 'FG' && existingFgPOs.length > 0)) && (() => {
+            // Check how many vendors already have POs
+            const existingList = poType === 'RM' ? existingRmPOs : poType === 'PM' ? existingPmPOs : existingFgPOs
+            const draftPOs = existingList.filter(po => po.status === 'DRAFT')
+            const lockedPOs = existingList.filter(po => po.status !== 'DRAFT')
+            const vendorsWithPOs = posList.filter(vendor => getExistingPOForVendor(poType, vendor.vendor_id))
+            const vendorsWithLockedPOs = posList.filter(vendor => {
+              const po = getExistingPOForVendor(poType, vendor.vendor_id)
+              return po && po.status !== 'DRAFT'
+            })
+            const allVendorsLocked = vendorsWithLockedPOs.length === posList.length
+            const hasAnyDraft = draftPOs.length > 0
+            
+            return (
+              <>
+                {hasAnyDraft && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <strong>DRAFT {poType} POs found (editable):</strong>{' '}
+                    {draftPOs.map(po => po.po_number).join(', ')}
+                    {'. You can edit quantities and items for DRAFT POs.'}
+                  </Alert>
+                )}
+                {lockedPOs.length > 0 && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <strong>Approved/Locked {poType} POs:</strong>{' '}
+                    {lockedPOs.map(po => `${po.po_number} (${po.status})`).join(', ')}
+                    {allVendorsLocked 
+                      ? '. All POs are locked and cannot be edited. They must return to DRAFT status first.' 
+                      : '. These POs are locked and cannot be edited until they return to DRAFT status.'
+                    }
+                  </Alert>
+                )}
+              </>
+            )
+          })()}
         
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="subtitle2">
-            {poType} Purchase Orders ({posList.filter(v => v.selected).length} vendor(s) selected)
-          </Typography>
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => handleAddLineItem(poType)}
-          >
-            Add Line Item
-          </Button>
-        </Box>
+        {!((poType === 'RM' && existingRmPOs.length > 0) ||
+           (poType === 'PM' && existingPmPOs.length > 0) ||
+           (poType === 'FG' && existingFgPOs.length > 0)) && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            <strong>Ready to generate {poType} POs!</strong> The system has automatically detected {posList.length} vendor(s) 
+            from your medicines. Review quantities and click "Generate {poType} POs" to create all POs at once.
+          </Alert>
+        )}
         
-        {posList.map((vendorGroup, vendorIndex) => (
-          <Paper key={vendorIndex} sx={{ mb: 2, p: 2, bgcolor: vendorGroup.selected ? 'white' : 'grey.100' }}>
+        <Typography variant="subtitle2" sx={{ mb: 2 }}>
+          {poType} Purchase Orders ({posList.filter(v => v.selected).length} vendor(s) selected)
+        </Typography>
+        
+        {posList.map((vendorGroup, vendorIndex) => {
+          const existingPO = getExistingPOForVendor(poType, vendorGroup.vendor_id)
+          const hasExistingPO = !!existingPO
+          const isDraftPO = existingPO?.status === 'DRAFT'
+          const isEditable = !hasExistingPO || isDraftPO
+          const isLocked = hasExistingPO && !isDraftPO
+          
+          return (
+          <Paper key={vendorIndex} sx={{ 
+            mb: 2, 
+            p: 2, 
+            bgcolor: isLocked ? 'grey.100' : isEditable && vendorGroup.selected ? 'white' : 'grey.50',
+            border: isDraftPO ? '2px solid' : 'none',
+            borderColor: 'warning.main'
+          }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Checkbox
-                checked={vendorGroup.selected}
+                checked={vendorGroup.selected && isEditable}
                 onChange={() => handleVendorSelectToggle(poType, vendorIndex)}
+                disabled={isLocked}
               />
               <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  {vendorGroup.vendor_name}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: isLocked ? 'text.disabled' : 'primary.main' }}>
+                    {vendorGroup.vendor_name}
+                  </Typography>
+                  {existingPO && (
+                    <>
+                      <Chip
+                        label={existingPO.po_number}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          borderStyle: 'dashed',
+                          borderWidth: 2,
+                          borderColor: isDraftPO ? 'warning.main' : 'success.main',
+                          color: isDraftPO ? 'warning.main' : 'success.main',
+                          fontWeight: 'bold'
+                        }}
+                      />
+                      <Chip
+                        label={existingPO.status}
+                        size="small"
+                        color={isDraftPO ? 'warning' : existingPO.status === 'APPROVED' ? 'success' : 'default'}
+                      />
+                    </>
+                  )}
+                </Box>
                 <Typography variant="caption" color="text.secondary">
-                  {vendorGroup.items.length} item(s)
+                  {isLocked ? `PO ${existingPO.status} - Locked (cannot edit)` : 
+                   isDraftPO ? `${vendorGroup.items.length} item(s) - DRAFT (editable)` :
+                   `${vendorGroup.items.length} item(s)`}
                 </Typography>
               </Box>
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={() => handleAddLineItem(poType, vendorIndex)}
+                sx={{ mr: 1 }}
+                disabled={isLocked}
+              >
+                Add Line Item
+              </Button>
               <Chip
                 icon={getVendorTypeIcon(poType)}
                 label={poType}
@@ -630,74 +753,94 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                         />
                       </TableCell>
                       <TableCell>
-                        {item.isNew ? (
-                          <FormControl fullWidth size="small">
-                            {poType === 'RM' && (
-                              <Select
-                                value={item.raw_material_id || ''}
-                                onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'raw_material_id', e.target.value)}
-                                displayEmpty
-                              >
-                                <MenuItem value="" disabled>
-                                  <em>Select Raw Material</em>
-                                </MenuItem>
-                                {rawMaterials.map(rm => (
-                                  <MenuItem key={rm.id} value={rm.id}>
-                                    {rm.raw_material_code} - {rm.raw_material_name}
+                        {item.isNew || item.isEditing ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <FormControl fullWidth size="small">
+                              {poType === 'RM' && (
+                                <Select
+                                  value={item.raw_material_id || ''}
+                                  onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'raw_material_id', e.target.value)}
+                                  displayEmpty
+                                >
+                                  <MenuItem value="" disabled>
+                                    <em>Select Raw Material</em>
                                   </MenuItem>
-                                ))}
-                              </Select>
-                            )}
-                            {poType === 'PM' && (
-                              <Select
-                                value={item.packing_material_id || ''}
-                                onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'packing_material_id', e.target.value)}
-                                displayEmpty
-                              >
-                                <MenuItem value="" disabled>
-                                  <em>Select Packing Material</em>
-                                </MenuItem>
-                                {packingMaterials.map(pm => (
-                                  <MenuItem key={pm.id} value={pm.id}>
-                                    {pm.packing_material_code} - {pm.packing_material_name}
+                                  {rawMaterials.map(rm => (
+                                    <MenuItem key={rm.id} value={rm.id}>
+                                      {rm.rm_code} - {rm.rm_name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              )}
+                              {poType === 'PM' && (
+                                <Select
+                                  value={item.packing_material_id || ''}
+                                  onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'packing_material_id', e.target.value)}
+                                  displayEmpty
+                                >
+                                  <MenuItem value="" disabled>
+                                    <em>Select Packing Material</em>
                                   </MenuItem>
-                                ))}
-                              </Select>
-                            )}
-                            {poType === 'FG' && (
-                              <Select
-                                value={item.medicine_id || ''}
-                                onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'medicine_id', e.target.value)}
-                                displayEmpty
-                              >
-                                <MenuItem value="" disabled>
-                                  <em>Select Medicine</em>
-                                </MenuItem>
-                                {medicines.map(med => (
-                                  <MenuItem key={med.id} value={med.id}>
-                                    {med.medicine_name}
+                                  {packingMaterials.map(pm => (
+                                    <MenuItem key={pm.id} value={pm.id}>
+                                      {pm.pm_code} - {pm.pm_name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              )}
+                              {poType === 'FG' && (
+                                <Select
+                                  value={item.medicine_id || ''}
+                                  onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'medicine_id', e.target.value)}
+                                  displayEmpty
+                                >
+                                  <MenuItem value="" disabled>
+                                    <em>Select Medicine</em>
                                   </MenuItem>
-                                ))}
-                              </Select>
+                                  {medicines.map(med => (
+                                    <MenuItem key={med.id} value={med.id}>
+                                      {med.medicine_name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              )}
+                            </FormControl>
+                            {item.isEditing && !item.isNew && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleItemChange(poType, vendorIndex, itemIndex, 'isEditing', false)}
+                                color="success"
+                              >
+                                <CheckIcon fontSize="small" />
+                              </IconButton>
                             )}
-                          </FormControl>
+                          </Box>
                         ) : (
-                          <Box>
-                            {poType === 'RM' && (
-                              <Typography variant="body2">
-                                <strong>{item.raw_material_code}</strong> - {item.raw_material_name}
-                              </Typography>
-                            )}
-                            {poType === 'PM' && (
-                              <Typography variant="body2">
-                                <strong>{item.packing_material_code}</strong> - {item.packing_material_name}
-                                {item.language && <Chip label={item.language} size="small" sx={{ ml: 1 }} />}
-                                {item.artwork_version && <Chip label={item.artwork_version} size="small" sx={{ ml: 0.5 }} />}
-                              </Typography>
-                            )}
-                            {poType === 'FG' && (
-                              <Typography variant="body2">{item.medicine_name}</Typography>
-                            )}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ flex: 1 }}>
+                              {poType === 'RM' && (
+                                <Typography variant="body2">
+                                  <strong>{item.raw_material_code}</strong> - {item.raw_material_name}
+                                </Typography>
+                              )}
+                              {poType === 'PM' && (
+                                <Typography variant="body2">
+                                  <strong>{item.packing_material_code}</strong> - {item.packing_material_name}
+                                  {item.language && <Chip label={item.language} size="small" sx={{ ml: 1 }} />}
+                                  {item.artwork_version && <Chip label={item.artwork_version} size="small" sx={{ ml: 0.5 }} />}
+                                </Typography>
+                              )}
+                              {poType === 'FG' && (
+                                <Typography variant="body2">{item.medicine_name}</Typography>
+                              )}
+                            </Box>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleItemChange(poType, vendorIndex, itemIndex, 'isEditing', true)}
+                              color="primary"
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
                           </Box>
                         )}
                       </TableCell>
@@ -724,7 +867,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                           onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'quantity', e.target.value)}
                           inputProps={{ min: 0, step: 0.001 }}
                           fullWidth
-                          disabled={!item.selected || (poType === 'FG' && !item.isNew)}
+                          disabled={!item.selected}
                         />
                       </TableCell>
                       <TableCell>
@@ -749,14 +892,13 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                         </FormControl>
                       </TableCell>
                       <TableCell>
-                        {item.isNew && (
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteLineItem(poType, vendorIndex, itemIndex)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteLineItem(poType, vendorIndex, itemIndex)}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -764,7 +906,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
               </Table>
             </TableContainer>
           </Paper>
-        ))}
+        )})}
       </Box>
     )
   }
@@ -916,17 +1058,39 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
         <Button onClick={onClose} disabled={submitting}>
           Cancel
         </Button>
-        {mode === 'generate' ? (
-          <Button
-            onClick={handleGeneratePOs}
-            variant="contained"
-            color="primary"
-            disabled={submitting}
-            startIcon={<ShoppingCartIcon />}
-          >
-            {submitting ? 'Generating...' : `Generate ${activeTab === 0 ? 'RM' : activeTab === 1 ? 'PM' : 'FG'} POs`}
-          </Button>
-        ) : (
+        {mode === 'generate' ? (() => {
+          const currentTab = activeTab === 0 ? 'RM' : activeTab === 1 ? 'PM' : 'FG'
+          const posList = activeTab === 0 ? rmPOs : activeTab === 1 ? pmPOs : fgPOs
+          const existingList = activeTab === 0 ? existingRmPOs : activeTab === 1 ? existingPmPOs : existingFgPOs
+          
+          // Check if all selected vendors have locked (non-DRAFT) POs
+          const selectedVendors = posList.filter(v => v.selected)
+          const vendorsWithLockedPOs = selectedVendors.filter(vendor => {
+            const po = getExistingPOForVendor(currentTab, vendor.vendor_id)
+            return po && po.status !== 'DRAFT'
+          })
+          const allSelectedLocked = selectedVendors.length > 0 && vendorsWithLockedPOs.length === selectedVendors.length
+          
+          const hasAnyDraft = selectedVendors.some(vendor => {
+            const po = getExistingPOForVendor(currentTab, vendor.vendor_id)
+            return po && po.status === 'DRAFT'
+          })
+          
+          return (
+            <Button
+              onClick={handleGeneratePOs}
+              variant="contained"
+              color="primary"
+              disabled={submitting || allSelectedLocked}
+              startIcon={<ShoppingCartIcon />}
+            >
+              {submitting ? 'Generating...' : 
+               allSelectedLocked ? `${currentTab} POs Locked (Cannot Edit)` :
+               hasAnyDraft ? `Update ${currentTab} POs` :
+               `Generate ${currentTab} POs`}
+            </Button>
+          )
+        })() : (
           <Button
             onClick={handleDeletePOs}
             variant="contained"

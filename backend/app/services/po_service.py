@@ -98,7 +98,7 @@ class POGenerationService:
                 400
             )
         
-        # Group FG/PM POs by vendor and type (old medicine-vendor logic)
+        # Group ONLY FG POs by vendor and medicine
         po_groups = self._group_items_by_vendor_and_type(eopa.items)
 
         # Prepare RM explosion grouped by vendor for RM POs
@@ -123,7 +123,7 @@ class POGenerationService:
                 400
             )
         
-        # Generate POs (one per medicine per vendor type)
+        # Generate FG POs (one per medicine per manufacturer)
         created_pos = []
         
         try:
@@ -145,10 +145,20 @@ class POGenerationService:
                 if po:  # Only add if PO was created (not skipped due to material balance)
                     created_pos.append(po)
             
-            # Update EOPA status if needed
-            # (EOPA can remain APPROVED, POs are separate)
-            
+            # Commit FG POs first
             self.db.commit()
+
+            # Next, generate RM and PM POs via explosion services to ensure correct item IDs
+            rm_result = self.generate_rm_pos_from_explosion(
+                eopa_id=eopa_id,
+                current_user_id=current_user_id,
+                rm_po_overrides=None
+            )
+            pm_result = self.generate_pm_pos_from_explosion(
+                eopa_id=eopa_id,
+                current_user_id=current_user_id,
+                pm_po_overrides=None
+            )
             
             logger.info({
                 "event": "POS_GENERATED_FROM_EOPA",
@@ -159,20 +169,28 @@ class POGenerationService:
                 "created_by": current_user_id
             })
             
+            # Compose combined summary
+            rm_created = rm_result.get("total_rm_pos_created", 0)
+            pm_created = pm_result.get("total_pm_pos_created", 0)
+            combined_list = [
+                {
+                    "po_number": po.po_number,
+                    "po_type": po.po_type.value,
+                    "vendor_id": po.vendor_id,
+                    "total_ordered_qty": float(po.total_ordered_qty),
+                    "items_count": len(po.items)
+                }
+                for po in created_pos
+            ]
+
             return {
                 "eopa_id": eopa_id,
                 "eopa_number": eopa.eopa_number,
-                "total_pos_created": len(created_pos),
-                "purchase_orders": [
-                    {
-                        "po_number": po.po_number,
-                        "po_type": po.po_type.value,
-                        "vendor_id": po.vendor_id,
-                        "total_ordered_qty": float(po.total_ordered_qty),
-                        "items_count": len(po.items)
-                    }
-                    for po in created_pos
-                ]
+                "total_pos_created": len(created_pos) + rm_created + pm_created,
+                "fg_pos_created": len(created_pos),
+                "rm_pos_created": rm_created,
+                "pm_pos_created": pm_created,
+                "purchase_orders": combined_list
             }
             
         except Exception as e:
@@ -189,19 +207,20 @@ class POGenerationService:
             )
     
     def _group_items_by_vendor_and_type(
-        self, 
+        self,
         eopa_items: List[EOPAItem]
     ) -> Dict[Tuple[int, POType, int, int], EOPAItem]:
         """
-        Group EOPA items by vendor, PO type, and medicine (ONE PO PER MEDICINE).
-        
+        Group EOPA items for FG POs only (ONE PO PER MEDICINE).
+
         Rules:
         - FG PO → One per medicine to Manufacturer vendor
-        - RM PO → One per medicine to Raw Material vendor (if exists)
-        - PM PO → One per medicine to Packing Material vendor (if exists)
-        
+
+        RM/PM POs are generated via dedicated explosion services to ensure
+        raw_material_id and packing_material_id are correctly populated.
+
         Returns:
-            Dict mapping (vendor_id, po_type, medicine_id, sequence) → EOPA item
+            Dict mapping (vendor_id, POType.FG, medicine_id, sequence) → EOPA item
         """
         po_groups: Dict[Tuple[int, POType, int, int], EOPAItem] = {}
         
@@ -225,7 +244,7 @@ class POGenerationService:
             
             seq = medicine_sequence[medicine.id]
             
-            # Always create FG PO for manufacturer (one per medicine)
+            # Create FG PO for manufacturer (one per medicine)
             if medicine.manufacturer_vendor_id:
                 key = (medicine.manufacturer_vendor_id, POType.FG, medicine.id, seq)
                 po_groups[key] = item
@@ -236,18 +255,6 @@ class POGenerationService:
                     "medicine_id": medicine.id,
                     "medicine_name": medicine.medicine_name
                 })
-            
-            # Create RM PO (always, one per medicine - even if vendor not assigned)
-            rm_vendor_id = medicine.rm_vendor_id if medicine.rm_vendor_id else -1  # Use -1 for unassigned
-            key = (rm_vendor_id, POType.RM, medicine.id, seq)
-            po_groups[key] = item
-            logger.info(f"Added RM PO: {key}")
-            
-            # Create PM PO (always, one per medicine - even if vendor not assigned)
-            pm_vendor_id = medicine.pm_vendor_id if medicine.pm_vendor_id else -1  # Use -1 for unassigned
-            key = (pm_vendor_id, POType.PM, medicine.id, seq)
-            po_groups[key] = item
-            logger.info(f"Added PM PO: {key}")
         
         logger.info({
             "event": "EOPA_ITEMS_GROUPED",
@@ -270,7 +277,7 @@ class POGenerationService:
         unit: str = None
     ) -> Optional[PurchaseOrder]:
         """
-        Create a single Purchase Order with items (QUANTITY ONLY, NO PRICING).
+        Create a single FG Purchase Order with items (QUANTITY ONLY, NO PRICING).
         
         Business Rules:
         1. PO contains ONLY quantities
@@ -311,7 +318,7 @@ class POGenerationService:
             })
         
         # Generate PO number with medicine sequence
-        po_number = generate_po_number(self.db, po_type.value, medicine_sequence)
+        po_number = generate_po_number(self.db, po_type.value, medicine_sequence, is_draft=True)
         
         # Create PO (NO PRICING)
         po = PurchaseOrder(
@@ -320,7 +327,7 @@ class POGenerationService:
             po_type=po_type,
             eopa_id=eopa.id,
             vendor_id=vendor_id,
-            status=POStatus.OPEN,
+            status=POStatus.DRAFT,
             total_ordered_qty=Decimal("0.00"),
             total_fulfilled_qty=Decimal("0.00"),
             created_by=current_user_id
@@ -356,22 +363,13 @@ class POGenerationService:
             hsn_code = pi_item.hsn_code if pi_item.hsn_code else medicine.hsn_code
             pack_size = pi_item.pack_size if pi_item.pack_size else None
             
-            # Set conditional fields based on PO type
+            # Set conditional fields (FG minimal; PM/RM handled via explosion flows)
             artwork_file_url = None
             artwork_approval_ref = None
             specification_reference = None
             test_method = None
             language = None
             artwork_version = None
-            
-            if po_type == POType.PM:
-                # PM PO: Add artwork fields if available from EOPA or PI
-                language = getattr(eopa_item, 'language', None) or 'EN'
-                artwork_version = getattr(eopa_item, 'artwork_version', None) or 'v1.0'
-            elif po_type == POType.RM:
-                # RM PO: Add quality specification fields
-                specification_reference = getattr(medicine, 'specification_reference', None)
-                test_method = getattr(medicine, 'test_method', None)
             
             # Create PO item (QUANTITY ONLY + UNIT + HSN + conditional fields)
             po_item = POItem(
@@ -512,24 +510,44 @@ class POGenerationService:
                         })
                         continue
                 
-                # Generate RM PO number
-                po_number = generate_po_number(self.db, "RM")
+                # Check for existing DRAFT PO for this vendor and EOPA
+                existing_po = self.db.query(PurchaseOrder).filter(
+                    PurchaseOrder.eopa_id == eopa_id,
+                    PurchaseOrder.vendor_id == vendor_id,
+                    PurchaseOrder.po_type == POType.RM,
+                    PurchaseOrder.status == POStatus.DRAFT
+                ).first()
                 
-                # Create RM PO
-                po = PurchaseOrder(
-                    po_number=po_number,
-                    po_date=date.today(),
-                    po_type=POType.RM,
-                    eopa_id=eopa_id,
-                    vendor_id=vendor_id,
-                    status=POStatus.OPEN,
-                    total_ordered_qty=Decimal("0.00"),
-                    total_fulfilled_qty=Decimal("0.00"),
-                    created_by=current_user_id
-                )
-                
-                self.db.add(po)
-                self.db.flush()  # Get PO ID
+                if existing_po:
+                    # Update existing DRAFT PO
+                    po = existing_po
+                    # Delete existing items to recreate them with new quantities
+                    self.db.query(POItem).filter(POItem.po_id == po.id).delete()
+                    logger.info({
+                        "event": "RM_PO_UPDATED",
+                        "po_id": po.id,
+                        "po_number": po.po_number,
+                        "vendor_id": vendor_id
+                    })
+                else:
+                    # Generate RM PO number
+                    po_number = generate_po_number(self.db, "RM", is_draft=True)
+                    
+                    # Create new RM PO
+                    po = PurchaseOrder(
+                        po_number=po_number,
+                        po_date=date.today(),
+                        po_type=POType.RM,
+                        eopa_id=eopa_id,
+                        vendor_id=vendor_id,
+                        status=POStatus.DRAFT,
+                        total_ordered_qty=Decimal("0.00"),
+                        total_fulfilled_qty=Decimal("0.00"),
+                        created_by=current_user_id
+                    )
+                    
+                    self.db.add(po)
+                    self.db.flush()  # Get PO ID
                 
                 # Create PO items (one per raw material)
                 total_ordered_qty = Decimal("0.00")
@@ -678,24 +696,44 @@ class POGenerationService:
                         })
                         continue
                 
-                # Generate PM PO number
-                po_number = generate_po_number(self.db, "PM")
+                # Check for existing DRAFT PO for this vendor and EOPA
+                existing_po = self.db.query(PurchaseOrder).filter(
+                    PurchaseOrder.eopa_id == eopa_id,
+                    PurchaseOrder.vendor_id == vendor_id,
+                    PurchaseOrder.po_type == POType.PM,
+                    PurchaseOrder.status == POStatus.DRAFT
+                ).first()
                 
-                # Create PM PO
-                po = PurchaseOrder(
-                    po_number=po_number,
-                    po_date=date.today(),
-                    po_type=POType.PM,
-                    eopa_id=eopa_id,
-                    vendor_id=vendor_id,
-                    status=POStatus.OPEN,
-                    total_ordered_qty=Decimal("0.00"),
-                    total_fulfilled_qty=Decimal("0.00"),
-                    created_by=current_user_id
-                )
-                
-                self.db.add(po)
-                self.db.flush()  # Get PO ID
+                if existing_po:
+                    # Update existing DRAFT PO
+                    po = existing_po
+                    # Delete existing items to recreate them with new quantities
+                    self.db.query(POItem).filter(POItem.po_id == po.id).delete()
+                    logger.info({
+                        "event": "PM_PO_UPDATED",
+                        "po_id": po.id,
+                        "po_number": po.po_number,
+                        "vendor_id": vendor_id
+                    })
+                else:
+                    # Generate PM PO number
+                    po_number = generate_po_number(self.db, "PM", is_draft=True)
+                    
+                    # Create new PM PO
+                    po = PurchaseOrder(
+                        po_number=po_number,
+                        po_date=date.today(),
+                        po_type=POType.PM,
+                        eopa_id=eopa_id,
+                        vendor_id=vendor_id,
+                        status=POStatus.DRAFT,
+                        total_ordered_qty=Decimal("0.00"),
+                        total_fulfilled_qty=Decimal("0.00"),
+                        created_by=current_user_id
+                    )
+                    
+                    self.db.add(po)
+                    self.db.flush()  # Get PO ID
                 
                 # Create PO items (one per packing material)
                 total_ordered_qty = Decimal("0.00")
@@ -724,7 +762,7 @@ class POGenerationService:
                         artwork_version=artwork_version,
                         gsm=gsm,
                         ply=ply,
-                        dimensions=dimensions,
+                        box_dimensions=dimensions,
                         hsn_code=hsn_code,
                         gst_rate=gst_rate
                     )

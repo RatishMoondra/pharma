@@ -11,6 +11,7 @@ from collections import defaultdict
 import logging
 
 from app.models.eopa import EOPA, EOPAItem
+from app.models.pi import PIItem
 from app.models.product import MedicineMaster
 from app.models.raw_material import RawMaterialMaster, MedicineRawMaterial
 from app.models.vendor import Vendor
@@ -82,7 +83,7 @@ class RMExplosionService:
         """
         # Load EOPA with all required relationships
         eopa = self.db.query(EOPA).options(
-            joinedload(EOPA.items).joinedload(EOPAItem.pi_item).joinedload("medicine")
+            joinedload(EOPA.items).joinedload(EOPAItem.pi_item).joinedload(PIItem.medicine)
         ).filter(EOPA.id == eopa_id).first()
         
         if not eopa:

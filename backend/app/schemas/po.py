@@ -29,6 +29,26 @@ class MedicineBasic(BaseModel):
         from_attributes = True
 
 
+class RawMaterialBasic(BaseModel):
+    """Basic raw material info"""
+    id: int
+    rm_name: str
+    rm_code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PackingMaterialBasic(BaseModel):
+    """Basic packing material info"""
+    id: int
+    pm_name: str
+    pm_code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class EOPABasic(BaseModel):
     """Basic EOPA info"""
     id: int
@@ -41,7 +61,9 @@ class EOPABasic(BaseModel):
 
 class POItemResponse(BaseModel):
     id: int
-    medicine_id: int
+    medicine_id: Optional[int] = None
+    raw_material_id: Optional[int] = None
+    packing_material_id: Optional[int] = None
     ordered_quantity: float
     fulfilled_quantity: float
     unit: Optional[str] = None  # kg, liters, boxes, labels, etc.
@@ -81,6 +103,8 @@ class POItemResponse(BaseModel):
     
     created_at: datetime
     medicine: Optional[MedicineBasic] = None
+    raw_material: Optional[RawMaterialBasic] = None
+    packing_material: Optional[PackingMaterialBasic] = None
     
     class Config:
         from_attributes = True

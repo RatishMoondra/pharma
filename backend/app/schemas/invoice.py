@@ -13,7 +13,11 @@ from decimal import Decimal
 
 class InvoiceItemCreate(BaseModel):
     """Schema for creating an invoice item"""
-    medicine_id: int
+    # Product identification (exactly one must be provided based on invoice type)
+    medicine_id: Optional[int] = Field(None, description="Medicine ID for FG invoices")
+    raw_material_id: Optional[int] = Field(None, description="Raw material ID for RM invoices")
+    packing_material_id: Optional[int] = Field(None, description="Packing material ID for PM invoices")
+    
     shipped_quantity: float = Field(gt=0, description="Quantity shipped by vendor")
     unit_price: float = Field(gt=0, description="Actual unit price from vendor invoice")
     tax_rate: float = Field(ge=0, le=100, default=0, description="Tax rate percentage (e.g., 18 for 18%)")
@@ -39,8 +43,15 @@ class InvoiceItemCreate(BaseModel):
 class InvoiceItemResponse(BaseModel):
     """Schema for invoice item response"""
     id: int
-    medicine_id: int
+    # Product identification (one will be populated based on invoice type)
+    medicine_id: Optional[int] = None
+    raw_material_id: Optional[int] = None
+    packing_material_id: Optional[int] = None
+    
     medicine: Optional["MedicineBasic"] = None
+    raw_material: Optional["RawMaterialBasic"] = None
+    packing_material: Optional["PackingMaterialBasic"] = None
+    
     shipped_quantity: float
     ordered_quantity: Optional[float] = None  # From PO item for material balance comparison
     unit_price: float
@@ -94,9 +105,9 @@ class InvoiceCreate(BaseModel):
     currency_code: str = Field(default="INR", max_length=10, description="Invoice currency")
     exchange_rate: Optional[float] = Field(None, gt=0, description="Exchange rate to base currency")
     
-    # FG-specific fields (optional, only for Finished Goods invoices)
-    dispatch_note_number: Optional[str] = Field(None, max_length=100, description="Dispatch note from manufacturer")
-    dispatch_date: Optional[date] = Field(None, description="Date goods dispatched from manufacturer")
+    # Dispatch and warehouse fields (optional, applicable to all invoice types RM/PM/FG)
+    dispatch_note_number: Optional[str] = Field(None, max_length=100, description="Dispatch note reference")
+    dispatch_date: Optional[date] = Field(None, description="Date goods dispatched from vendor")
     warehouse_location: Optional[str] = Field(None, max_length=200, description="Warehouse location where goods stored")
     warehouse_received_by: Optional[str] = Field(None, max_length=100, description="Warehouse person who received goods")
     
@@ -134,7 +145,7 @@ class InvoiceResponse(BaseModel):
     exchange_rate: Optional[Decimal] = None
     base_currency_amount: Optional[Decimal] = None
     
-    # FG-specific fields
+    # Dispatch and warehouse fields (optional, applicable to all invoice types RM/PM/FG)
     dispatch_note_number: Optional[str] = None
     dispatch_date: Optional[date] = None
     warehouse_location: Optional[str] = None
@@ -159,6 +170,26 @@ class MedicineBasic(BaseModel):
     id: int
     medicine_name: str
     dosage_form: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class RawMaterialBasic(BaseModel):
+    """Basic raw material info for nested responses"""
+    id: int
+    rm_name: str
+    rm_code: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class PackingMaterialBasic(BaseModel):
+    """Basic packing material info for nested responses"""
+    id: int
+    pm_name: str
+    pm_code: Optional[str] = None
     
     class Config:
         from_attributes = True

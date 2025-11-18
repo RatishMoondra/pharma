@@ -82,18 +82,24 @@ def generate_eopa_number(db: Session) -> str:
     return f"{prefix}{new_num:04d}"
 
 
-def generate_po_number(db: Session, po_type: str, medicine_sequence: int = None) -> str:
+def generate_po_number(db: Session, po_type: str, medicine_sequence: int = None, is_draft: bool = True) -> str:
     """
     Generate PO number using configured format
-    Default formats:
-    - RM: PO/RM/{FY}/{SEQ:04d}
-    - PM: PO/PM/{FY}/{SEQ:04d}
-    - FG: PO/FG/{FY}/{SEQ:04d}
+    Draft PO formats:
+    - RM: PO/{FY}/RM/DRAFT/{SEQ:04d}
+    - PM: PO/{FY}/PM/DRAFT/{SEQ:04d}
+    - FG: PO/{FY}/FG/DRAFT/{SEQ:04d}
+    
+    Final PO formats (after approval):
+    - RM: PO/{FY}/RM/{SEQ:04d}
+    - PM: PO/{FY}/PM/{SEQ:04d}
+    - FG: PO/{FY}/FG/{SEQ:04d}
     
     Args:
         db: Database session
         po_type: Type of PO (FG, RM, PM)
         medicine_sequence: Sequence number of medicine in EOPA (optional, for future use)
+        is_draft: Whether this is a draft PO (default True)
     """
     from app.models.po import PurchaseOrder
     from app.services.configuration_service import ConfigurationService  # Lazy import
@@ -101,17 +107,18 @@ def generate_po_number(db: Session, po_type: str, medicine_sequence: int = None)
     config_service = ConfigurationService(db)
     numbering = config_service.get_document_numbering()
     
-    # Get format based on PO type
-    format_key = f"po_{po_type.lower()}_format"
-    format_template = numbering.get(format_key, f"PO/{po_type}/{{FY}}/{{SEQ:04d}}")
-    
     fy = get_financial_year(db)
     
     if medicine_sequence:
         # New format with medicine sequence: PO/YY-YY/TYPE/SEQ/0001
         prefix = f"PO/{fy}/{po_type}/{medicine_sequence}/"
+    elif is_draft:
+        # Draft format: PO/YY-YY/TYPE/DRAFT/0001
+        prefix = f"PO/{fy}/{po_type}/DRAFT/"
     else:
-        # Use configured format
+        # Use configured format for final POs
+        format_key = f"po_{po_type.lower()}_format"
+        format_template = numbering.get(format_key, f"PO/{po_type}/{{FY}}/{{SEQ:04d}}")
         prefix = format_template.replace("{FY}", fy).split("{SEQ")[0]
     
     last_po = db.query(PurchaseOrder).filter(

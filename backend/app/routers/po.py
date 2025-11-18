@@ -8,7 +8,8 @@ from typing import List
 
 from app.database.session import get_db
 from app.schemas.po import POCreate, POResponse
-from app.models.po import PurchaseOrder, POItem, POType
+from app.models.po import PurchaseOrder, POItem, POType, POStatus
+from app.models.vendor import Vendor
 from app.models.eopa import EOPA, EOPAStatus
 from app.models.product import MedicineMaster
 from app.models.user import User, UserRole
@@ -68,6 +69,51 @@ async def generate_pos_from_eopa(
         logger.error({
             "event": "PO_GENERATION_ENDPOINT_ERROR",
             "eopa_id": eopa_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            "Failed to generate Purchase Orders",
+            "ERR_PO_GENERATION",
+            500
+        )
+
+
+@router.post("/generate-from-eopa", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def generate_pos_from_eopa_body(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate Purchase Orders from an approved EOPA (body-based).
+
+    Payload:
+    {
+        "eopa_id": int,
+        "po_quantities": { ... }  # optional overrides
+    }
+    """
+    try:
+        eopa_id = payload.get("eopa_id")
+        po_quantities = payload.get("po_quantities") if payload else None
+        if not eopa_id:
+            raise AppException("eopa_id is required", "ERR_VALIDATION", 400)
+
+        service = POGenerationService(db)
+        result = service.generate_pos_from_eopa(eopa_id, current_user.id, po_quantities)
+
+        return {
+            "success": True,
+            "message": f"Successfully generated {result['total_pos_created']} Purchase Order(s) from EOPA {result['eopa_number']}",
+            "data": result,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    except AppException:
+        raise
+    except Exception as e:
+        logger.error({
+            "event": "PO_GENERATION_ENDPOINT_ERROR_BODY",
             "error": str(e),
             "user": current_user.username
         })
@@ -309,7 +355,9 @@ async def list_pos(
     query = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
         joinedload(PurchaseOrder.eopa),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
     )
     
     if po_type:
@@ -348,7 +396,9 @@ async def get_po(
     po = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
         joinedload(PurchaseOrder.eopa),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
     ).filter(PurchaseOrder.id == po_id).first()
     
     if not po:
@@ -421,7 +471,9 @@ async def update_po(
     po = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
         joinedload(PurchaseOrder.eopa),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
     ).filter(PurchaseOrder.id == po_id).first()
     
     return {
@@ -447,6 +499,8 @@ async def download_po_pdf(
     po = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
         joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material),
         joinedload(PurchaseOrder.preparer),
         joinedload(PurchaseOrder.checker),
         joinedload(PurchaseOrder.approver),
@@ -510,7 +564,9 @@ async def send_po_email(
     # Get PO with all relationships
     po = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
     ).filter(PurchaseOrder.id == po_id).first()
     
     if not po:
@@ -618,6 +674,221 @@ async def test_email_configuration(
         )
 
 
+@router.post("/{po_id}/submit-for-approval", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def submit_po_for_approval(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Submit PO for approval (DRAFT → PENDING_APPROVAL)"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status != POStatus.DRAFT:
+        raise AppException("Only DRAFT POs can be submitted for approval", "ERR_VALIDATION", 400)
+    
+    po.status = POStatus.PENDING_APPROVAL
+    po.prepared_by = current_user.id
+    po.prepared_at = datetime.utcnow()
+    po.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_SUBMITTED_FOR_APPROVAL",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} submitted for approval",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/{po_id}/approve", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def approve_po(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Approve PO (PENDING_APPROVAL → APPROVED)"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status != POStatus.PENDING_APPROVAL:
+        raise AppException("Only PENDING_APPROVAL POs can be approved", "ERR_VALIDATION", 400)
+    
+    po.status = POStatus.APPROVED
+    po.approved_by = current_user.id
+    po.approved_at = datetime.utcnow()
+    po.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_APPROVED",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} approved",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/{po_id}/reject", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN]))])
+async def reject_po(
+    po_id: int,
+    remarks: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reject PO (PENDING_APPROVAL/APPROVED → DRAFT)"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status not in [POStatus.PENDING_APPROVAL, POStatus.APPROVED]:
+        raise AppException("Only PENDING_APPROVAL or APPROVED POs can be rejected", "ERR_VALIDATION", 400)
+    
+    po.status = POStatus.DRAFT
+    if remarks:
+        po.remarks = (po.remarks or "") + f"\n[Rejected by {current_user.username}]: {remarks}"
+    po.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_REJECTED",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "user": current_user.username,
+        "remarks": remarks
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} rejected",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/{po_id}/mark-ready", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def mark_po_ready(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark PO as ready to send (APPROVED → READY)"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status != POStatus.APPROVED:
+        raise AppException("Only APPROVED POs can be marked as ready", "ERR_VALIDATION", 400)
+    
+    po.status = POStatus.READY
+    po.verified_by = current_user.id
+    po.verified_at = datetime.utcnow()
+    po.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_MARKED_READY",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} marked as ready",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/{po_id}/send-to-vendor", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def send_po_to_vendor(
+    po_id: int,
+    send_email: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send PO to vendor (READY → SENT)"""
+    po = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.vendor)
+    ).filter(PurchaseOrder.id == po_id).first()
+    
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status != POStatus.READY:
+        raise AppException("Only READY POs can be sent to vendor", "ERR_VALIDATION", 400)
+    
+    po.status = POStatus.SENT
+    po.sent_at = datetime.utcnow()
+    po.updated_at = datetime.utcnow()
+    
+    # Optionally send email
+    if send_email and po.vendor and po.vendor.email:
+        try:
+            email_service = EmailService(db)
+            email_result = email_service.send_po_email(
+                po=po,
+                to_emails=[po.vendor.email],
+                attach_pdf=True
+            )
+            if not email_result["success"]:
+                logger.warning({
+                    "event": "PO_EMAIL_FAILED",
+                    "po_id": po.id,
+                    "po_number": po.po_number,
+                    "error": email_result["message"]
+                })
+        except Exception as e:
+            logger.error({
+                "event": "PO_EMAIL_ERROR",
+                "po_id": po.id,
+                "error": str(e)
+            })
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_SENT_TO_VENDOR",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "vendor": po.vendor.vendor_name if po.vendor else "NOT ASSIGNED",
+        "email_sent": send_email,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} sent to vendor",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 @router.get("/by-eopa/{eopa_id}", response_model=dict)
 async def get_pos_by_eopa(
     eopa_id: int,
@@ -636,7 +907,9 @@ async def get_pos_by_eopa(
     # Fetch POs linked to this EOPA
     pos = db.query(PurchaseOrder).options(
         joinedload(PurchaseOrder.vendor),
-        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
     ).filter(PurchaseOrder.eopa_id == eopa_id).all()
     
     return {
@@ -647,7 +920,7 @@ async def get_pos_by_eopa(
     }
 
 
-@router.post("/generate-from-eopa", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+@router.post("/generate-po-by-vendor", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
 async def generate_po_by_vendor(
     payload: dict,
     current_user: User = Depends(get_current_user),
@@ -670,9 +943,12 @@ async def generate_po_by_vendor(
         ]
     }
     """
+    # Local imports to avoid circular references and fix incorrect modules
+    from datetime import date, timedelta
+    from decimal import Decimal
     from app.models.eopa import EOPA
     from app.models.vendor import Vendor
-    from app.models.medicine import MedicineMaster
+    from app.models.product import MedicineMaster
     from app.utils.number_generator import generate_po_number
     
     eopa_id = payload.get('eopa_id')

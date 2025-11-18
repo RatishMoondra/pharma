@@ -27,6 +27,39 @@ logger = logging.getLogger("pharma")
 
 
 @router.post(
+    "/create",
+    response_model=dict,
+    dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.WAREHOUSE_MANAGER]))]
+)
+async def create_invoice(
+    invoice_data: InvoiceCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a vendor tax invoice.
+    
+    This endpoint:
+    1. Records the vendor invoice with actual pricing
+    2. Updates PO fulfillment quantities
+    3. Updates PO status (OPEN → PARTIAL → CLOSED)
+    4. For RM/PM: Updates manufacturer's material balance
+    """
+    service = InvoiceService(db)
+    
+    # Get PO ID from invoice data
+    po_id = invoice_data.po_id
+    
+    result = service.process_vendor_invoice(po_id, invoice_data, current_user.id)
+    
+    return {
+        "success": True,
+        "message": f"Invoice {invoice_data.invoice_number} created successfully",
+        "data": result
+    }
+
+
+@router.post(
     "/vendor/{po_id}",
     response_model=dict,
     dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER, UserRole.WAREHOUSE_MANAGER]))]

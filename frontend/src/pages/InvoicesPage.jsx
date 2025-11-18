@@ -1108,52 +1108,52 @@ const InvoicesPage = () => {
               </Grid>
             </Grid>
 
-            {/* FG-specific fields */}
-            {editingInvoice?.invoice_type === 'FG' && (
-              <>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Finished Goods: Update dispatch note details and warehouse location
-                </Alert>
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Dispatch Note Number"
-                      value={editFormData.dispatch_note_number}
-                      onChange={(e) => handleEditFormChange('dispatch_note_number', e.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Dispatch Date"
-                      type="date"
-                      value={editFormData.dispatch_date}
-                      onChange={(e) => handleEditFormChange('dispatch_date', e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Warehouse Location"
-                      value={editFormData.warehouse_location}
-                      onChange={(e) => handleEditFormChange('warehouse_location', e.target.value)}
-                      helperText="Where goods are stored in warehouse"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Received By (Warehouse Person)"
-                      value={editFormData.warehouse_received_by}
-                      onChange={(e) => handleEditFormChange('warehouse_received_by', e.target.value)}
-                      helperText="Who received the goods"
-                    />
-                  </Grid>
+            {/* Dispatch and Warehouse Details - Available for all invoice types */}
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {editingInvoice?.invoice_type === 'FG'
+                  ? 'Finished Goods: Update dispatch note details and warehouse location'
+                  : 'Optional: Update dispatch and warehouse details if applicable'}
+              </Alert>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Dispatch Note Number"
+                    value={editFormData.dispatch_note_number}
+                    onChange={(e) => handleEditFormChange('dispatch_note_number', e.target.value)}
+                  />
                 </Grid>
-              </>
-            )}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Dispatch Date"
+                    type="date"
+                    value={editFormData.dispatch_date}
+                    onChange={(e) => handleEditFormChange('dispatch_date', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Warehouse Location"
+                    value={editFormData.warehouse_location}
+                    onChange={(e) => handleEditFormChange('warehouse_location', e.target.value)}
+                    helperText="Where goods are stored in warehouse"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Received By (Warehouse Person)"
+                    value={editFormData.warehouse_received_by}
+                    onChange={(e) => handleEditFormChange('warehouse_received_by', e.target.value)}
+                    helperText="Who received the goods"
+                  />
+                </Grid>
+              </Grid>
+            </>
 
             {/* Invoice Items */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -1416,47 +1416,50 @@ const InvoicesPage = () => {
               </Alert>
             )}
 
-            {createFormData.invoice_type === 'FG' && (
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12}>
-                  <Alert severity="info">Finished Goods: Enter dispatch and warehouse details</Alert>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Dispatch Note Number"
-                    value={createFormData.dispatch_note_number}
-                    onChange={(e) => handleCreateFormChange('dispatch_note_number', e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Dispatch Date"
-                    type="date"
-                    value={createFormData.dispatch_date}
-                    onChange={(e) => handleCreateFormChange('dispatch_date', e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Warehouse Location"
-                    value={createFormData.warehouse_location}
-                    onChange={(e) => handleCreateFormChange('warehouse_location', e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Received By"
-                    value={createFormData.warehouse_received_by}
-                    onChange={(e) => handleCreateFormChange('warehouse_received_by', e.target.value)}
-                  />
-                </Grid>
+            {/* Dispatch and Warehouse Details - Available for all invoice types */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  {createFormData.invoice_type === 'FG' 
+                    ? 'Finished Goods: Enter dispatch and warehouse details'
+                    : 'Optional: Enter dispatch and warehouse details if applicable'}
+                </Alert>
               </Grid>
-            )}
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Dispatch Note Number"
+                  value={createFormData.dispatch_note_number}
+                  onChange={(e) => handleCreateFormChange('dispatch_note_number', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Dispatch Date"
+                  type="date"
+                  value={createFormData.dispatch_date}
+                  onChange={(e) => handleCreateFormChange('dispatch_date', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Warehouse Location"
+                  value={createFormData.warehouse_location}
+                  onChange={(e) => handleCreateFormChange('warehouse_location', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Received By"
+                  value={createFormData.warehouse_received_by}
+                  onChange={(e) => handleCreateFormChange('warehouse_received_by', e.target.value)}
+                />
+              </Grid>
+            </Grid>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Invoice Items</Typography>
