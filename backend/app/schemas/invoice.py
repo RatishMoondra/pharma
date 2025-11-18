@@ -42,6 +42,7 @@ class InvoiceItemResponse(BaseModel):
     medicine_id: int
     medicine: Optional["MedicineBasic"] = None
     shipped_quantity: float
+    ordered_quantity: Optional[float] = None  # From PO item for material balance comparison
     unit_price: float
     total_price: float
     tax_rate: float

@@ -153,7 +153,13 @@ async def create_medicine_master(
     
     db.add(medicine)
     db.commit()
-    db.refresh(medicine)
+    
+    # Reload with vendor relationships
+    medicine = db.query(MedicineMaster).options(
+        joinedload(MedicineMaster.manufacturer_vendor),
+        joinedload(MedicineMaster.rm_vendor),
+        joinedload(MedicineMaster.pm_vendor)
+    ).filter(MedicineMaster.id == medicine.id).first()
     
     logger.info({
         "event": "MEDICINE_CREATED",
@@ -233,7 +239,13 @@ async def update_medicine(
     medicine.updated_at = datetime.utcnow()
     
     db.commit()
-    db.refresh(medicine)
+    
+    # Reload with vendor relationships
+    medicine = db.query(MedicineMaster).options(
+        joinedload(MedicineMaster.manufacturer_vendor),
+        joinedload(MedicineMaster.rm_vendor),
+        joinedload(MedicineMaster.pm_vendor)
+    ).filter(MedicineMaster.id == medicine_id).first()
     
     logger.info({
         "event": "MEDICINE_UPDATED",

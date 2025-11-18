@@ -184,4 +184,4 @@ npm run preview
 4. ✅ Create product and medicine masters
 5. ✅ Start the procurement workflow with PI creation
 
-Enjoy using the Pharmaceutical Procurement System! 🎉
+Enjoy using the PharmaFlow 360! 🎉

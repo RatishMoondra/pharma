@@ -308,9 +308,19 @@ class InvoiceService:
             List of invoices
         """
         invoices = self.db.query(VendorInvoice).options(
+            joinedload(VendorInvoice.purchase_order).joinedload(PurchaseOrder.items),
             joinedload(VendorInvoice.vendor),
             joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine)
         ).filter(VendorInvoice.po_id == po_id).all()
+        
+        # Enrich invoice items with ordered quantity from PO
+        for invoice in invoices:
+            if invoice.purchase_order and invoice.purchase_order.items:
+                po_items_dict = {item.medicine_id: item for item in invoice.purchase_order.items}
+                for inv_item in invoice.items:
+                    po_item = po_items_dict.get(inv_item.medicine_id)
+                    if po_item:
+                        inv_item.ordered_quantity = po_item.ordered_quantity
         
         return invoices
     
@@ -322,10 +332,20 @@ class InvoiceService:
             List of all invoices ordered by received date (newest first)
         """
         invoices = self.db.query(VendorInvoice).options(
-            joinedload(VendorInvoice.purchase_order),
+            joinedload(VendorInvoice.purchase_order).joinedload(PurchaseOrder.items),
             joinedload(VendorInvoice.vendor),
             joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine)
         ).order_by(VendorInvoice.received_at.desc()).all()
+        
+        # Enrich invoice items with ordered quantity from PO
+        for invoice in invoices:
+            if invoice.purchase_order and invoice.purchase_order.items:
+                po_items_dict = {item.medicine_id: item for item in invoice.purchase_order.items}
+                for inv_item in invoice.items:
+                    po_item = po_items_dict.get(inv_item.medicine_id)
+                    if po_item:
+                        # Attach ordered_quantity to invoice item for frontend display
+                        inv_item.ordered_quantity = po_item.ordered_quantity
         
         return invoices
     
@@ -561,7 +581,7 @@ class InvoiceService:
             Invoice
         """
         invoice = self.db.query(VendorInvoice).options(
-            joinedload(VendorInvoice.purchase_order),
+            joinedload(VendorInvoice.purchase_order).joinedload(PurchaseOrder.items),
             joinedload(VendorInvoice.vendor),
             joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine)
         ).filter(VendorInvoice.invoice_number == invoice_number).first()
@@ -572,6 +592,14 @@ class InvoiceService:
                 "ERR_INVOICE_NOT_FOUND",
                 404
             )
+        
+        # Enrich invoice items with ordered quantity from PO
+        if invoice.purchase_order and invoice.purchase_order.items:
+            po_items_dict = {item.medicine_id: item for item in invoice.purchase_order.items}
+            for inv_item in invoice.items:
+                po_item = po_items_dict.get(inv_item.medicine_id)
+                if po_item:
+                    inv_item.ordered_quantity = po_item.ordered_quantity
         
         return invoice
     

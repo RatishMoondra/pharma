@@ -21,9 +21,12 @@ from app.models.product import MedicineMaster
 from app.models.vendor import Vendor
 from app.models.material import MaterialBalance
 from app.utils.number_generator import generate_po_number
+from app.services.rm_explosion_service import RMExplosionService
+from app.services.pm_explosion_service import PMExplosionService
 from app.exceptions.base import AppException
 
 logger = logging.getLogger("pharma")
+
 
 
 class POGenerationService:
@@ -95,8 +98,13 @@ class POGenerationService:
                 400
             )
         
-        # Group EOPA items by vendor and PO type
+        # Group FG/PM POs by vendor and type (old medicine-vendor logic)
         po_groups = self._group_items_by_vendor_and_type(eopa.items)
+
+        # Prepare RM explosion grouped by vendor for RM POs
+        rm_explosion_service = RMExplosionService(self.db)
+        rm_explosion = rm_explosion_service.explode_eopa_to_raw_materials(eopa_id)
+        rm_vendor_groups = rm_explosion.get("grouped_by_vendor", [])
         
         # Build custom quantities and units lookup
         qty_lookup = {}
@@ -433,3 +441,345 @@ class POGenerationService:
         if balance:
             return Decimal(str(balance.available_quantity))
         return Decimal("0.00")
+    
+    def generate_rm_pos_from_explosion(
+        self,
+        eopa_id: int,
+        current_user_id: int,
+        rm_po_overrides: Optional[List[Dict]] = None
+    ) -> Dict:
+        """
+        Generate Raw Material POs using BOM explosion.
+        
+        Creates ONE RM PO per vendor with multiple line items (one per raw material).
+        
+        Args:
+            eopa_id: EOPA ID
+            current_user_id: User creating the POs
+            rm_po_overrides: Optional list of vendor groups with user overrides
+                Format: [{"vendor_id": 1, "items": [{"raw_material_id": 1, "quantity": 100, "uom": "KG", ...}]}]
+                
+        Returns:
+            Dict with created RM POs summary
+        """
+        # Load EOPA to validate
+        eopa = self.db.query(EOPA).filter(EOPA.id == eopa_id).first()
+        if not eopa:
+            raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
+        
+        if eopa.status != EOPAStatus.APPROVED:
+            raise AppException(
+                "EOPA must be approved before generating POs",
+                "ERR_VALIDATION",
+                400
+            )
+        
+        # Perform RM explosion
+        rm_explosion_service = RMExplosionService(self.db)
+        
+        if rm_po_overrides:
+            # Use user-provided overrides
+            vendor_groups = rm_po_overrides
+        else:
+            # Use computed explosion
+            explosion_result = rm_explosion_service.explode_eopa_to_raw_materials(eopa_id)
+            vendor_groups = explosion_result.get("grouped_by_vendor", [])
+        
+        if not vendor_groups:
+            raise AppException(
+                "No raw materials found for this EOPA. Please check medicine BOM definitions.",
+                "ERR_NO_RM_FOUND",
+                400
+            )
+        
+        created_pos = []
+        
+        try:
+            for vendor_group in vendor_groups:
+                vendor_id = vendor_group.get("vendor_id")
+                raw_materials = vendor_group.get("raw_materials") or vendor_group.get("items", [])
+                
+                if not raw_materials:
+                    continue
+                
+                # Validate vendor exists
+                if vendor_id:
+                    vendor = self.db.query(Vendor).filter(Vendor.id == vendor_id).first()
+                    if not vendor:
+                        logger.warning({
+                            "event": "RM_PO_VENDOR_NOT_FOUND",
+                            "vendor_id": vendor_id
+                        })
+                        continue
+                
+                # Generate RM PO number
+                po_number = generate_po_number(self.db, "RM")
+                
+                # Create RM PO
+                po = PurchaseOrder(
+                    po_number=po_number,
+                    po_date=date.today(),
+                    po_type=POType.RM,
+                    eopa_id=eopa_id,
+                    vendor_id=vendor_id,
+                    status=POStatus.OPEN,
+                    total_ordered_qty=Decimal("0.00"),
+                    total_fulfilled_qty=Decimal("0.00"),
+                    created_by=current_user_id
+                )
+                
+                self.db.add(po)
+                self.db.flush()  # Get PO ID
+                
+                # Create PO items (one per raw material)
+                total_ordered_qty = Decimal("0.00")
+                
+                for rm in raw_materials:
+                    raw_material_id = rm.get("raw_material_id")
+                    qty_required = Decimal(str(rm.get("qty_required") or rm.get("quantity", 0)))
+                    uom = rm.get("uom")
+                    hsn_code = rm.get("hsn_code")
+                    gst_rate = Decimal(str(rm.get("gst_rate", 0))) if rm.get("gst_rate") else None
+                    
+                    # Create PO item with raw_material_id (not medicine_id for RM POs)
+                    po_item = POItem(
+                        po_id=po.id,
+                        raw_material_id=raw_material_id,
+                        medicine_id=None,  # RM POs use raw_material_id
+                        ordered_quantity=float(qty_required),
+                        fulfilled_quantity=0.0,
+                        unit=uom,
+                        hsn_code=hsn_code,
+                        gst_rate=gst_rate
+                    )
+                    
+                    self.db.add(po_item)
+                    total_ordered_qty += qty_required
+                
+                # Update PO total
+                po.total_ordered_qty = float(total_ordered_qty)
+                created_pos.append(po)
+                
+                logger.info({
+                    "event": "RM_PO_CREATED",
+                    "po_number": po_number,
+                    "vendor_id": vendor_id,
+                    "eopa_id": eopa_id,
+                    "items_count": len(raw_materials),
+                    "total_ordered_qty": float(total_ordered_qty),
+                    "created_by": current_user_id
+                })
+            
+            self.db.commit()
+            
+            logger.info({
+                "event": "RM_POS_GENERATED_FROM_EXPLOSION",
+                "eopa_id": eopa_id,
+                "total_rm_pos_created": len(created_pos),
+                "po_numbers": [po.po_number for po in created_pos],
+                "created_by": current_user_id
+            })
+            
+            return {
+                "eopa_id": eopa_id,
+                "total_rm_pos_created": len(created_pos),
+                "purchase_orders": [
+                    {
+                        "po_number": po.po_number,
+                        "po_type": po.po_type.value,
+                        "vendor_id": po.vendor_id,
+                        "total_ordered_qty": float(po.total_ordered_qty),
+                        "items_count": len(po.items)
+                    }
+                    for po in created_pos
+                ]
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error({
+                "event": "RM_PO_GENERATION_FAILED",
+                "eopa_id": eopa_id,
+                "error": str(e)
+            })
+            raise AppException(
+                f"Failed to generate RM POs: {str(e)}",
+                "ERR_RM_PO_GENERATION",
+                500
+            )
+    
+    def generate_pm_pos_from_explosion(
+        self,
+        eopa_id: int,
+        current_user_id: int,
+        pm_po_overrides: Optional[List[Dict]] = None
+    ) -> Dict:
+        """
+        Generate Packing Material POs using BOM explosion.
+        
+        Creates ONE PM PO per vendor with multiple line items (one per packing material).
+        
+        Args:
+            eopa_id: EOPA ID
+            current_user_id: User creating the POs
+            pm_po_overrides: Optional list of vendor groups with user overrides
+                Format: [{"vendor_id": 1, "items": [{"packing_material_id": 1, "quantity": 1000, "uom": "PCS", "language": "EN", ...}]}]
+                
+        Returns:
+            Dict with created PM POs summary
+        """
+        # Load EOPA to validate
+        eopa = self.db.query(EOPA).filter(EOPA.id == eopa_id).first()
+        if not eopa:
+            raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
+        
+        if eopa.status != EOPAStatus.APPROVED:
+            raise AppException(
+                "EOPA must be approved before generating POs",
+                "ERR_VALIDATION",
+                400
+            )
+        
+        # Perform PM explosion
+        pm_explosion_service = PMExplosionService(self.db)
+        
+        if pm_po_overrides:
+            # Use user-provided overrides
+            vendor_groups = pm_po_overrides
+        else:
+            # Use computed explosion
+            explosion_result = pm_explosion_service.explode_eopa_to_packing_materials(eopa_id)
+            vendor_groups = explosion_result.get("grouped_by_vendor", [])
+        
+        if not vendor_groups:
+            raise AppException(
+                "No packing materials found for this EOPA. Please check medicine BOM definitions.",
+                "ERR_NO_PM_FOUND",
+                400
+            )
+        
+        created_pos = []
+        
+        try:
+            for vendor_group in vendor_groups:
+                vendor_id = vendor_group.get("vendor_id")
+                packing_materials = vendor_group.get("packing_materials") or vendor_group.get("items", [])
+                
+                if not packing_materials:
+                    continue
+                
+                # Validate vendor exists
+                if vendor_id:
+                    vendor = self.db.query(Vendor).filter(Vendor.id == vendor_id).first()
+                    if not vendor:
+                        logger.warning({
+                            "event": "PM_PO_VENDOR_NOT_FOUND",
+                            "vendor_id": vendor_id
+                        })
+                        continue
+                
+                # Generate PM PO number
+                po_number = generate_po_number(self.db, "PM")
+                
+                # Create PM PO
+                po = PurchaseOrder(
+                    po_number=po_number,
+                    po_date=date.today(),
+                    po_type=POType.PM,
+                    eopa_id=eopa_id,
+                    vendor_id=vendor_id,
+                    status=POStatus.OPEN,
+                    total_ordered_qty=Decimal("0.00"),
+                    total_fulfilled_qty=Decimal("0.00"),
+                    created_by=current_user_id
+                )
+                
+                self.db.add(po)
+                self.db.flush()  # Get PO ID
+                
+                # Create PO items (one per packing material)
+                total_ordered_qty = Decimal("0.00")
+                
+                for pm in packing_materials:
+                    packing_material_id = pm.get("packing_material_id")
+                    qty_required = Decimal(str(pm.get("qty_required") or pm.get("quantity", 0)))
+                    uom = pm.get("uom")
+                    language = pm.get("language")
+                    artwork_version = pm.get("artwork_version")
+                    gsm = Decimal(str(pm.get("gsm"))) if pm.get("gsm") else None
+                    ply = pm.get("ply")
+                    dimensions = pm.get("dimensions")
+                    hsn_code = pm.get("hsn_code")
+                    gst_rate = Decimal(str(pm.get("gst_rate", 0))) if pm.get("gst_rate") else None
+                    
+                    # Create PO item with packing_material_id (not medicine_id for PM POs)
+                    po_item = POItem(
+                        po_id=po.id,
+                        packing_material_id=packing_material_id,
+                        medicine_id=None,  # PM POs use packing_material_id
+                        ordered_quantity=float(qty_required),
+                        fulfilled_quantity=0.0,
+                        unit=uom,
+                        language=language,
+                        artwork_version=artwork_version,
+                        gsm=gsm,
+                        ply=ply,
+                        dimensions=dimensions,
+                        hsn_code=hsn_code,
+                        gst_rate=gst_rate
+                    )
+                    
+                    self.db.add(po_item)
+                    total_ordered_qty += qty_required
+                
+                # Update PO total
+                po.total_ordered_qty = float(total_ordered_qty)
+                created_pos.append(po)
+                
+                logger.info({
+                    "event": "PM_PO_CREATED",
+                    "po_number": po_number,
+                    "vendor_id": vendor_id,
+                    "eopa_id": eopa_id,
+                    "items_count": len(packing_materials),
+                    "total_ordered_qty": float(total_ordered_qty),
+                    "created_by": current_user_id
+                })
+            
+            self.db.commit()
+            
+            logger.info({
+                "event": "PM_POS_GENERATED_FROM_EXPLOSION",
+                "eopa_id": eopa_id,
+                "total_pm_pos_created": len(created_pos),
+                "po_numbers": [po.po_number for po in created_pos],
+                "created_by": current_user_id
+            })
+            
+            return {
+                "eopa_id": eopa_id,
+                "total_pm_pos_created": len(created_pos),
+                "purchase_orders": [
+                    {
+                        "po_number": po.po_number,
+                        "po_type": po.po_type.value,
+                        "vendor_id": po.vendor_id,
+                        "total_ordered_qty": float(po.total_ordered_qty),
+                        "items_count": len(po.items)
+                    }
+                    for po in created_pos
+                ]
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error({
+                "event": "PM_PO_GENERATION_FAILED",
+                "eopa_id": eopa_id,
+                "error": str(e)
+            })
+            raise AppException(
+                f"Failed to generate PM POs: {str(e)}",
+                "ERR_PM_PO_GENERATION",
+                500
+            )

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the implementation of stable row editing across all master and transaction screens in the pharmaceutical procurement system. The feature ensures that:
+This document describes the implementation of stable row editing across all master and transaction screens in the PharmaFlow 360. The feature ensures that:
 
 1. **Rows maintain their position** after edit/save (no re-sorting)
 2. **Active editing rows are highlighted** with a soft background color

@@ -19,11 +19,16 @@ import {
   Tab,
   TextField,
   InputAdornment,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ProductForm from '../components/ProductForm'
 import MedicineForm from '../components/MedicineForm'
 import api from '../services/api'
@@ -79,11 +84,33 @@ const ProductsPage = () => {
     }
   }
 
+  const fetchProductsWithMedicines = async () => {
+    try {
+      setLoading(true)
+      // Fetch both products and medicines
+      const [productsRes, medicinesRes] = await Promise.all([
+        api.get('/api/products/'),
+        api.get('/api/products/medicines')
+      ])
+      
+      if (productsRes.data.success) {
+        setProducts(productsRes.data.data)
+      }
+      if (medicinesRes.data.success) {
+        setMedicines(medicinesRes.data.data)
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (tab === 0) {
       fetchProducts()
     } else {
-      fetchMedicines()
+      fetchProductsWithMedicines()
     }
   }, [tab])
 
@@ -301,58 +328,135 @@ const ProductsPage = () => {
       ) : medicines.length === 0 ? (
         <Alert severity="info">No medicines found. Click "Add Medicine" to create one.</Alert>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Medicine Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>HSN Code</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Dosage Form</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Strength</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Units</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Manufacturer</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredMedicines.map((medicine) => (
-                <TableRow 
-                  key={medicine.id}
-                  sx={getRowStyle(medicine.id)}
+        <Box>
+          {/* Group medicines by product */}
+          {products.map((product) => {
+            const productMedicines = filteredMedicines.filter(m => m.product_id === product.id)
+            
+            if (productMedicines.length === 0 && searchQuery) {
+              // Skip products with no matching medicines when searching
+              return null
+            }
+            
+            return (
+              <Accordion key={product.id} sx={{ mb: 2, boxShadow: 2 }}>
+                <AccordionSummary 
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ bgcolor: 'primary.50', '&:hover': { bgcolor: 'primary.100' } }}
                 >
-                  <TableCell>{medicine.medicine_name}</TableCell>
-                  <TableCell>{medicine.hsn_code || '-'}</TableCell>
-                  <TableCell>{medicine.product?.product_name || '-'}</TableCell>
-                  <TableCell>{medicine.dosage_form}</TableCell>
-                  <TableCell>{medicine.strength || '-'}</TableCell>
-                  <TableCell>
-                    {medicine.primary_unit && medicine.secondary_unit && medicine.conversion_factor
-                      ? `${medicine.conversion_factor} ${medicine.primary_unit}/${medicine.secondary_unit}`
-                      : medicine.primary_unit || '-'}
-                  </TableCell>
-                  <TableCell>{medicine.manufacturer_vendor?.vendor_name || '-'}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenForm(medicine)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(medicine.id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
+                    <Box>
+                      <Typography variant="h6" color="primary.main">
+                        {product.product_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Code: {product.product_code} | HSN: {product.hsn_code || 'N/A'} | UOM: {product.unit_of_measure || 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Chip 
+                      label={`${productMedicines.length} medicine${productMedicines.length !== 1 ? 's' : ''}`} 
+                      color="primary" 
+                      size="small" 
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {productMedicines.length === 0 ? (
+                    <Alert severity="info">
+                      No medicines under this product. Click "Add Medicine" to create one.
+                    </Alert>
+                  ) : (
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: 'grey.100' }}>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Medicine Name</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Code</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>HSN</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Dosage Form</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Strength</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Pack Size</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Units</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Manufacturer</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }} align="right">Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {productMedicines.map((medicine, idx) => (
+                            <TableRow 
+                              key={medicine.id}
+                              sx={{
+                                bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
+                                '&:hover': { bgcolor: 'action.hover' },
+                                ...getRowStyle(medicine.id)
+                              }}
+                            >
+                              <TableCell>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {medicine.medicine_name}
+                                </Typography>
+                                {medicine.composition && (
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {medicine.composition}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>{medicine.medicine_code}</TableCell>
+                              <TableCell>{medicine.hsn_code || '-'}</TableCell>
+                              <TableCell>
+                                <Chip label={medicine.dosage_form} size="small" color="info" />
+                              </TableCell>
+                              <TableCell>{medicine.strength || '-'}</TableCell>
+                              <TableCell>{medicine.pack_size || '-'}</TableCell>
+                              <TableCell>
+                                {medicine.primary_unit && medicine.secondary_unit && medicine.conversion_factor
+                                  ? `${medicine.conversion_factor} ${medicine.primary_unit}/${medicine.secondary_unit}`
+                                  : medicine.primary_unit || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {medicine.manufacturer_vendor?.vendor_name || '-'}
+                              </TableCell>
+                              <TableCell align="right">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenForm(medicine)}
+                                  color="primary"
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDelete(medicine.id)}
+                                  color="error"
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            )
+          })}
+          
+          {/* Show products with no medicines if not searching */}
+          {!searchQuery && products.filter(p => !medicines.some(m => m.product_id === p.id)).length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                Products with no medicines:
+              </Typography>
+              {products.filter(p => !medicines.some(m => m.product_id === p.id)).map(product => (
+                <Alert key={product.id} severity="warning" sx={{ mb: 1 }}>
+                  <strong>{product.product_name}</strong> ({product.product_code}) has no medicines.
+                </Alert>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </Box>
+          )}
+        </Box>
       )}
 
       {tab === 0 ? (

@@ -15,3 +15,22 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* PharmaFlow 360 Logo Styles */
+.app-logo {
+  height: 40px;
+  object-fit: contain;
+}
+
+/* Responsive logo sizing */
+@media (max-width: 600px) {
+  .app-logo {
+    height: 32px;
+  }
+}
+
+@media (max-width: 400px) {
+  .app-logo {
+    height: 28px;
+  }
+}

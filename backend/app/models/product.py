@@ -62,3 +62,5 @@ class MedicineMaster(Base):
     rm_vendor: Mapped[Optional["Vendor"]] = relationship("Vendor", foreign_keys=[rm_vendor_id])
     pm_vendor: Mapped[Optional["Vendor"]] = relationship("Vendor", foreign_keys=[pm_vendor_id])
     pi_items: Mapped[List["PIItem"]] = relationship("PIItem", back_populates="medicine")
+    raw_materials: Mapped[List["MedicineRawMaterial"]] = relationship("MedicineRawMaterial", back_populates="medicine", cascade="all, delete-orphan")
+    packing_materials: Mapped[List["MedicinePackingMaterial"]] = relationship("MedicinePackingMaterial", back_populates="medicine", cascade="all, delete-orphan")

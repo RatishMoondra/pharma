@@ -7,7 +7,7 @@ import uuid
 
 from app.database.session import engine
 from app.models import base
-from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice, analytics, configuration
+from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice, analytics, configuration, raw_material, packing_material
 from app.routers import countries as countries_router
 from app.exceptions.handlers import app_exception_handler, validation_exception_handler
 from app.exceptions.base import AppException
@@ -29,7 +29,7 @@ logger = logging.getLogger("pharma")
 base.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Pharmaceutical Procurement System",
+    title="PharmaFlow 360",
     description="Web-based pharmaceutical procurement, manufacturing, and dispatch workflow system",
     version="1.0.0"
 )
@@ -61,6 +61,8 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(countries_router.router)  # Already has /api/countries prefix
 app.include_router(vendors.router, prefix="/api/vendors", tags=["Vendors"])
 app.include_router(products.router, prefix="/api/products", tags=["Products"])
+app.include_router(raw_material.router, prefix="/api", tags=["Raw Materials & BOM"])
+app.include_router(packing_material.router, prefix="/api", tags=["Packing Materials & BOM"])
 app.include_router(pi.router, prefix="/api/pi", tags=["Proforma Invoice"])
 app.include_router(eopa.router, prefix="/api/eopa", tags=["EOPA"])
 app.include_router(po.router, prefix="/api/po", tags=["Purchase Orders"])
@@ -73,7 +75,7 @@ app.include_router(configuration.router, prefix="/api/config", tags=["Configurat
 async def root():
     return {
         "success": True,
-        "message": "Pharmaceutical Procurement System API",
+        "message": "PharmaFlow 360 API",
         "data": {
             "version": "1.0.0",
             "status": "running"

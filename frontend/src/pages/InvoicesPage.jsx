@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Container,
   Typography,
@@ -155,7 +156,8 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'grey.200' }}>
                     <TableCell>Medicine</TableCell>
-                    <TableCell align="right">Shipped Qty</TableCell>
+                    <TableCell align="right">Qty Ordered (PO)</TableCell>
+                    <TableCell align="right">Shipped Qty (Invoice)</TableCell>
                     <TableCell align="right">Unit Price</TableCell>
                     <TableCell align="right">Tax %</TableCell>
                     <TableCell>Batch #</TableCell>
@@ -170,7 +172,14 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
                         <Typography variant="body2">{item.medicine?.medicine_name || 'N/A'}</Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Typography variant="body2">{parseFloat(item.shipped_quantity || 0).toLocaleString('en-IN')}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.ordered_quantity ? parseFloat(item.ordered_quantity).toLocaleString('en-IN') : '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" fontWeight="medium">
+                          {parseFloat(item.shipped_quantity || 0).toLocaleString('en-IN')}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2">₹{parseFloat(item.unit_price || 0).toFixed(2)}</Typography>
@@ -255,6 +264,7 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
 }
 
 const InvoicesPage = () => {
+  const location = useLocation()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -295,6 +305,8 @@ const InvoicesPage = () => {
   
   // For adding new items
   const [medicines, setMedicines] = useState([])
+  const [rawMaterials, setRawMaterials] = useState([])
+  const [packingMaterials, setPackingMaterials] = useState([])
   
   // Create invoice dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -335,10 +347,35 @@ const InvoicesPage = () => {
     try {
       const response = await api.get('/api/products/medicines')
       if (response.data.success) {
+        console.log('Medicines loaded:', response.data.data.length, 'items')
         setMedicines(response.data.data)
       }
     } catch (err) {
       console.error('Failed to fetch medicines:', err)
+    }
+  }
+
+  const fetchRawMaterials = async () => {
+    try {
+      const response = await api.get('/api/raw-materials/')
+      if (response.data.success) {
+        console.log('Raw Materials loaded:', response.data.data.length, 'items')
+        setRawMaterials(response.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch raw materials:', err)
+    }
+  }
+
+  const fetchPackingMaterials = async () => {
+    try {
+      const response = await api.get('/api/packing-materials/')
+      if (response.data.success) {
+        console.log('Packing Materials loaded:', response.data.data.length, 'items')
+        setPackingMaterials(response.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch packing materials:', err)
     }
   }
 
@@ -362,10 +399,82 @@ const InvoicesPage = () => {
   useEffect(() => {
     fetchInvoices()
     fetchMedicines()
+    fetchRawMaterials()
+    fetchPackingMaterials()
   }, [])
 
+  // Handle incoming PO data from navigation
+  useEffect(() => {
+    if (location.state?.fromPO && location.state?.poData) {
+      const { poData } = location.state
+      
+      // Fetch POs and vendors first
+      fetchPOsAndVendors().then(() => {
+        // Pre-populate the create form with PO data
+        setCreateFormData({
+          invoice_number: '',
+          invoice_date: new Date().toISOString().split('T')[0],
+          invoice_type: poData.invoice_type,
+          vendor_id: poData.vendor_id,
+          po_id: poData.po_id,
+          dispatch_note_number: '',
+          dispatch_date: '',
+          warehouse_location: '',
+          warehouse_received_by: '',
+          subtotal: 0,
+          tax_amount: 0,
+          total_amount: 0,
+          remarks: `Invoice for PO: ${poData.po_number}`,
+          items: poData.items.map(item => {
+            const baseItem = {
+              ordered_quantity: item.ordered_quantity,
+              shipped_quantity: item.shipped_quantity,
+              unit: item.unit,
+              unit_price: 0,
+              discount_amount: 0,
+              tax_percentage: 18,
+              total_price: 0,
+              tax_rate: 0,
+              hsn_code: '',
+              gst_rate: 0,
+              batch_number: '',
+              manufacturing_date: '',
+              expiry_date: ''
+            }
+
+            // Set the appropriate ID field based on invoice type
+            if (poData.invoice_type === 'RM') {
+              baseItem.raw_material_id = item.raw_material_id || item.medicine_id
+              baseItem.raw_material_name = item.raw_material_name || item.medicine_name
+            } else if (poData.invoice_type === 'PM') {
+              baseItem.packing_material_id = item.packing_material_id || item.medicine_id
+              baseItem.packing_material_name = item.packing_material_name || item.medicine_name
+            } else {
+              baseItem.medicine_id = item.medicine_id
+              baseItem.medicine_name = item.medicine_name
+            }
+
+            return baseItem
+          })
+        })
+        
+        // Open the create dialog
+        setCreateDialogOpen(true)
+        setSuccessMessage(`Creating invoice from PO: ${poData.po_number}`)
+      })
+      
+      // Clear the location state to prevent re-triggering
+      window.history.replaceState({}, document.title)
+    }
+  }, [location])
+
   const handleCreateClick = () => {
+    // Fetch all required data when opening the create dialog
     fetchPOsAndVendors()
+    fetchMedicines()
+    fetchRawMaterials()
+    fetchPackingMaterials()
+    
     setCreateFormData({
       invoice_number: '',
       invoice_date: new Date().toISOString().split('T')[0],
@@ -385,7 +494,7 @@ const InvoicesPage = () => {
       currency_code: 'INR',
       exchange_rate: 1.0,
       items: [{ 
-        medicine_id: '', 
+        raw_material_id: '', 
         shipped_quantity: 0, 
         unit_price: 0, 
         tax_rate: 0, 
@@ -403,11 +512,72 @@ const InvoicesPage = () => {
     setCreateDialogOpen(false)
   }
 
-  const handleCreateFormChange = (field, value) => {
-    setCreateFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
+  const handleCreateFormChange = async (field, value) => {
+    // Special handling for PO selection - auto-populate form
+    if (field === 'po_id' && value) {
+      try {
+        const response = await api.get(`/api/po/${value}`)
+        if (response.data.success) {
+          const po = response.data.data
+          
+          console.log('PO Data:', po)
+          console.log('PO Type:', po.po_type)
+          console.log('PO Items:', po.items)
+          
+          // Auto-populate vendor, invoice type, and items from PO
+          setCreateFormData(prev => ({
+            ...prev,
+            po_id: value,
+            vendor_id: po.vendor_id,
+            invoice_type: po.po_type,
+            items: po.items?.map(item => {
+              const baseItem = {
+                ordered_quantity: item.ordered_quantity,
+                shipped_quantity: item.ordered_quantity - (item.fulfilled_quantity || 0),
+                unit: item.unit,
+                unit_price: 0, // User must enter actual price
+                tax_rate: 18, // Default GST
+                total_price: 0,
+                hsn_code: item.medicine?.hsn_code || item.raw_material?.hsn_code || item.packing_material?.hsn_code || '',
+                pack_size: item.medicine?.pack_size || '',
+                gst_rate: 0,
+                batch_number: '',
+                manufacturing_date: '',
+                expiry_date: ''
+              }
+
+              // Set the appropriate ID and name based on PO type
+              if (po.po_type === 'RM') {
+                baseItem.raw_material_id = item.raw_material_id ? Number(item.raw_material_id) : null
+                baseItem.raw_material_name = item.raw_material?.rm_name
+                console.log('RM Item:', item.raw_material_id, item.raw_material?.rm_name)
+              } else if (po.po_type === 'PM') {
+                baseItem.packing_material_id = item.packing_material_id ? Number(item.packing_material_id) : null
+                baseItem.packing_material_name = item.packing_material?.pm_name
+                console.log('PM Item:', item.packing_material_id, item.packing_material?.pm_name)
+              } else {
+                baseItem.medicine_id = item.medicine_id ? Number(item.medicine_id) : null
+                baseItem.medicine_name = item.medicine?.medicine_name
+                console.log('FG Item:', item.medicine_id, item.medicine?.medicine_name)
+              }
+
+              return baseItem
+            }) || []
+          }))
+          
+          setSuccessMessage(`Invoice pre-filled from PO: ${po.po_number}`)
+          setTimeout(() => setSuccessMessage(''), 3000)
+        }
+      } catch (err) {
+        handleApiError(err)
+      }
+    } else {
+      // Normal field update
+      setCreateFormData(prev => ({
+        ...prev,
+        [field]: value
+      }))
+    }
   }
 
   const handleCreateItemChange = (index, field, value) => {
@@ -440,19 +610,29 @@ const InvoicesPage = () => {
   }
 
   const handleCreateAddItem = () => {
+    const newItem = {
+      shipped_quantity: 0, 
+      unit_price: 0, 
+      tax_rate: 0, 
+      hsn_code: '',
+      gst_rate: 0,
+      batch_number: '', 
+      manufacturing_date: '',
+      expiry_date: ''
+    }
+
+    // Set the appropriate ID field based on invoice type
+    if (createFormData.invoice_type === 'RM') {
+      newItem.raw_material_id = ''
+    } else if (createFormData.invoice_type === 'PM') {
+      newItem.packing_material_id = ''
+    } else {
+      newItem.medicine_id = ''
+    }
+
     setCreateFormData({
       ...createFormData,
-      items: [...createFormData.items, { 
-        medicine_id: '', 
-        shipped_quantity: 0, 
-        unit_price: 0, 
-        tax_rate: 0, 
-        hsn_code: '',
-        gst_rate: 0,
-        batch_number: '', 
-        manufacturing_date: '',
-        expiry_date: '' 
-      }]
+      items: [...createFormData.items, newItem]
     })
   }
 
@@ -992,7 +1172,8 @@ const InvoicesPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Medicine</TableCell>
-                    <TableCell>Shipped Qty</TableCell>
+                    <TableCell align="right">Qty Ordered (PO)</TableCell>
+                    <TableCell align="right">Shipped Qty</TableCell>
                     <TableCell>Unit Price (₹)</TableCell>
                     <TableCell>Tax %</TableCell>
                     <TableCell>Batch #</TableCell>
@@ -1025,6 +1206,11 @@ const InvoicesPage = () => {
                             </Select>
                           </FormControl>
                         )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
+                          {item.ordered_quantity ? parseFloat(item.ordered_quantity).toLocaleString('en-IN') : '-'}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -1197,20 +1383,38 @@ const InvoicesPage = () => {
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
-                  <InputLabel>PO (Optional)</InputLabel>
+                  <InputLabel>PO (Optional - Auto-fills form)</InputLabel>
                   <Select
                     value={createFormData.po_id || ''}
                     onChange={(e) => handleCreateFormChange('po_id', e.target.value)}
-                    label="PO (Optional)"
+                    label="PO (Optional - Auto-fills form)"
                   >
                     <MenuItem value=""><em>None</em></MenuItem>
-                    {pos.map(po => (
-                      <MenuItem key={po.id} value={po.id}>{po.po_number}</MenuItem>
-                    ))}
+                    {pos
+                      .filter(po => 
+                        // Only show POs that can be invoiced
+                        ['APPROVED', 'READY', 'SENT', 'ACKNOWLEDGED', 'OPEN', 'PARTIAL'].includes(po.status) &&
+                        // Match invoice type if selected
+                        (!createFormData.invoice_type || po.po_type === createFormData.invoice_type)
+                      )
+                      .map(po => (
+                        <MenuItem key={po.id} value={po.id}>
+                          {po.po_number} - {po.vendor?.vendor_name} ({po.status})
+                        </MenuItem>
+                      ))
+                    }
                   </Select>
                 </FormControl>
               </Grid>
             </Grid>
+
+            {/* Auto-population alert when PO is selected */}
+            {createFormData.po_id && createFormData.items?.length > 0 && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <strong>Invoice pre-filled from PO!</strong> Vendor, type, and {createFormData.items.length} item(s) loaded. 
+                Please enter unit prices and verify quantities before saving.
+              </Alert>
+            )}
 
             {createFormData.invoice_type === 'FG' && (
               <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1265,9 +1469,14 @@ const InvoicesPage = () => {
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Medicine *</TableCell>
+                    <TableCell>
+                      {createFormData.invoice_type === 'RM' && 'Raw Material *'}
+                      {createFormData.invoice_type === 'PM' && 'Packing Material *'}
+                      {createFormData.invoice_type === 'FG' && 'Medicine *'}
+                    </TableCell>
                     <TableCell>HSN Code</TableCell>
-                    <TableCell>Qty *</TableCell>
+                    <TableCell align="right">Qty Ordered (PO)</TableCell>
+                    <TableCell align="right">Shipped Qty *</TableCell>
                     <TableCell>Unit Price *</TableCell>
                     <TableCell>Tax %</TableCell>
                     <TableCell>GST %</TableCell>
@@ -1279,20 +1488,53 @@ const InvoicesPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {createFormData.items.map((item, index) => (
+                  {createFormData.items.map((item, index) => {
+                    // Debug logging
+                    if (createFormData.invoice_type === 'RM') {
+                      console.log(`Item ${index} - raw_material_id:`, item.raw_material_id, typeof item.raw_material_id)
+                      console.log(`Available raw materials:`, rawMaterials.map(rm => ({ id: rm.id, type: typeof rm.id, name: rm.rm_name })))
+                    }
+                    
+                    return (
                     <TableRow key={index}>
                       <TableCell>
                         <FormControl size="small" fullWidth required>
-                          <Select
-                            value={item.medicine_id}
-                            onChange={(e) => handleCreateItemChange(index, 'medicine_id', e.target.value)}
-                            displayEmpty
-                          >
-                            <MenuItem value=""><em>Select Medicine</em></MenuItem>
-                            {medicines.map(med => (
-                              <MenuItem key={med.id} value={med.id}>{med.medicine_name}</MenuItem>
-                            ))}
-                          </Select>
+                          {createFormData.invoice_type === 'RM' && (
+                            <Select
+                              value={item.raw_material_id || ''}
+                              onChange={(e) => handleCreateItemChange(index, 'raw_material_id', e.target.value)}
+                              displayEmpty
+                            >
+                              <MenuItem value=""><em>Select Raw Material</em></MenuItem>
+                              {rawMaterials.map(rm => (
+                                <MenuItem key={rm.id} value={rm.id}>{rm.rm_name}</MenuItem>
+                              ))}
+                            </Select>
+                          )}
+                          {createFormData.invoice_type === 'PM' && (
+                            <Select
+                              value={item.packing_material_id || ''}
+                              onChange={(e) => handleCreateItemChange(index, 'packing_material_id', e.target.value)}
+                              displayEmpty
+                            >
+                              <MenuItem value=""><em>Select Packing Material</em></MenuItem>
+                              {packingMaterials.map(pm => (
+                                <MenuItem key={pm.id} value={pm.id}>{pm.pm_name}</MenuItem>
+                              ))}
+                            </Select>
+                          )}
+                          {createFormData.invoice_type === 'FG' && (
+                            <Select
+                              value={item.medicine_id || ''}
+                              onChange={(e) => handleCreateItemChange(index, 'medicine_id', e.target.value)}
+                              displayEmpty
+                            >
+                              <MenuItem value=""><em>Select Medicine</em></MenuItem>
+                              {medicines.map(med => (
+                                <MenuItem key={med.id} value={med.id}>{med.medicine_name}</MenuItem>
+                              ))}
+                            </Select>
+                          )}
                         </FormControl>
                       </TableCell>
                       <TableCell>
@@ -1303,6 +1545,11 @@ const InvoicesPage = () => {
                           onChange={(e) => handleCreateItemChange(index, 'hsn_code', e.target.value)}
                           sx={{ width: 100 }}
                         />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
+                          {item.ordered_quantity ? parseFloat(item.ordered_quantity).toLocaleString('en-IN') : '-'}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -1390,7 +1637,8 @@ const InvoicesPage = () => {
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

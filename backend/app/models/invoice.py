@@ -100,12 +100,19 @@ class VendorInvoiceItem(Base):
     Invoice Line Item - Contains actual pricing and shipped quantity.
     
     This is where the REAL pricing comes from, not the PO.
+    
+    Supports three types based on invoice type:
+    - RM invoices: raw_material_id populated
+    - PM invoices: packing_material_id populated
+    - FG invoices: medicine_id populated
     """
     __tablename__ = "vendor_invoice_items"
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("vendor_invoices.id"), index=True)
-    medicine_id: Mapped[int] = mapped_column(ForeignKey("medicine_master.id"))
+    medicine_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medicine_master.id"), nullable=True)
+    raw_material_id: Mapped[Optional[int]] = mapped_column(ForeignKey("raw_material_master.id"), nullable=True)
+    packing_material_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packing_material_master.id"), nullable=True)
     
     # Actual shipped quantity from vendor
     shipped_quantity: Mapped[float] = mapped_column(Numeric(15, 3))
@@ -131,4 +138,6 @@ class VendorInvoiceItem(Base):
     
     # Relationships
     invoice: Mapped["VendorInvoice"] = relationship("VendorInvoice", back_populates="items")
-    medicine: Mapped["MedicineMaster"] = relationship("MedicineMaster")
+    medicine: Mapped[Optional["MedicineMaster"]] = relationship("MedicineMaster")
+    raw_material: Mapped[Optional["RawMaterialMaster"]] = relationship("RawMaterialMaster")
+    packing_material: Mapped[Optional["PackingMaterialMaster"]] = relationship("PackingMaterialMaster")

@@ -10,6 +10,7 @@ import {
   Alert,
 } from '@mui/material'
 import { useAuth } from '../context/AuthContext'
+import logo from '../assets/logo-pharmaflow.png'
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({ username: '', password: '' })
@@ -48,9 +49,15 @@ const LoginPage = () => {
         }}
       >
         <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h5" align="center" gutterBottom>
-            Pharmaceutical Procurement System
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <Box 
+              component="img" 
+              src={logo} 
+              alt="PharmaFlow 360" 
+              className="app-logo"
+              sx={{ height: 48 }}
+            />
+          </Box>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
             Sign in to your account
           </Typography>

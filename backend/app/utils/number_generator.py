@@ -185,3 +185,49 @@ def generate_grn_number(db: Session) -> str:
         new_num = 1
     
     return f"{prefix}{new_num:04d}"
+
+
+def generate_rm_code(db: Session) -> str:
+    """Generate Raw Material code: RM-0001"""
+    from app.models.raw_material import RawMaterialMaster
+    
+    prefix = "RM-"
+    
+    last_rm = db.query(RawMaterialMaster).filter(
+        RawMaterialMaster.rm_code.like(f"{prefix}%")
+    ).order_by(RawMaterialMaster.rm_code.desc()).first()
+    
+    if last_rm:
+        try:
+            last_num = int(last_rm.rm_code.replace(prefix, ""))
+            new_num = last_num + 1
+        except ValueError:
+            # If existing codes don't follow pattern, start from 1
+            new_num = 1
+    else:
+        new_num = 1
+    
+    return f"{prefix}{new_num:04d}"
+
+
+def generate_pm_code(db: Session) -> str:
+    """Generate Packing Material code: PM-0001"""
+    from app.models.packing_material import PackingMaterialMaster
+    
+    prefix = "PM-"
+    
+    last_pm = db.query(PackingMaterialMaster).filter(
+        PackingMaterialMaster.pm_code.like(f"{prefix}%")
+    ).order_by(PackingMaterialMaster.pm_code.desc()).first()
+    
+    if last_pm:
+        try:
+            last_num = int(last_pm.pm_code.replace(prefix, ""))
+            new_num = last_num + 1
+        except ValueError:
+            # If existing codes don't follow pattern, start from 1
+            new_num = 1
+    else:
+        new_num = 1
+    
+    return f"{prefix}{new_num:04d}"

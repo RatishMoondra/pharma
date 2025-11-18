@@ -5,10 +5,13 @@ import DashboardPage from './pages/DashboardPage'
 import CountriesPage from './pages/CountriesPage'
 import VendorsPage from './pages/VendorsPage'
 import ProductsPage from './pages/ProductsPage'
+import RawMaterialPage from './pages/RawMaterialPage'
+import PackingMaterialPage from './pages/PackingMaterialPage'
 import PIPage from './pages/PIPage'
 import PIWorkflowVisualPage from './pages/PIWorkflowVisualPage'
 import EOPAPage from './pages/EOPAPage'
 import POPage from './pages/POPage'
+import POApprovalPage from './pages/POApprovalPage'
 import InvoicesPage from './pages/InvoicesPage'
 import MaterialPage from './pages/MaterialPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -54,6 +57,8 @@ function App() {
           />
           <Route path="vendors" element={<VendorsPage />} />
           <Route path="products" element={<ProductsPage />} />
+          <Route path="raw-materials" element={<RawMaterialPage />} />
+          <Route path="packing-materials" element={<PackingMaterialPage />} />
           <Route 
             path="pi" 
             element={
@@ -83,6 +88,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
                 <POPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="po-approval" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
+                <POApprovalPage />
               </PrivateRoute>
             } 
           />

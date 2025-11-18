@@ -15,10 +15,16 @@ class POType(str, enum.Enum):
 
 
 class POStatus(str, enum.Enum):
-    OPEN = "OPEN"          # No fulfillment yet
-    PARTIAL = "PARTIAL"    # Partially fulfilled
-    CLOSED = "CLOSED"      # Fully fulfilled
-    CANCELLED = "CANCELLED"
+    DRAFT = "DRAFT"                    # Initial state after generation
+    PENDING_APPROVAL = "PENDING_APPROVAL"  # Submitted for approval
+    APPROVED = "APPROVED"              # Approved by authorized person
+    READY = "READY"                    # Final check done, ready to send
+    SENT = "SENT"                      # Sent to vendor
+    ACKNOWLEDGED = "ACKNOWLEDGED"      # Vendor acknowledged receipt
+    OPEN = "OPEN"                      # No fulfillment yet (after acknowledgment)
+    PARTIAL = "PARTIAL"                # Partially fulfilled
+    CLOSED = "CLOSED"                  # Fully fulfilled
+    CANCELLED = "CANCELLED"            # Cancelled
 
 
 class PurchaseOrder(Base):
@@ -39,7 +45,7 @@ class PurchaseOrder(Base):
     po_type: Mapped[POType] = mapped_column(SQLEnum(POType))
     eopa_id: Mapped[int] = mapped_column(ForeignKey("eopa.id"))
     vendor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("vendors.id"), nullable=True)
-    status: Mapped[POStatus] = mapped_column(SQLEnum(POStatus), default=POStatus.OPEN)
+    status: Mapped[POStatus] = mapped_column(SQLEnum(POStatus), default=POStatus.DRAFT)
     
     # Fulfillment tracking (quantity-based, not price-based)
     total_ordered_qty: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
@@ -69,9 +75,15 @@ class PurchaseOrder(Base):
     
     # Approval workflow metadata
     prepared_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    prepared_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     checked_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    checked_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     approved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     verified_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     
     delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -107,7 +119,9 @@ class POItem(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     po_id: Mapped[int] = mapped_column(ForeignKey("purchase_orders.id"))
-    medicine_id: Mapped[int] = mapped_column(ForeignKey("medicine_master.id"))
+    medicine_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medicine_master.id"), nullable=True)
+    raw_material_id: Mapped[Optional[int]] = mapped_column(ForeignKey("raw_material_master.id"), nullable=True)
+    packing_material_id: Mapped[Optional[int]] = mapped_column(ForeignKey("packing_material_master.id"), nullable=True)
     
     # Quantity tracking only
     ordered_quantity: Mapped[float] = mapped_column(Numeric(15, 3))
@@ -151,4 +165,6 @@ class POItem(Base):
     
     # Relationships
     purchase_order: Mapped["PurchaseOrder"] = relationship("PurchaseOrder", back_populates="items")
-    medicine: Mapped["MedicineMaster"] = relationship("MedicineMaster")
+    medicine: Mapped[Optional["MedicineMaster"]] = relationship("MedicineMaster")
+    raw_material: Mapped[Optional["RawMaterialMaster"]] = relationship("RawMaterialMaster")
+    packing_material: Mapped[Optional["PackingMaterialMaster"]] = relationship("PackingMaterialMaster")

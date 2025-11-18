@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Container,
   Typography,
@@ -53,7 +54,7 @@ import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
-const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, onSendEmail, getRowStyle }) => {
+const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, onDownloadPDF, onSendEmail, getRowStyle }) => {
   const [open, setOpen] = useState(false)
   const [tabValue, setTabValue] = useState(0)
   const [editingVendor, setEditingVendor] = useState(false)
@@ -414,6 +415,15 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
         </TableCell>
         <TableCell align="right">
           <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton 
+              size="small" 
+              color="success"
+              onClick={() => onCreateInvoice(po)}
+              title="Create Invoice from PO"
+              disabled={po.status === 'CLOSED' || po.status === 'DRAFT'}
+            >
+              <ReceiptIcon fontSize="small" />
+            </IconButton>
             <IconButton 
               size="small" 
               color="error"
@@ -867,6 +877,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
 }
 
 const POPage = () => {
+  const navigate = useNavigate()
   const [eopas, setEopas] = useState([])
   const [pos, setPos] = useState([])
   const [vendors, setVendors] = useState([])
@@ -1004,6 +1015,34 @@ const POPage = () => {
       console.error('Error downloading PDF:', err)
       handleApiError(err)
     }
+  }
+
+  const handleCreateInvoiceFromPO = (po) => {
+    // Navigate to invoices page with PO data in state
+    navigate('/invoices', { 
+      state: { 
+        fromPO: true,
+        poData: {
+          po_id: po.id,
+          po_number: po.po_number,
+          vendor_id: po.vendor_id,
+          vendor_name: po.vendor?.vendor_name,
+          invoice_type: po.po_type,
+          items: po.items?.map(item => ({
+            medicine_id: item.medicine_id,
+            medicine_name: item.medicine?.medicine_name,
+            ordered_quantity: item.ordered_quantity,
+            fulfilled_quantity: item.fulfilled_quantity,
+            unit: item.unit,
+            // Pre-populate with remaining quantity to be invoiced
+            shipped_quantity: item.ordered_quantity - (item.fulfilled_quantity || 0),
+            unit_price: 0,
+            hsn_code: item.medicine?.hsn_code,
+            pack_size: item.medicine?.pack_size
+          })) || []
+        }
+      }
+    })
   }
 
   const handleSendEmail = async (po) => {
@@ -1191,6 +1230,7 @@ const POPage = () => {
                           vendors={vendors}
                           onVendorUpdate={handleVendorUpdate}
                           onInvoiceSubmit={handleInvoiceSubmit}
+                          onCreateInvoice={handleCreateInvoiceFromPO}
                           onDownloadPDF={handleDownloadPDF}
                           onSendEmail={handleSendEmail}
                           getRowStyle={getRowStyle}

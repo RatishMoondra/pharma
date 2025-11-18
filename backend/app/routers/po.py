@@ -78,6 +78,148 @@ async def generate_pos_from_eopa(
         )
 
 
+@router.post("/generate-rm-pos/{eopa_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def generate_rm_pos_from_explosion(
+    eopa_id: int,
+    rm_po_overrides: dict = None,  # Optional user overrides from preview
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate Raw Material POs from BOM explosion.
+    
+    Creates ONE RM PO per vendor with multiple line items (one per raw material).
+    
+    Business Logic:
+    - Performs RM explosion for all medicines in the EOPA
+    - Groups raw materials by vendor
+    - Creates one RM PO per vendor with raw material line items
+    - Each PO item contains: raw_material_id, quantity, uom, hsn_code, gst_rate
+    - Supports user overrides from the PO preview step
+    
+    Args:
+        eopa_id: ID of the EOPA
+        rm_po_overrides: Optional user overrides from preview
+            Example: [{"vendor_id": 1, "items": [{"raw_material_id": 1, "quantity": 100, "uom": "KG", ...}]}]
+    
+    Returns:
+        Summary of created RM POs with PO numbers and details
+    """
+    try:
+        po_service = POGenerationService(db)
+        
+        # Extract rm_pos list if provided in nested structure
+        overrides_list = None
+        if rm_po_overrides:
+            overrides_list = rm_po_overrides.get("rm_pos") or rm_po_overrides.get("vendor_groups")
+        
+        result = po_service.generate_rm_pos_from_explosion(
+            eopa_id=eopa_id,
+            current_user_id=current_user.id,
+            rm_po_overrides=overrides_list
+        )
+        
+        logger.info({
+            "event": "RM_POS_GENERATED_FROM_API",
+            "eopa_id": eopa_id,
+            "total_rm_pos": result["total_rm_pos_created"],
+            "user": current_user.username
+        })
+        
+        return {
+            "success": True,
+            "message": f"Successfully generated {result['total_rm_pos_created']} RM PO(s) from EOPA explosion",
+            "data": result,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except AppException as e:
+        raise e
+    except Exception as e:
+        logger.error({
+            "event": "RM_PO_GENERATION_FAILED",
+            "eopa_id": eopa_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            "Failed to generate RM Purchase Orders from explosion",
+            "ERR_RM_PO_GENERATION",
+            500
+        )
+
+
+@router.post("/generate-pm-pos/{eopa_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def generate_pm_pos_from_explosion(
+    eopa_id: int,
+    pm_po_overrides: dict = None,  # Optional user overrides from preview
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate Packing Material POs from BOM explosion.
+    
+    Creates ONE PM PO per vendor with multiple line items (one per packing material).
+    
+    Business Logic:
+    - Performs PM explosion for all medicines in the EOPA
+    - Groups packing materials by vendor
+    - Creates one PM PO per vendor with packing material line items
+    - Each PO item contains: packing_material_id, quantity, uom, language, artwork_version, gsm, ply, dimensions, hsn_code, gst_rate
+    - Supports user overrides from the PO preview step
+    
+    Args:
+        eopa_id: ID of the EOPA
+        pm_po_overrides: Optional user overrides from preview
+            Example: [{"vendor_id": 1, "items": [{"packing_material_id": 1, "quantity": 1000, "uom": "PCS", "language": "EN", ...}]}]
+    
+    Returns:
+        Summary of created PM POs with PO numbers and details
+    """
+    try:
+        po_service = POGenerationService(db)
+        
+        # Extract pm_pos list if provided in nested structure
+        overrides_list = None
+        if pm_po_overrides:
+            overrides_list = pm_po_overrides.get("pm_pos") or pm_po_overrides.get("vendor_groups")
+        
+        result = po_service.generate_pm_pos_from_explosion(
+            eopa_id=eopa_id,
+            current_user_id=current_user.id,
+            pm_po_overrides=overrides_list
+        )
+        
+        logger.info({
+            "event": "PM_POS_GENERATED_FROM_API",
+            "eopa_id": eopa_id,
+            "total_pm_pos": result["total_pm_pos_created"],
+            "user": current_user.username
+        })
+        
+        return {
+            "success": True,
+            "message": f"Successfully generated {result['total_pm_pos_created']} PM PO(s) from EOPA explosion",
+            "data": result,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except AppException as e:
+        raise e
+    except Exception as e:
+        logger.error({
+            "event": "PM_PO_GENERATION_FAILED",
+            "eopa_id": eopa_id,
+            "error": str(e),
+            "user": current_user.username
+        })
+        raise AppException(
+            "Failed to generate PM Purchase Orders from explosion",
+            "ERR_PM_PO_GENERATION",
+            500
+        )
+
+
 @router.post("/", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
 async def create_po(
     po_data: POCreate,
@@ -501,5 +643,235 @@ async def get_pos_by_eopa(
         "success": True,
         "message": f"Purchase Orders for EOPA #{eopa_id} retrieved successfully",
         "data": [POResponse.model_validate(po).model_dump() for po in pos],
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.post("/generate-from-eopa", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def generate_po_by_vendor(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a single PO for a specific vendor and PO type from EOPA.
+    
+    Payload:
+    {
+        "eopa_id": int,
+        "vendor_id": int,
+        "po_type": "RM" | "PM" | "FG",
+        "items": [
+            {
+                "medicine_id": int,
+                "ordered_quantity": float,
+                "unit": "kg" | "pcs" | "boxes" | etc.
+            }
+        ]
+    }
+    """
+    from app.models.eopa import EOPA
+    from app.models.vendor import Vendor
+    from app.models.medicine import MedicineMaster
+    from app.utils.number_generator import generate_po_number
+    
+    eopa_id = payload.get('eopa_id')
+    vendor_id = payload.get('vendor_id')
+    po_type = payload.get('po_type')
+    items = payload.get('items', [])
+    
+    if not all([eopa_id, vendor_id, po_type, items]):
+        raise AppException("Missing required fields: eopa_id, vendor_id, po_type, items", "ERR_VALIDATION", 400)
+    
+    # Validate EOPA
+    eopa = db.query(EOPA).filter(EOPA.id == eopa_id).first()
+    if not eopa:
+        raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
+    
+    if eopa.status != "APPROVED":
+        raise AppException("EOPA must be APPROVED to generate POs", "ERR_EOPA_NOT_APPROVED", 400)
+    
+    # Validate vendor
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise AppException("Vendor not found", "ERR_NOT_FOUND", 404)
+    
+    # Generate PO number
+    po_number = generate_po_number(db, po_type)
+    
+    # Create PO
+    po = PurchaseOrder(
+        po_number=po_number,
+        po_date=date.today(),
+        po_type=po_type,
+        eopa_id=eopa_id,
+        vendor_id=vendor_id,
+        delivery_date=date.today() + timedelta(days=30),  # Default 30 days
+        status="OPEN",
+        created_by=current_user.id
+    )
+    
+    db.add(po)
+    db.flush()
+    
+    # Create PO items
+    for item in items:
+        medicine_id = item.get('medicine_id')
+        ordered_quantity = item.get('ordered_quantity')
+        unit = item.get('unit', 'pcs')
+        
+        if not medicine_id or not ordered_quantity:
+            continue
+        
+        medicine = db.query(MedicineMaster).filter(MedicineMaster.id == medicine_id).first()
+        if not medicine:
+            continue
+        
+        po_item = POItem(
+            po_id=po.id,
+            medicine_id=medicine_id,
+            ordered_quantity=Decimal(str(ordered_quantity)),
+            fulfilled_quantity=Decimal('0'),
+            unit=unit
+        )
+        db.add(po_item)
+    
+    db.commit()
+    db.refresh(po)
+    
+    logger.info({
+        "event": "PO_GENERATED_SINGLE",
+        "po_id": po.id,
+        "po_number": po_number,
+        "po_type": po_type,
+        "vendor_id": vendor_id,
+        "eopa_id": eopa_id,
+        "items_count": len(items),
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"Successfully generated {po_type} PO {po_number} for vendor {vendor.vendor_name}",
+        "data": {
+            "po_id": po.id,
+            "po_number": po_number,
+            "po_type": po_type,
+            "vendor_name": vendor.vendor_name
+        },
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.delete("/{po_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def delete_po(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a single Purchase Order"""
+    from app.models.invoice import VendorInvoice
+    
+    # Fetch PO
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    po_number = po.po_number
+    po_type = po.po_type
+    
+    # Check if PO has any invoices
+    invoice_count = db.query(VendorInvoice).filter(VendorInvoice.po_id == po_id).count()
+    
+    if invoice_count > 0:
+        raise AppException(
+            f"Cannot delete PO {po_number}. It has {invoice_count} invoice(s) associated with it. Please delete or reassign invoices first.",
+            "ERR_PO_HAS_INVOICES",
+            400
+        )
+    
+    # Delete PO (cascade should handle items)
+    db.delete(po)
+    db.commit()
+    
+    logger.info({
+        "event": "PO_DELETED",
+        "po_id": po_id,
+        "po_number": po_number,
+        "po_type": po_type,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"Purchase Order {po_number} deleted successfully",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.delete("/by-eopa/{eopa_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def delete_pos_by_eopa(
+    eopa_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete all Purchase Orders generated from a specific EOPA"""
+    from app.models.eopa import EOPA
+    from app.models.invoice import VendorInvoice
+    
+    # Verify EOPA exists
+    eopa = db.query(EOPA).filter(EOPA.id == eopa_id).first()
+    if not eopa:
+        raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
+    
+    # Fetch POs linked to this EOPA
+    pos = db.query(PurchaseOrder).filter(PurchaseOrder.eopa_id == eopa_id).all()
+    
+    if not pos:
+        return {
+            "success": True,
+            "message": f"No Purchase Orders found for EOPA {eopa.eopa_number}",
+            "data": {"deleted_count": 0},
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    # Check if any PO has invoices
+    po_ids = [po.id for po in pos]
+    invoices = db.query(VendorInvoice).filter(VendorInvoice.po_id.in_(po_ids)).all()
+    
+    if invoices:
+        pos_with_invoices = list(set([inv.purchase_order.po_number for inv in invoices]))
+        raise AppException(
+            f"Cannot delete POs. The following POs have invoices: {', '.join(pos_with_invoices)}. Please delete or reassign invoices first.",
+            "ERR_POS_HAVE_INVOICES",
+            400
+        )
+    
+    deleted_count = len(pos)
+    po_numbers = [po.po_number for po in pos]
+    
+    # Delete all POs and their items (cascade should handle items)
+    for po in pos:
+        db.delete(po)
+    
+    db.commit()
+    
+    logger.info({
+        "event": "POS_DELETED_BULK",
+        "eopa_id": eopa_id,
+        "eopa_number": eopa.eopa_number,
+        "deleted_count": deleted_count,
+        "po_numbers": po_numbers,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"Successfully deleted {deleted_count} Purchase Order(s) for EOPA {eopa.eopa_number}",
+        "data": {
+            "deleted_count": deleted_count,
+            "po_numbers": po_numbers
+        },
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
