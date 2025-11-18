@@ -64,6 +64,49 @@ async def list_products(
     }
 
 
+@router.put("/{product_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def update_product_master(
+    product_id: int,
+    product_data: ProductMasterCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update product master"""
+    product = db.query(ProductMaster).filter(ProductMaster.id == product_id).first()
+    if not product:
+        raise AppException("Product not found", "ERR_NOT_FOUND", 404)
+    
+    # Check if product_code is being changed and if it already exists
+    if product_data.product_code != product.product_code:
+        existing = db.query(ProductMaster).filter(
+            ProductMaster.product_code == product_data.product_code,
+            ProductMaster.id != product_id
+        ).first()
+        if existing:
+            raise AppException("Product code already exists", "ERR_VALIDATION", 400)
+    
+    # Update fields
+    for field, value in product_data.model_dump().items():
+        setattr(product, field, value)
+    
+    db.commit()
+    db.refresh(product)
+    
+    logger.info({
+        "event": "PRODUCT_UPDATED",
+        "product_id": product.id,
+        "product_code": product.product_code,
+        "updated_by": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": "Product updated successfully",
+        "data": ProductMasterResponse.model_validate(product).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 @router.post("/medicines", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
 async def create_medicine_master(
     medicine_data: MedicineMasterCreate,

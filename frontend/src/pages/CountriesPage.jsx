@@ -31,6 +31,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
 const CountriesPage = () => {
   const [countries, setCountries] = useState([])
@@ -48,6 +49,15 @@ const CountriesPage = () => {
   const [successMessage, setSuccessMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    openEditForm,
+    closeEditForm,
+    markAsSaved,
+    updateDataStably,
+    addDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   useEffect(() => {
     fetchCountries()
@@ -77,6 +87,7 @@ const CountriesPage = () => {
         currency: country.currency || '',
         is_active: country.is_active !== undefined ? country.is_active : true,
       })
+      openEditForm(country.id)
     } else {
       setEditingCountry(null)
       setFormData({
@@ -100,6 +111,7 @@ const CountriesPage = () => {
       currency: '',
       is_active: true,
     })
+    closeEditForm()
   }
 
   const handleChange = (e) => {
@@ -115,14 +127,23 @@ const CountriesPage = () => {
       setSubmitting(true)
       
       if (editingCountry) {
-        await api.put(`/api/countries/${editingCountry.id}`, formData)
-        setSuccessMessage('Country updated successfully')
+        const response = await api.put(`/api/countries/${editingCountry.id}`, formData)
+        if (response.data.success) {
+          const updatedCountry = response.data.data
+          setCountries(prevCountries => updateDataStably(prevCountries, updatedCountry))
+          setSuccessMessage('Country updated successfully')
+          markAsSaved(editingCountry.id)
+        }
       } else {
-        await api.post('/api/countries/', formData)
-        setSuccessMessage('Country created successfully')
+        const response = await api.post('/api/countries/', formData)
+        if (response.data.success) {
+          const newCountry = response.data.data
+          setCountries(prevCountries => addDataStably(prevCountries, newCountry, true))
+          setSuccessMessage('Country created successfully')
+          markAsSaved(newCountry.id)
+        }
       }
       
-      await fetchCountries()
       handleCloseForm()
     } catch (err) {
       handleApiError(err)
@@ -137,9 +158,11 @@ const CountriesPage = () => {
     }
 
     try {
-      await api.delete(`/api/countries/${id}`)
-      setSuccessMessage('Country deleted successfully')
-      await fetchCountries()
+      const response = await api.delete(`/api/countries/${id}`)
+      if (response.data.success) {
+        setCountries(prevCountries => removeDataStably(prevCountries, id))
+        setSuccessMessage('Country deleted successfully')
+      }
     } catch (err) {
       handleApiError(err)
     }
@@ -211,7 +234,10 @@ const CountriesPage = () => {
             </TableHead>
             <TableBody>
               {filteredCountries.map((country) => (
-                <TableRow key={country.id}>
+                <TableRow 
+                  key={country.id}
+                  sx={getRowStyle(country.id)}
+                >
                   <TableCell>{country.country_code}</TableCell>
                   <TableCell>{country.country_name}</TableCell>
                   <TableCell>{country.language}</TableCell>

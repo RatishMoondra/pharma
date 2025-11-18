@@ -475,3 +475,31 @@ async def test_email_configuration(
             500
         )
 
+
+@router.get("/by-eopa/{eopa_id}", response_model=dict)
+async def get_pos_by_eopa(
+    eopa_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all Purchase Orders generated from a specific EOPA"""
+    from app.models.eopa import EOPA
+    from app.models.vendor import Vendor
+    
+    # Verify EOPA exists
+    eopa = db.query(EOPA).filter(EOPA.id == eopa_id).first()
+    if not eopa:
+        raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
+    
+    # Fetch POs linked to this EOPA
+    pos = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.vendor),
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine)
+    ).filter(PurchaseOrder.eopa_id == eopa_id).all()
+    
+    return {
+        "success": True,
+        "message": f"Purchase Orders for EOPA #{eopa_id} retrieved successfully",
+        "data": [POResponse.model_validate(po).model_dump() for po in pos],
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }

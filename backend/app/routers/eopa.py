@@ -294,3 +294,29 @@ async def approve_eopa(
         "data": EOPAResponse.model_validate(eopa).model_dump(),
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@router.get("/by-pi/{pi_id}", response_model=dict)
+async def get_eopas_by_pi(
+    pi_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all EOPAs for a specific PI"""
+    # Verify PI exists
+    pi = db.query(PI).filter(PI.id == pi_id).first()
+    if not pi:
+        raise AppException("PI not found", "ERR_NOT_FOUND", 404)
+    
+    # Fetch EOPAs linked to this PI
+    eopas = db.query(EOPA).options(
+        joinedload(EOPA.pi).joinedload(PI.partner_vendor),
+        joinedload(EOPA.items).joinedload(EOPAItem.pi_item).joinedload(PIItem.medicine)
+    ).filter(EOPA.pi_id == pi_id).all()
+    
+    return {
+        "success": True,
+        "message": f"EOPAs for PI #{pi_id} retrieved successfully",
+        "data": [EOPAResponse.model_validate(eopa).model_dump() for eopa in eopas],
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }

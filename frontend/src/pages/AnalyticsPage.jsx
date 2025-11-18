@@ -343,7 +343,7 @@ const DiscrepanciesTab = ({ data }) => {
                 {data.summary.high_severity || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                High Severity (>10%)
+                High Severity (&gt;10%)
               </Typography>
             </CardContent>
           </Card>

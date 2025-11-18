@@ -9,6 +9,19 @@ If any field exists in one layer but is missing in others, proactively synchroni
 You must behave like a full-stack agentic co-developer and keep the entire system consistent without me asking for every change manually.
 
 
+Whenever generating a screen for PI, EOPA, PO, Invoice, or related items, 
+always include a “View Document Flow” button linking to:
+
+   /pi/{id}/visual
+
+Every document type should include a link back to its parent:
+- PO → link to EOPA
+- EOPA → link to PI
+- Invoice → link to PO
+
+Maintain full document traceability across the system.
+
+
 # Copilot Instructions - Pharmaceutical Procurement & Dispatch System
 
 ## Project Overview

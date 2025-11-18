@@ -34,19 +34,22 @@ import SearchIcon from '@mui/icons-material/Search'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import DownloadIcon from '@mui/icons-material/Download'
+import TimelineIcon from '@mui/icons-material/Timeline'
 import PIForm from '../components/PIForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
+import { useNavigate } from 'react-router-dom'
 
-const PIRow = ({ pi, onEdit, onDelete, onApprove, onDownloadPDF }) => {
+const PIRow = ({ pi, onEdit, onDelete, onApprove, onDownloadPDF, onViewWorkflow, getRowStyle }) => {
   const [open, setOpen] = useState(false)
 
   return (
     <>
       <TableRow 
-        sx={{ 
-          '&:hover': { bgcolor: 'action.hover' },
-          bgcolor: open ? 'action.selected' : 'inherit'
+        sx={{
+          ...getRowStyle(pi.id),
+          ...(open ? { bgcolor: 'action.selected' } : {})
         }}
       >
         <TableCell>
@@ -107,6 +110,15 @@ const PIRow = ({ pi, onEdit, onDelete, onApprove, onDownloadPDF }) => {
               </IconButton>
             </>
           )}
+          <IconButton
+            size="small"
+            color="secondary"
+            onClick={() => onViewWorkflow(pi)}
+            sx={{ mr: 1 }}
+            title="View Document Flow"
+          >
+            <TimelineIcon fontSize="small" />
+          </IconButton>
           <IconButton
             size="small"
             color="info"
@@ -287,6 +299,7 @@ const PIRow = ({ pi, onEdit, onDelete, onApprove, onDownloadPDF }) => {
 }
 
 const PIPage = () => {
+  const navigate = useNavigate()
   const [pis, setPis] = useState([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -303,6 +316,15 @@ const PIPage = () => {
   const [approvalRemarks, setApprovalRemarks] = useState('')
   const [approving, setApproving] = useState(false)
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    openEditForm,
+    closeEditForm,
+    markAsSaved,
+    updateDataStably,
+    addDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   const fetchPIs = async () => {
     try {
@@ -330,16 +352,26 @@ const PIPage = () => {
       let response
       if (piId) {
         response = await api.put(`/api/pi/${piId}`, formData)
-        setSuccessMessage('PI updated successfully')
+        if (response.data.success) {
+          const updatedPI = response.data.data
+          setPis(prevPis => updateDataStably(prevPis, updatedPI))
+          setSuccessMessage('PI updated successfully')
+          markAsSaved(piId)
+        }
       } else {
         response = await api.post('/api/pi/', formData)
-        setSuccessMessage('PI created successfully')
+        if (response.data.success) {
+          const newPI = response.data.data
+          setPis(prevPis => addDataStably(prevPis, newPI, true))
+          setSuccessMessage('PI created successfully')
+          markAsSaved(newPI.id)
+        }
       }
       
       if (response.data.success) {
-        fetchPIs()
         setFormOpen(false)
         setEditingPI(null)
+        closeEditForm()
       }
     } catch (err) {
       handleApiError(err)
@@ -351,6 +383,7 @@ const PIPage = () => {
   const handleEdit = (pi) => {
     setEditingPI(pi)
     setFormOpen(true)
+    openEditForm(pi.id)
   }
 
   const handleDeleteClick = (pi) => {
@@ -367,8 +400,8 @@ const PIPage = () => {
       
       const response = await api.delete(`/api/pi/${piToDelete.id}`)
       if (response.data.success) {
+        setPis(prevPis => removeDataStably(prevPis, piToDelete.id))
         setSuccessMessage('PI deleted successfully')
-        fetchPIs()
         setDeleteDialogOpen(false)
         setPiToDelete(null)
       }
@@ -404,6 +437,10 @@ const PIPage = () => {
       console.error('Error downloading PDF:', err)
       handleApiError(err)
     }
+  }
+
+  const handleViewWorkflow = (pi) => {
+    navigate(`/pi/${pi.id}/visual`)
   }
 
   const handleCreateNew = () => {
@@ -443,8 +480,11 @@ const PIPage = () => {
           message += ` - EOPA ${response.data.data.eopa_number} created with ${piToApprove.items?.length || 0} line items`
         }
         
+        // Update PI in-place to preserve row order
+        const updatedPI = response.data.data.pi || response.data.data
+        setPis(prevPis => updateDataStably(prevPis, updatedPI))
+        markAsSaved(piToApprove.id)
         setSuccessMessage(message)
-        fetchPIs()
         setApprovalDialogOpen(false)
         setPiToApprove(null)
         setApprovalRemarks('')
@@ -538,6 +578,8 @@ const PIPage = () => {
                   onDelete={handleDeleteClick}
                   onApprove={handleApprovalClick}
                   onDownloadPDF={handleDownloadPDF}
+                  onViewWorkflow={handleViewWorkflow}
+                  getRowStyle={getRowStyle}
                 />
               ))}
             </TableBody>

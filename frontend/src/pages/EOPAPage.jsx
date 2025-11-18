@@ -43,6 +43,7 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
 const getVendorTypeIcon = (type) => {
   switch (type) {
@@ -70,7 +71,7 @@ const getVendorTypeLabel = (type) => {
   }
 }
 
-const PIItemRow = ({ piItem, eopas, onApprove, onDelete }) => {
+const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
   const [open, setOpen] = useState(false)
   const itemEopas = eopas.filter(e => e.pi_item_id === piItem.id)
   const hasEopa = itemEopas.length > 0
@@ -79,8 +80,8 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete }) => {
     <>
       <TableRow 
         sx={{ 
-          '&:hover': { bgcolor: 'action.hover' },
-          bgcolor: open ? 'action.selected' : 'inherit'
+          ...getRowStyle(piItem.id),
+          ...(open ? { bgcolor: 'action.selected' } : {})
         }}
       >
         <TableCell>
@@ -157,8 +158,8 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete }) => {
                         <TableRow
                           key={eopa.id}
                           sx={{
+                            ...getRowStyle(eopa.id),
                             bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
-                            '&:hover': { bgcolor: 'primary.50' }
                           }}
                         >
                           <TableCell>
@@ -315,6 +316,12 @@ const EOPAPage = () => {
   const [generatingPO, setGeneratingPO] = useState(false)
   
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    markAsSaved,
+    updateDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   const fetchData = async () => {
     try {
@@ -468,8 +475,10 @@ const EOPAPage = () => {
         approved: true
       })
       if (response.data.success) {
+        const updatedEopa = response.data.data
+        setEopas(prevEopas => updateDataStably(prevEopas, updatedEopa))
+        markAsSaved(eopaToApprove.id)
         setSuccessMessage('EOPA approved successfully')
-        fetchData()
         setApproveDialogOpen(false)
         setEopaToApprove(null)
       }
@@ -499,8 +508,8 @@ const EOPAPage = () => {
       
       const response = await api.delete(`/api/eopa/${eopaToDelete.id}`)
       if (response.data.success) {
+        setEopas(prevEopas => removeDataStably(prevEopas, eopaToDelete.id))
         setSuccessMessage('EOPA deleted successfully')
-        fetchData()
         setDeleteDialogOpen(false)
         setEopaToDelete(null)
       }

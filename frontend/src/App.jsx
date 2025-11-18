@@ -6,6 +6,7 @@ import CountriesPage from './pages/CountriesPage'
 import VendorsPage from './pages/VendorsPage'
 import ProductsPage from './pages/ProductsPage'
 import PIPage from './pages/PIPage'
+import PIWorkflowVisualPage from './pages/PIWorkflowVisualPage'
 import EOPAPage from './pages/EOPAPage'
 import POPage from './pages/POPage'
 import InvoicesPage from './pages/InvoicesPage'
@@ -58,6 +59,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
                 <PIPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="pi/:id/visual" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
+                <PIWorkflowVisualPage />
               </PrivateRoute>
             } 
           />

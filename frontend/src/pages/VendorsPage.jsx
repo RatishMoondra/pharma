@@ -27,6 +27,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import VendorForm from '../components/VendorForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
 const VendorsPage = () => {
   const [vendors, setVendors] = useState([])
@@ -37,6 +38,15 @@ const VendorsPage = () => {
   const [successMessage, setSuccessMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    openEditForm,
+    closeEditForm,
+    markAsSaved,
+    updateDataStably,
+    addDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   const fetchVendors = async () => {
     try {
@@ -59,11 +69,15 @@ const VendorsPage = () => {
   const handleOpenForm = (vendor = null) => {
     setEditingVendor(vendor)
     setFormOpen(true)
+    if (vendor) {
+      openEditForm(vendor.id)
+    }
   }
 
   const handleCloseForm = () => {
     setFormOpen(false)
     setEditingVendor(null)
+    closeEditForm()
   }
 
   const handleSubmit = async (formData) => {
@@ -72,19 +86,24 @@ const VendorsPage = () => {
       clearError()
 
       if (editingVendor) {
-        // Update existing vendor
+        // Update existing vendor - maintain row position
         const response = await api.put(`/api/vendors/${editingVendor.id}`, formData)
         if (response.data.success) {
+          const updatedVendor = response.data.data
+          // Update in-place to preserve row order
+          setVendors(prevVendors => updateDataStably(prevVendors, updatedVendor))
           setSuccessMessage('Vendor updated successfully')
-          fetchVendors()
+          markAsSaved(editingVendor.id)
           handleCloseForm()
         }
       } else {
-        // Create new vendor
+        // Create new vendor - add to beginning
         const response = await api.post('/api/vendors/', formData)
         if (response.data.success) {
+          const newVendor = response.data.data
+          setVendors(prevVendors => addDataStably(prevVendors, newVendor, true))
           setSuccessMessage('Vendor created successfully')
-          fetchVendors()
+          markAsSaved(newVendor.id)
           handleCloseForm()
         }
       }
@@ -103,8 +122,9 @@ const VendorsPage = () => {
     try {
       const response = await api.delete(`/api/vendors/${vendorId}`)
       if (response.data.success) {
+        // Remove from array while preserving order of remaining items
+        setVendors(prevVendors => removeDataStably(prevVendors, vendorId))
         setSuccessMessage('Vendor deleted successfully')
-        fetchVendors()
       }
     } catch (err) {
       handleApiError(err)
@@ -191,7 +211,10 @@ const VendorsPage = () => {
             </TableHead>
             <TableBody>
               {filteredVendors.map((vendor) => (
-                <TableRow key={vendor.id}>
+                <TableRow 
+                  key={vendor.id}
+                  sx={getRowStyle(vendor.id)}
+                >
                   <TableCell>{vendor.vendor_name}</TableCell>
                   <TableCell>
                     <Chip

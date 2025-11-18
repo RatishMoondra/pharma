@@ -28,7 +28,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
     drug_license_number: vendor?.drug_license_number || '',
     gmp_certified: vendor?.gmp_certified || false,
     iso_certified: vendor?.iso_certified || false,
-    credit_days: vendor?.credit_days || '',
+    credit_days: vendor?.credit_days || 15,
   })
 
   const [errors, setErrors] = useState({})
@@ -66,7 +66,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         drug_license_number: vendor.drug_license_number || '',
         gmp_certified: vendor.gmp_certified || false,
         iso_certified: vendor.iso_certified || false,
-        credit_days: vendor.credit_days || '',
+        credit_days: vendor.credit_days || 15,
       })
     } else {
       setFormData({
@@ -81,7 +81,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         drug_license_number: '',
         gmp_certified: false,
         iso_certified: false,
-        credit_days: '',
+        credit_days: 15,
       })
     }
   }, [vendor])
@@ -134,7 +134,7 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         drug_license_number: '',
         gmp_certified: false,
         iso_certified: false,
-        credit_days: '',
+        credit_days: 15,
       })
       setErrors({})
       onClose()
@@ -266,12 +266,12 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
               select
               label="GMP Certified"
               name="gmp_certified"
-              value={formData.gmp_certified}
+              value={String(formData.gmp_certified)}
               onChange={(e) => setFormData(prev => ({ ...prev, gmp_certified: e.target.value === 'true' }))}
               disabled={isLoading}
             >
-              <MenuItem value={false}>No</MenuItem>
-              <MenuItem value={true}>Yes</MenuItem>
+              <MenuItem value="false">No</MenuItem>
+              <MenuItem value="true">Yes</MenuItem>
             </TextField>
           </Grid>
           <Grid item xs={12} sm={4}>
@@ -280,12 +280,12 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
               select
               label="ISO Certified"
               name="iso_certified"
-              value={formData.iso_certified}
+              value={String(formData.iso_certified)}
               onChange={(e) => setFormData(prev => ({ ...prev, iso_certified: e.target.value === 'true' }))}
               disabled={isLoading}
             >
-              <MenuItem value={false}>No</MenuItem>
-              <MenuItem value={true}>Yes</MenuItem>
+              <MenuItem value="false">No</MenuItem>
+              <MenuItem value="true">Yes</MenuItem>
             </TextField>
           </Grid>
           <Grid item xs={12} sm={4}>

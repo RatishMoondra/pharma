@@ -11,9 +11,11 @@ import {
 
 const ProductForm = ({ open, onClose, onSubmit, product = null, isLoading = false }) => {
   const [formData, setFormData] = useState({
+    product_code: product?.product_code || '',
     product_name: product?.product_name || '',
     description: product?.description || '',
     unit_of_measure: product?.unit_of_measure || '',
+    hsn_code: product?.hsn_code || '',
   })
 
   const [errors, setErrors] = useState({})
@@ -21,15 +23,19 @@ const ProductForm = ({ open, onClose, onSubmit, product = null, isLoading = fals
   useEffect(() => {
     if (product) {
       setFormData({
+        product_code: product.product_code || '',
         product_name: product.product_name || '',
         description: product.description || '',
         unit_of_measure: product.unit_of_measure || '',
+        hsn_code: product.hsn_code || '',
       })
     } else {
       setFormData({
+        product_code: '',
         product_name: '',
         description: '',
         unit_of_measure: '',
+        hsn_code: '',
       })
     }
   }, [product])
@@ -45,6 +51,7 @@ const ProductForm = ({ open, onClose, onSubmit, product = null, isLoading = fals
   const validate = () => {
     const newErrors = {}
     
+    if (!formData.product_code.trim()) newErrors.product_code = 'Product code is required'
     if (!formData.product_name.trim()) newErrors.product_name = 'Product name is required'
     if (!formData.unit_of_measure.trim()) newErrors.unit_of_measure = 'Unit of measure is required'
 
@@ -61,9 +68,11 @@ const ProductForm = ({ open, onClose, onSubmit, product = null, isLoading = fals
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
+        product_code: '',
         product_name: '',
         description: '',
         unit_of_measure: '',
+        hsn_code: '',
       })
       setErrors({})
       onClose()
@@ -75,6 +84,31 @@ const ProductForm = ({ open, onClose, onSubmit, product = null, isLoading = fals
       <DialogTitle>{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Product Code"
+              name="product_code"
+              value={formData.product_code}
+              onChange={handleChange}
+              error={!!errors.product_code}
+              helperText={errors.product_code}
+              required
+              disabled={isLoading || !!product}
+              placeholder="e.g., PROD-001"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="HSN Code"
+              name="hsn_code"
+              value={formData.hsn_code}
+              onChange={handleChange}
+              disabled={isLoading}
+              placeholder="8-digit HSN code"
+            />
+          </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth

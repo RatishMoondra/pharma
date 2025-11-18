@@ -39,4 +39,9 @@ api.interceptors.response.use(
   }
 )
 
+// Visual Relationship Viewer - Fetch workflow data
+export const getEOPAsByPI = (piId) => api.get(`/api/eopa/by-pi/${piId}`)
+export const getPOsByEOPA = (eopaId) => api.get(`/api/po/by-eopa/${eopaId}`)
+export const getInvoicesByPO = (poId) => api.get(`/api/invoice/po/${poId}`)
+
 export default api

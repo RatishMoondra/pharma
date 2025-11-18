@@ -28,6 +28,7 @@ import ProductForm from '../components/ProductForm'
 import MedicineForm from '../components/MedicineForm'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
 const ProductsPage = () => {
   const [tab, setTab] = useState(0)
@@ -40,6 +41,15 @@ const ProductsPage = () => {
   const [successMessage, setSuccessMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    openEditForm,
+    closeEditForm,
+    markAsSaved,
+    updateDataStably,
+    addDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   const fetchProducts = async () => {
     try {
@@ -80,11 +90,15 @@ const ProductsPage = () => {
   const handleOpenForm = (item = null) => {
     setEditingItem(item)
     setFormOpen(true)
+    if (item) {
+      openEditForm(item.id)
+    }
   }
 
   const handleCloseForm = () => {
     setFormOpen(false)
     setEditingItem(null)
+    closeEditForm()
   }
 
   const handleSubmit = async (formData) => {
@@ -97,15 +111,19 @@ const ProductsPage = () => {
         if (editingItem) {
           const response = await api.put(`/api/products/${editingItem.id}`, formData)
           if (response.data.success) {
+            const updatedProduct = response.data.data
+            setProducts(prevProducts => updateDataStably(prevProducts, updatedProduct))
             setSuccessMessage('Product updated successfully')
-            fetchProducts()
+            markAsSaved(editingItem.id)
             handleCloseForm()
           }
         } else {
           const response = await api.post('/api/products/', formData)
           if (response.data.success) {
+            const newProduct = response.data.data
+            setProducts(prevProducts => addDataStably(prevProducts, newProduct, true))
             setSuccessMessage('Product created successfully')
-            fetchProducts()
+            markAsSaved(newProduct.id)
             handleCloseForm()
           }
         }
@@ -114,15 +132,19 @@ const ProductsPage = () => {
         if (editingItem) {
           const response = await api.put(`/api/products/medicines/${editingItem.id}`, formData)
           if (response.data.success) {
+            const updatedMedicine = response.data.data
+            setMedicines(prevMedicines => updateDataStably(prevMedicines, updatedMedicine))
             setSuccessMessage('Medicine updated successfully')
-            fetchMedicines()
+            markAsSaved(editingItem.id)
             handleCloseForm()
           }
         } else {
           const response = await api.post('/api/products/medicines', formData)
           if (response.data.success) {
+            const newMedicine = response.data.data
+            setMedicines(prevMedicines => addDataStably(prevMedicines, newMedicine, true))
             setSuccessMessage('Medicine created successfully')
-            fetchMedicines()
+            markAsSaved(newMedicine.id)
             handleCloseForm()
           }
         }
@@ -143,14 +165,14 @@ const ProductsPage = () => {
       if (tab === 0) {
         const response = await api.delete(`/api/products/${itemId}`)
         if (response.data.success) {
+          setProducts(prevProducts => removeDataStably(prevProducts, itemId))
           setSuccessMessage('Product deleted successfully')
-          fetchProducts()
         }
       } else {
         const response = await api.delete(`/api/products/medicines/${itemId}`)
         if (response.data.success) {
+          setMedicines(prevMedicines => removeDataStably(prevMedicines, itemId))
           setSuccessMessage('Medicine deleted successfully')
-          fetchMedicines()
         }
       }
     } catch (err) {
@@ -236,6 +258,7 @@ const ProductsPage = () => {
               <TableHead>
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product Code</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>HSN Code</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Product Name</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Unit of Measure</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
@@ -244,8 +267,12 @@ const ProductsPage = () => {
               </TableHead>
               <TableBody>
                 {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
+                  <TableRow 
+                    key={product.id}
+                    sx={getRowStyle(product.id)}
+                  >
                     <TableCell>{product.product_code}</TableCell>
+                    <TableCell>{product.hsn_code || '-'}</TableCell>
                     <TableCell>{product.product_name}</TableCell>
                     <TableCell>{product.unit_of_measure || '-'}</TableCell>
                     <TableCell>{product.description || '-'}</TableCell>
@@ -290,7 +317,10 @@ const ProductsPage = () => {
             </TableHead>
             <TableBody>
               {filteredMedicines.map((medicine) => (
-                <TableRow key={medicine.id}>
+                <TableRow 
+                  key={medicine.id}
+                  sx={getRowStyle(medicine.id)}
+                >
                   <TableCell>{medicine.medicine_name}</TableCell>
                   <TableCell>{medicine.hsn_code || '-'}</TableCell>
                   <TableCell>{medicine.product?.product_name || '-'}</TableCell>

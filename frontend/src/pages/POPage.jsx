@@ -51,8 +51,9 @@ import {
 } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
-const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, onSendEmail }) => {
+const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, onSendEmail, getRowStyle }) => {
   const [open, setOpen] = useState(false)
   const [tabValue, setTabValue] = useState(0)
   const [editingVendor, setEditingVendor] = useState(false)
@@ -302,8 +303,8 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onDownloadPDF, on
     <>
       <TableRow 
         sx={{ 
-          '&:hover': { bgcolor: 'action.hover' },
-          bgcolor: open ? 'action.selected' : 'inherit'
+          ...getRowStyle(po.id),
+          ...(open ? { bgcolor: 'action.selected' } : {})
         }}
       >
         <TableCell>
@@ -873,6 +874,11 @@ const POPage = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const { error, handleApiError, clearError } = useApiError()
+  const {
+    markAsSaved,
+    updateDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   useEffect(() => {
     fetchData()
@@ -913,8 +919,10 @@ const POPage = () => {
       clearError()
       const response = await api.put(`/api/po/${poId}`, { vendor_id: vendorId })
       if (response.data.success) {
+        const updatedPO = response.data.data
+        setPos(prevPos => updateDataStably(prevPos, updatedPO))
+        markAsSaved(poId)
         setSuccessMessage('Vendor updated successfully')
-        fetchData() // Refresh data
       }
     } catch (err) {
       console.error('Error updating vendor:', err)
@@ -961,8 +969,11 @@ const POPage = () => {
       const response = await api.post(`/api/invoice/vendor/${poId}`, payload)
       
       if (response.data.success) {
+        // Update PO with new fulfillment data
+        const updatedPO = response.data.data.po || response.data.data
+        setPos(prevPos => updateDataStably(prevPos, updatedPO))
+        markAsSaved(poId)
         setSuccessMessage(`Invoice ${invoiceData.invoice_number} processed successfully`)
-        fetchData() // Refresh to show updated fulfillment
       }
     } catch (err) {
       console.error('Error submitting invoice:', err)
@@ -1182,6 +1193,7 @@ const POPage = () => {
                           onInvoiceSubmit={handleInvoiceSubmit}
                           onDownloadPDF={handleDownloadPDF}
                           onSendEmail={handleSendEmail}
+                          getRowStyle={getRowStyle}
                         />
                       ))}
                     </TableBody>

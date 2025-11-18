@@ -46,9 +46,10 @@ import Inventory2Icon from '@mui/icons-material/Inventory2'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 import { useAuth } from '../context/AuthContext'
+import { useStableRowEditing } from '../hooks/useStableRowEditing'
 
 // Invoice Row Component with Expandable Items
-const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDelete, getInvoiceTypeColor }) => {
+const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDelete, getInvoiceTypeColor, getRowStyle }) => {
   const [open, setOpen] = useState(false)
 
   const getVendorTypeIcon = (type) => {
@@ -66,7 +67,10 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
 
   return (
     <>
-      <TableRow sx={{ '&:hover': { bgcolor: 'action.hover' }, bgcolor: open ? 'action.selected' : 'inherit' }}>
+      <TableRow sx={{ 
+        ...getRowStyle(invoice.id),
+        ...(open ? { bgcolor: 'action.selected' } : {}) 
+      }}>
         <TableCell>
           <IconButton size="small" onClick={() => setOpen(!open)}>
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
@@ -260,6 +264,15 @@ const InvoicesPage = () => {
   const [invoiceToDelete, setInvoiceToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const { user } = useAuth()
+  const {
+    openEditForm,
+    closeEditForm,
+    markAsSaved,
+    updateDataStably,
+    addDataStably,
+    removeDataStably,
+    getRowStyle,
+  } = useStableRowEditing()
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -490,9 +503,11 @@ const InvoicesPage = () => {
 
       const response = await api.post('/api/invoice/create', payload)
       if (response.data.success) {
+        const newInvoice = response.data.data
+        setInvoices(prevInvoices => addDataStably(prevInvoices, newInvoice, true))
+        markAsSaved(newInvoice.id)
         setSuccessMessage('Invoice created successfully!')
         setCreateDialogOpen(false)
-        fetchInvoices()
       }
     } catch (err) {
       handleApiError(err)
@@ -503,6 +518,7 @@ const InvoicesPage = () => {
 
   const handleEditClick = (invoice) => {
     setEditingInvoice(invoice)
+    openEditForm(invoice.id)
     setEditFormData({
       invoice_number: invoice.invoice_number,
       invoice_date: invoice.invoice_date,
@@ -532,6 +548,7 @@ const InvoicesPage = () => {
   const handleEditClose = () => {
     setEditDialogOpen(false)
     setEditingInvoice(null)
+    closeEditForm()
   }
 
   const handleEditFormChange = (field, value) => {
@@ -648,10 +665,11 @@ const InvoicesPage = () => {
       const response = await api.put(`/api/invoice/${editingInvoice.id}`, payload)
 
       if (response.data.success) {
+        const updatedInvoice = response.data.data
+        setInvoices(prevInvoices => updateDataStably(prevInvoices, updatedInvoice))
+        markAsSaved(editingInvoice.id)
         setSuccessMessage(`Invoice ${editFormData.invoice_number} updated successfully`)
-        setEditDialogOpen(false)
-        setEditingInvoice(null)
-        fetchInvoices()
+        handleEditClose()
       }
     } catch (err) {
       handleApiError(err)
@@ -673,10 +691,10 @@ const InvoicesPage = () => {
       const response = await api.delete(`/api/invoice/${invoiceToDelete.id}`)
       
       if (response.data.success) {
+        setInvoices(prevInvoices => removeDataStably(prevInvoices, invoiceToDelete.id))
         setSuccessMessage(`Invoice ${invoiceToDelete.invoice_number} deleted successfully`)
         setDeleteDialogOpen(false)
         setInvoiceToDelete(null)
-        fetchInvoices()
       }
     } catch (err) {
       handleApiError(err)
@@ -843,6 +861,7 @@ const InvoicesPage = () => {
                   canEdit={canEdit}
                   canDelete={canDelete}
                   getInvoiceTypeColor={getInvoiceTypeColor}
+                  getRowStyle={getRowStyle}
                 />
               ))}
             </TableBody>
