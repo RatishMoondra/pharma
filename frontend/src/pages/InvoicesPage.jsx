@@ -169,7 +169,12 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
                   {invoice.items?.map((item, idx) => (
                     <TableRow key={idx}>
                       <TableCell>
-                        <Typography variant="body2">{item.medicine?.medicine_name || 'N/A'}</Typography>
+                        <Typography variant="body2">
+                          {item.medicine?.medicine_name || 
+                           item.raw_material?.rm_name || 
+                           item.packing_material?.pm_name || 
+                           'N/A'}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" color="text.secondary">
@@ -382,7 +387,7 @@ const InvoicesPage = () => {
   const fetchPOsAndVendors = async () => {
     try {
       const [posRes, vendorsRes] = await Promise.all([
-        api.get('/api/po/'),
+        api.get('/api/po/?status=SENT'),  // Only fetch POs that have been sent to vendor
         api.get('/api/vendors/')
       ])
       if (posRes.data.success) {
@@ -712,12 +717,20 @@ const InvoicesPage = () => {
       total_amount: invoice.total_amount,
       remarks: invoice.remarks || '',
       items: invoice.items.map(item => ({
-        medicine_id: item.medicine_id,
-        medicine_name: item.medicine?.medicine_name || 'N/A',
+        medicine_id: item.medicine_id || null,
+        raw_material_id: item.raw_material_id || null,
+        packing_material_id: item.packing_material_id || null,
+        medicine_name: item.medicine?.medicine_name || 
+                       item.raw_material?.rm_name || 
+                       item.packing_material?.pm_name || 
+                       'N/A',
         shipped_quantity: item.shipped_quantity,
         unit_price: item.unit_price,
         tax_rate: item.tax_rate,
+        gst_rate: item.gst_rate || 0,
+        hsn_code: item.hsn_code || '',
         batch_number: item.batch_number || '',
+        manufacturing_date: item.manufacturing_date || '',
         expiry_date: item.expiry_date || '',
         remarks: item.remarks || ''
       }))
@@ -832,13 +845,18 @@ const InvoicesPage = () => {
         total_amount: parseFloat(editFormData.total_amount),
         remarks: editFormData.remarks,
         items: editFormData.items.map(item => ({
-          medicine_id: item.medicine_id,
+          medicine_id: item.medicine_id || null,
+          raw_material_id: item.raw_material_id || null,
+          packing_material_id: item.packing_material_id || null,
           shipped_quantity: parseFloat(item.shipped_quantity),
           unit_price: parseFloat(item.unit_price),
           tax_rate: parseFloat(item.tax_rate),
-          batch_number: item.batch_number,
+          gst_rate: parseFloat(item.gst_rate) || 0,
+          hsn_code: item.hsn_code || null,
+          batch_number: item.batch_number || null,
+          manufacturing_date: item.manufacturing_date || null,
           expiry_date: item.expiry_date || null,
-          remarks: item.remarks
+          remarks: item.remarks || null
         }))
       }
 

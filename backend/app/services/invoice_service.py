@@ -4,8 +4,7 @@ Invoice Service - Process Vendor Tax Invoices and Update PO Fulfillment
 KEY BUSINESS RULES:
 1. Invoices are the SOURCE OF TRUTH for pricing
 2. Invoice receipt updates PO fulfillment status
-3. RM/PM invoices update manufacturer's material balance
-4. FG invoices update final shipment records
+3. FG invoices update final shipment records
 """
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, date
@@ -15,7 +14,6 @@ import logging
 
 from app.models.invoice import VendorInvoice, VendorInvoiceItem, InvoiceType, InvoiceStatus
 from app.models.po import PurchaseOrder, POItem, POType, POStatus
-from app.models.material import MaterialBalance
 from app.models.vendor import Vendor
 from app.models.product import MedicineMaster
 from app.schemas.invoice import InvoiceCreate
@@ -164,6 +162,8 @@ class InvoiceService:
                 invoice_item = VendorInvoiceItem(
                     invoice_id=invoice.id,
                     medicine_id=item_data.medicine_id,
+                    raw_material_id=item_data.raw_material_id,
+                    packing_material_id=item_data.packing_material_id,
                     shipped_quantity=Decimal(str(item_data.shipped_quantity)),
                     unit_price=Decimal(str(item_data.unit_price)),
                     total_price=item_total,
@@ -181,16 +181,30 @@ class InvoiceService:
                 
                 self.db.add(invoice_item)
                 
-                # Update PO item fulfillment
-                po_item = next(
-                    (pi for pi in po.items if pi.medicine_id == item_data.medicine_id),
-                    None
-                )
+                # Update PO item fulfillment - match by appropriate ID based on invoice type
+                if invoice_type == InvoiceType.RM:
+                    po_item = next(
+                        (pi for pi in po.items if pi.raw_material_id == item_data.raw_material_id),
+                        None
+                    )
+                    item_name = po_item.raw_material.rm_name if po_item and po_item.raw_material else f"RM ID {item_data.raw_material_id}"
+                elif invoice_type == InvoiceType.PM:
+                    po_item = next(
+                        (pi for pi in po.items if pi.packing_material_id == item_data.packing_material_id),
+                        None
+                    )
+                    item_name = po_item.packing_material.pm_name if po_item and po_item.packing_material else f"PM ID {item_data.packing_material_id}"
+                else:  # FG
+                    po_item = next(
+                        (pi for pi in po.items if pi.medicine_id == item_data.medicine_id),
+                        None
+                    )
+                    item_name = po_item.medicine.medicine_name if po_item and po_item.medicine else f"Medicine ID {item_data.medicine_id}"
                 
                 if not po_item:
                     raise AppException(
-                        f"Medicine {item_data.medicine_id} not found in PO {po.po_number}",
-                        "ERR_MEDICINE_NOT_IN_PO",
+                        f"Item {item_name} not found in PO {po.po_number}",
+                        "ERR_ITEM_NOT_IN_PO",
                         400
                     )
                 
@@ -201,14 +215,10 @@ class InvoiceService:
                 # Validate not over-shipped
                 if po_item.fulfilled_quantity > po_item.ordered_quantity:
                     raise AppException(
-                        f"Shipped quantity exceeds ordered quantity for {po_item.medicine.medicine_name}",
+                        f"Shipped quantity exceeds ordered quantity for {item_name}",
                         "ERR_OVERSHIPPED",
                         400
                     )
-                
-                # Update manufacturer material balance for RM/PM
-                if po.po_type in [POType.RM, POType.PM]:
-                    self._update_material_balance(item_data.medicine_id, shipped_qty)
             
             # Update PO fulfillment totals
             po.total_fulfilled_qty += total_shipped_qty
@@ -266,37 +276,6 @@ class InvoiceService:
                 500
             )
     
-    def _update_material_balance(self, medicine_id: int, quantity: Decimal) -> None:
-        """
-        Update manufacturer's material balance when RM/PM is received.
-        
-        Args:
-            medicine_id: Medicine ID
-            quantity: Quantity received
-        """
-        balance = self.db.query(MaterialBalance).filter(
-            MaterialBalance.medicine_id == medicine_id
-        ).first()
-        
-        if balance:
-            balance.available_quantity += quantity
-            balance.last_updated = datetime.utcnow()
-        else:
-            # Create new balance record
-            balance = MaterialBalance(
-                medicine_id=medicine_id,
-                available_quantity=quantity,
-                last_updated=datetime.utcnow()
-            )
-            self.db.add(balance)
-        
-        logger.info({
-            "event": "MATERIAL_BALANCE_UPDATED",
-            "medicine_id": medicine_id,
-            "quantity_added": float(quantity),
-            "new_balance": float(balance.available_quantity)
-        })
-    
     def get_po_invoices(self, po_id: int) -> List[VendorInvoice]:
         """
         Get all invoices for a Purchase Order.
@@ -334,15 +313,30 @@ class InvoiceService:
         invoices = self.db.query(VendorInvoice).options(
             joinedload(VendorInvoice.purchase_order).joinedload(PurchaseOrder.items),
             joinedload(VendorInvoice.vendor),
-            joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine)
+            joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.medicine),
+            joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.raw_material),
+            joinedload(VendorInvoice.items).joinedload(VendorInvoiceItem.packing_material)
         ).order_by(VendorInvoice.received_at.desc()).all()
         
         # Enrich invoice items with ordered quantity from PO
         for invoice in invoices:
             if invoice.purchase_order and invoice.purchase_order.items:
-                po_items_dict = {item.medicine_id: item for item in invoice.purchase_order.items}
+                # Create lookup dictionaries for all three types
+                po_medicine_items = {item.medicine_id: item for item in invoice.purchase_order.items if item.medicine_id}
+                po_rm_items = {item.raw_material_id: item for item in invoice.purchase_order.items if item.raw_material_id}
+                po_pm_items = {item.packing_material_id: item for item in invoice.purchase_order.items if item.packing_material_id}
+                
                 for inv_item in invoice.items:
-                    po_item = po_items_dict.get(inv_item.medicine_id)
+                    po_item = None
+                    
+                    # Match by appropriate ID based on what's populated in invoice item
+                    if inv_item.medicine_id:
+                        po_item = po_medicine_items.get(inv_item.medicine_id)
+                    elif inv_item.raw_material_id:
+                        po_item = po_rm_items.get(inv_item.raw_material_id)
+                    elif inv_item.packing_material_id:
+                        po_item = po_pm_items.get(inv_item.packing_material_id)
+                    
                     if po_item:
                         # Attach ordered_quantity to invoice item for frontend display
                         inv_item.ordered_quantity = po_item.ordered_quantity
@@ -400,17 +394,29 @@ class InvoiceService:
             for item_data in invoice_data.items:
                 item_subtotal = Decimal(str(item_data.shipped_quantity)) * Decimal(str(item_data.unit_price))
                 item_tax = item_subtotal * (Decimal(str(item_data.tax_rate)) / Decimal("100"))
+                
+                # Calculate GST amount if GST rate provided
+                gst_amount = None
+                if item_data.gst_rate:
+                    gst_amount = item_subtotal * (Decimal(str(item_data.gst_rate)) / Decimal("100"))
+                
                 item_total = item_subtotal + item_tax
                 
                 invoice_item = VendorInvoiceItem(
                     invoice_id=invoice.id,
                     medicine_id=item_data.medicine_id,
+                    raw_material_id=item_data.raw_material_id,
+                    packing_material_id=item_data.packing_material_id,
                     shipped_quantity=Decimal(str(item_data.shipped_quantity)),
                     unit_price=Decimal(str(item_data.unit_price)),
                     total_price=item_total,
                     tax_rate=Decimal(str(item_data.tax_rate)),
                     tax_amount=item_tax,
+                    hsn_code=item_data.hsn_code,
+                    gst_rate=Decimal(str(item_data.gst_rate)) if item_data.gst_rate else None,
+                    gst_amount=gst_amount,
                     batch_number=item_data.batch_number,
+                    manufacturing_date=item_data.manufacturing_date,
                     expiry_date=item_data.expiry_date,
                     remarks=item_data.remarks
                 )

@@ -4,9 +4,6 @@ PO Generation Service - Business Logic for creating Purchase Orders from EOPA
 CRITICAL BUSINESS RULES:
 1. POs contain ONLY quantities, NO pricing
 2. Pricing comes from vendor invoices after shipment
-3. Before creating RM/PM PO, check manufacturer's material balance
-4. Effective PO quantity = Required quantity - Available balance
-5. If balance >= required, no PO is raised
 """
 from sqlalchemy.orm import Session, joinedload
 from datetime import date
@@ -19,7 +16,6 @@ from app.models.eopa import EOPA, EOPAItem, EOPAStatus
 from app.models.pi import PIItem
 from app.models.product import MedicineMaster
 from app.models.vendor import Vendor
-from app.models.material import MaterialBalance
 from app.utils.number_generator import generate_po_number
 from app.services.rm_explosion_service import RMExplosionService
 from app.services.pm_explosion_service import PMExplosionService
@@ -421,24 +417,6 @@ class POGenerationService:
         })
         
         return po
-    
-    def _get_material_balance(self, medicine_id: int) -> Decimal:
-        """
-        Get current material balance for a medicine at manufacturer.
-        
-        Args:
-            medicine_id: Medicine ID to check
-            
-        Returns:
-            Available quantity (Decimal)
-        """
-        balance = self.db.query(MaterialBalance).filter(
-            MaterialBalance.medicine_id == medicine_id
-        ).first()
-        
-        if balance:
-            return Decimal(str(balance.available_quantity))
-        return Decimal("0.00")
     
     def generate_rm_pos_from_explosion(
         self,

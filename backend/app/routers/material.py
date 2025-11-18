@@ -6,11 +6,10 @@ import logging
 from app.database.session import get_db
 from app.schemas.material import (
     MaterialReceiptCreate, MaterialReceiptResponse,
-    MaterialBalanceResponse,
     DispatchAdviceCreate, DispatchAdviceResponse,
     WarehouseGRNCreate, WarehouseGRNResponse
 )
-from app.models.material import MaterialReceipt, MaterialBalance, DispatchAdvice, WarehouseGRN
+from app.models.material import MaterialReceipt, DispatchAdvice, WarehouseGRN
 from app.models.user import User, UserRole
 from app.auth.dependencies import get_current_user, require_role
 from app.utils.number_generator import generate_receipt_number, generate_dispatch_number, generate_grn_number
@@ -36,18 +35,6 @@ async def create_material_receipt(
     )
     
     db.add(receipt)
-    
-    # Update material balance
-    balance = db.query(MaterialBalance).filter(MaterialBalance.medicine_id == receipt_data.medicine_id).first()
-    if balance:
-        balance.available_quantity += receipt_data.quantity_received
-    else:
-        balance = MaterialBalance(
-            medicine_id=receipt_data.medicine_id,
-            available_quantity=receipt_data.quantity_received
-        )
-        db.add(balance)
-    
     db.commit()
     db.refresh(receipt)
     
@@ -67,22 +54,6 @@ async def create_material_receipt(
     }
 
 
-@router.get("/balance/", response_model=dict)
-async def list_material_balance(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """List Material Balance"""
-    balances = db.query(MaterialBalance).all()
-    
-    return {
-        "success": True,
-        "message": "Material balances retrieved successfully",
-        "data": [MaterialBalanceResponse.model_validate(b).model_dump() for b in balances],
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
-
-
 @router.post("/dispatch/", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.WAREHOUSE_MANAGER]))])
 async def create_dispatch_advice(
     dispatch_data: DispatchAdviceCreate,
@@ -90,11 +61,6 @@ async def create_dispatch_advice(
     db: Session = Depends(get_db)
 ):
     """Create Dispatch Advice"""
-    # Check material balance
-    balance = db.query(MaterialBalance).filter(MaterialBalance.medicine_id == dispatch_data.medicine_id).first()
-    if not balance or balance.available_quantity < dispatch_data.quantity_dispatched:
-        raise AppException("Insufficient material balance", "ERR_VALIDATION", 400)
-    
     dispatch_number = generate_dispatch_number(db)
     
     dispatch = DispatchAdvice(
@@ -104,10 +70,6 @@ async def create_dispatch_advice(
     )
     
     db.add(dispatch)
-    
-    # Update material balance
-    balance.available_quantity -= dispatch_data.quantity_dispatched
-    
     db.commit()
     db.refresh(dispatch)
     

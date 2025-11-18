@@ -27,19 +27,6 @@ class MaterialReceipt(Base):
     receiver: Mapped["User"] = relationship("User")
 
 
-class MaterialBalance(Base):
-    """Current Material Inventory Balance"""
-    __tablename__ = "material_balance"
-    
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    medicine_id: Mapped[int] = mapped_column(ForeignKey("medicine_master.id"), unique=True)
-    available_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
-    last_updated: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships
-    medicine: Mapped["MedicineMaster"] = relationship("MedicineMaster")
-
-
 class DispatchAdvice(Base):
     """Dispatch Advice to Warehouse"""
     __tablename__ = "dispatch_advice"

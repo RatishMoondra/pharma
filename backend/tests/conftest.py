@@ -70,7 +70,7 @@ def test_db(test_engine):
     
     # Truncate all tables before each test for clean state
     with db.begin_nested():
-        db.execute(text("TRUNCATE TABLE warehouse_grn, dispatch_advice, material_receipts, material_balance, vendor_invoice_items, vendor_invoices, po_items, po_terms_conditions, purchase_orders, eopa_items, eopa, pi_items, pi, medicine_master, product_master, vendors, countries, users, system_configuration RESTART IDENTITY CASCADE"))
+        db.execute(text("TRUNCATE TABLE warehouse_grn, dispatch_advice, material_receipts, vendor_invoice_items, vendor_invoices, po_items, po_terms_conditions, purchase_orders, eopa_items, eopa, pi_items, pi, medicine_master, product_master, vendors, countries, users, system_configuration RESTART IDENTITY CASCADE"))
     
     try:
         yield db

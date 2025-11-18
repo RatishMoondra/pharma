@@ -249,7 +249,6 @@ class ConfigurationService:
                 "allow_eopa_edit_after_approval": False,
                 "auto_close_po_when_fulfilled": True,
                 "enable_partial_dispatch": True,
-                "enable_material_balance_logic": True,
                 "enable_invoice_based_fulfillment": True,
                 "enable_multilingual_pm": True
             }

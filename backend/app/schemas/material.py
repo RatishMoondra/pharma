@@ -26,16 +26,6 @@ class MaterialReceiptResponse(MaterialReceiptBase):
         from_attributes = True
 
 
-class MaterialBalanceResponse(BaseModel):
-    id: int
-    medicine_id: int
-    available_quantity: float
-    last_updated: datetime
-    
-    class Config:
-        from_attributes = True
-
-
 class DispatchAdviceBase(BaseModel):
     dispatch_date: date
     medicine_id: int
