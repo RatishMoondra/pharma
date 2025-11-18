@@ -107,28 +107,36 @@ The database consists of **12 main tables** organized around pharmaceutical proc
    - Fields: id, pi_id, medicine_id, quantity, unit_price, total_price, remarks
    - Used for: Individual medicine requirements in PI
 
-8. **eopa** (Estimated Order & Price Approval) - **PI-ITEM-LEVEL**
-   - Fields: id, eopa_number (UNIQUE), pi_item_id, vendor_type (MANUFACTURER/RM/PM), vendor_id, quantity, estimated_unit_price, estimated_total, status, approval_date, approved_by, remarks, created_by
+8. **eopa** (Estimated Order & Price Approval) - **PI-LEVEL VENDOR-AGNOSTIC**
+   - Fields: id, eopa_number (UNIQUE), pi_id, eopa_date, status, remarks, approved_by, approved_at, created_by, created_at, updated_at
    - **Critical Architecture**: 
-     - One EOPA per PI Item per Vendor Type
-     - Each PI Item can have up to 3 EOPAs (one for each vendor type)
-     - UNIQUE constraint on (pi_item_id, vendor_type)
-     - Vendor defaults from medicine_master but is user-editable
-   - Used for: Price estimation, vendor selection, approval workflow before PO creation
+     - ONE EOPA per PI (not per PI item)
+     - Does NOT contain vendor information - vendor-agnostic design
+     - Vendors are resolved LATER during PO generation based on Medicine Master mappings
+     - Acts as approval checkpoint for medicine/product details ONLY
+   - Used for: Price estimation approval, workflow checkpoint before PO generation
 
-9. **purchase_order** - Purchase orders (3 types: RM, PM, FG)
-   - Fields: id, po_number (UNIQUE), po_date, po_type (RM/PM/FG), vendor_id, delivery_date, status (OPEN/PARTIAL/CLOSED), remarks, created_by
-   - **Critical**: POs do NOT contain pricing - pricing comes from vendor_invoice
+9. **eopa_items** - EOPA Line Items
+   - Fields: id, eopa_id, pi_item_id, quantity, estimated_unit_price, estimated_total, created_by, created_at, updated_at
+   - **Critical**: One EOPA item per PI item, contains pricing but NO vendor selection
+   - Used for: Line-level quantity and pricing details within EOPA
+
+10. **purchase_order** - Purchase orders (3 types: RM, PM, FG)
+   - Fields: id, po_number (UNIQUE), po_date, po_type (RM/PM/FG), eopa_id, vendor_id, delivery_date, status (OPEN/PARTIAL/CLOSED), remarks, created_by
+   - **Critical**: 
+     - POs do NOT contain pricing - pricing comes from vendor_invoice
+     - Linked to EOPA via eopa_id
+     - Vendor selection happens at PO creation based on Medicine Master mappings
    - Used for: Ordering raw materials, packaging materials, finished goods
 
-10. **po_item** - Line items in PO (NO PRICING)
+11. **po_item** - Line items in PO (NO PRICING)
     - Fields: id, po_id, medicine_id, ordered_quantity, fulfilled_quantity, unit, language (for PM), artwork_version (for PM), remarks
     - **Critical**: No unit_price field - fulfillment driven by invoices
     - Used for: Ordered quantities, PM specifications, fulfillment tracking
 
 ### Invoice & Configuration Tables
 
-11. **vendor_invoice** - Vendor tax invoices with actual pricing
+12. **vendor_invoice** - Vendor tax invoices with actual pricing
     - Fields: id, invoice_number, po_id, invoice_date, medicine_id, shipped_quantity, unit_price, total_amount, tax_amount, discount_amount, net_amount, payment_status, payment_date, remarks, created_by
     - **Critical**: Source of truth for pricing, drives PO fulfillment
     - Workflow:
@@ -137,14 +145,14 @@ The database consists of **12 main tables** organized around pharmaceutical proc
       - Manufacturer sends FG Invoice → updates FG PO fulfilled_qty → decrements manufacturer_balance
     - Used for: Pricing, PO fulfillment, material balance tracking, payment tracking
 
-12. **system_configuration** - Flexible configuration storage with JSONB
+13. **system_configuration** - Flexible configuration storage with JSONB
     - Fields: id, config_key (UNIQUE), config_value (JSON/JSONB), description, category, is_sensitive, updated_at
     - **Critical**: Stores all system settings (42 configs across 8 categories)
     - Used for: Company info, workflow rules, document numbering formats, vendor rules, SMTP settings, security policies, UI preferences, integrations
 
 ### Key Indexes
 
-- **Unique constraints**: pi_number, eopa_number, po_number, config_key, (pi_item_id, vendor_type)
+- **Unique constraints**: pi_number, eopa_number, po_number, config_key
 - **Performance indexes**: idx_users_username, idx_vendor_code, idx_medicine_code, idx_pi_number, idx_config_key, idx_config_category
 - **Foreign key indexes**: All relationship fields indexed for join performance
 
@@ -162,10 +170,11 @@ Always model these entities with proper relationships:
 2. **Vendor** (types: PARTNER, RM, PM, MANUFACTURER)
 3. **Product Master** & **Medicine Master** (with vendor mappings)
 4. **PI** (Proforma Invoice) + **PI Items**
-5. **EOPA** (Estimated Order & Price Approval) - **PI-Item-Level Architecture**
-   - One EOPA per PI Item per Vendor Type (MANUFACTURER, RM, PM)
-   - Each PI Item can have up to 3 EOPAs (one for each vendor type)
-   - Vendor selection defaults from Medicine Master but is user-editable
+5. **EOPA** (Estimated Order & Price Approval) - **PI-Level Vendor-Agnostic Architecture**
+   - One EOPA per PI (not per PI item)
+   - Contains multiple line items via eopa_items table
+   - Does NOT contain vendor information - vendors resolved at PO creation
+   - Acts as approval checkpoint for medicine/product details and pricing
 6. **Purchase Orders** (RM/PM/FG) + **PO Items**
 7. **Material Receipt** & **Material Balance**
 8. **Dispatch Advice** & **Warehouse GRN**
@@ -173,11 +182,14 @@ Always model these entities with proper relationships:
 
 ### EOPA Architecture (CRITICAL)
 
-**EOPA is now PI-ITEM-LEVEL, not PI-LEVEL:**
-- Each PI Item can have multiple EOPAs (one per vendor type: MANUFACTURER, RM, PM)
-- Medicine Master defines default vendors, but users can override during EOPA creation
+**EOPA is PI-LEVEL and VENDOR-AGNOSTIC:**
+- ONE EOPA per PI (not per PI item)
+- EOPA contains multiple line items via eopa_items table
+- Does NOT store vendor information - vendor-agnostic design
+- Vendors are resolved LATER at PO creation based on Medicine Master mappings
+- EOPA acts as approval checkpoint for medicine/product details and pricing ONLY
 - EOPA number is unique system-wide (EOPA/YY-YY/####) with unique constraint
-- Vendor type determines which vendor mapping is used from Medicine Master
+- Workflow: PI → EOPA (with items, no vendors) → Approve → PO (vendor resolution)
 
 ## Authentication & Authorization
 

@@ -48,6 +48,7 @@ async def create_pi(
         pi_number=pi_number,
         pi_date=pi_data.pi_date,
         partner_vendor_id=pi_data.partner_vendor_id,
+        country_id=pi_data.country_id,  # Added: country_id from request
         total_amount=total_amount,
         currency=pi_data.currency,
         remarks=pi_data.remarks,
