@@ -1,5 +1,16 @@
-import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+// React & Router
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+
+// Custom Hooks & Context
+import { useApiError } from '../hooks/useApiError';
+import { useAuth } from '../context/AuthContext';
+import { useStableRowEditing } from '../hooks/useStableRowEditing';
+
+// API Service
+import api from '../services/api';
+
+// MUI Components
 import {
   Container,
   Typography,
@@ -30,24 +41,23 @@ import {
   MenuItem,
   Collapse,
   InputLabel,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import ReceiptIcon from '@mui/icons-material/Receipt'
-import LocalShippingIcon from '@mui/icons-material/LocalShipping'
-import WarehouseIcon from '@mui/icons-material/Warehouse'
-import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
-import DownloadIcon from '@mui/icons-material/Download'
-import AddIcon from '@mui/icons-material/Add'
-import RemoveIcon from '@mui/icons-material/Remove'
-import BusinessIcon from '@mui/icons-material/Business'
-import Inventory2Icon from '@mui/icons-material/Inventory2'
-import api from '../services/api'
-import { useApiError } from '../hooks/useApiError'
-import { useAuth } from '../context/AuthContext'
-import { useStableRowEditing } from '../hooks/useStableRowEditing'
+} from '@mui/material';
+
+// MUI Icons
+import SearchIcon from '@mui/icons-material/Search';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import WarehouseIcon from '@mui/icons-material/Warehouse';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import BusinessIcon from '@mui/icons-material/Business';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import { Save as SaveIcon, Close as CloseIcon } from '@mui/icons-material';
 
 // Invoice Row Component with Expandable Items
 const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDelete, getInvoiceTypeColor, getRowStyle }) => {
@@ -447,16 +457,16 @@ const InvoicesPage = () => {
               expiry_date: ''
             }
 
-            // Set the appropriate ID field based on invoice type
+            // Strictly set only the correct ID for each type
             if (poData.invoice_type === 'RM') {
-              baseItem.raw_material_id = item.raw_material_id || item.medicine_id
-              baseItem.raw_material_name = item.raw_material_name || item.medicine_name
+              baseItem.raw_material_id = item.raw_material_id ? item.raw_material_id : ''
+              baseItem.raw_material_name = item.raw_material_name || ''
             } else if (poData.invoice_type === 'PM') {
-              baseItem.packing_material_id = item.packing_material_id || item.medicine_id
-              baseItem.packing_material_name = item.packing_material_name || item.medicine_name
+              baseItem.packing_material_id = item.packing_material_id ? item.packing_material_id : ''
+              baseItem.packing_material_name = item.packing_material_name || ''
             } else {
-              baseItem.medicine_id = item.medicine_id
-              baseItem.medicine_name = item.medicine_name
+              baseItem.medicine_id = item.medicine_id ? item.medicine_id : ''
+              baseItem.medicine_name = item.medicine_name || ''
             }
 
             return baseItem
@@ -553,17 +563,16 @@ const InvoicesPage = () => {
 
               // Set the appropriate ID and name based on PO type
               if (po.po_type === 'RM') {
-                baseItem.raw_material_id = item.raw_material_id ? Number(item.raw_material_id) : null
-                baseItem.raw_material_name = item.raw_material?.rm_name
-                console.log('RM Item:', item.raw_material_id, item.raw_material?.rm_name)
+                baseItem.raw_material_id = item.raw_material_id ? Number(item.raw_material_id) : ''
+                baseItem.raw_material_name = item.raw_material?.rm_name || ''
+                // Do not fallback to medicine_id
               } else if (po.po_type === 'PM') {
-                baseItem.packing_material_id = item.packing_material_id ? Number(item.packing_material_id) : null
-                baseItem.packing_material_name = item.packing_material?.pm_name
-                console.log('PM Item:', item.packing_material_id, item.packing_material?.pm_name)
+                baseItem.packing_material_id = item.packing_material_id ? Number(item.packing_material_id) : ''
+                baseItem.packing_material_name = item.packing_material?.pm_name || ''
+                // Do not fallback to medicine_id
               } else {
-                baseItem.medicine_id = item.medicine_id ? Number(item.medicine_id) : null
-                baseItem.medicine_name = item.medicine?.medicine_name
-                console.log('FG Item:', item.medicine_id, item.medicine?.medicine_name)
+                baseItem.medicine_id = item.medicine_id ? Number(item.medicine_id) : ''
+                baseItem.medicine_name = item.medicine?.medicine_name || ''
               }
 
               return baseItem
@@ -676,7 +685,13 @@ const InvoicesPage = () => {
         total_amount: createFormData.total_amount,
         remarks: createFormData.remarks,
         items: createFormData.items.map(item => ({
-          medicine_id: parseInt(item.medicine_id),
+          ...(createFormData.invoice_type === 'RM' ? {
+            raw_material_id: parseInt(item.raw_material_id)
+          } : createFormData.invoice_type === 'PM' ? {
+            packing_material_id: parseInt(item.packing_material_id)
+          } : {
+            medicine_id: parseInt(item.medicine_id)
+          }),
           shipped_quantity: parseFloat(item.shipped_quantity),
           unit_price: parseFloat(item.unit_price),
           tax_rate: parseFloat(item.tax_rate),
@@ -702,40 +717,53 @@ const InvoicesPage = () => {
   }
 
   const handleEditClick = (invoice) => {
-    setEditingInvoice(invoice)
-    openEditForm(invoice.id)
-    setEditFormData({
-      invoice_number: invoice.invoice_number,
-      invoice_date: invoice.invoice_date,
-      po_id: invoice.po_id,
-      dispatch_note_number: invoice.dispatch_note_number || '',
-      dispatch_date: invoice.dispatch_date || '',
-      warehouse_location: invoice.warehouse_location || '',
-      warehouse_received_by: invoice.warehouse_received_by || '',
-      subtotal: invoice.subtotal,
-      tax_amount: invoice.tax_amount,
-      total_amount: invoice.total_amount,
-      remarks: invoice.remarks || '',
-      items: invoice.items.map(item => ({
-        medicine_id: item.medicine_id || null,
-        raw_material_id: item.raw_material_id || null,
-        packing_material_id: item.packing_material_id || null,
-        medicine_name: item.medicine?.medicine_name || 
-                       item.raw_material?.rm_name || 
-                       item.packing_material?.pm_name || 
-                       'N/A',
-        shipped_quantity: item.shipped_quantity,
-        unit_price: item.unit_price,
-        tax_rate: item.tax_rate,
-        gst_rate: item.gst_rate || 0,
-        hsn_code: item.hsn_code || '',
-        batch_number: item.batch_number || '',
-        manufacturing_date: item.manufacturing_date || '',
-        expiry_date: item.expiry_date || '',
-        remarks: item.remarks || ''
-      }))
+    api.get('/api/po/').then(posRes => {
+      if (posRes.data.success) {
+        setPos(posRes.data.data)
+      }
+      setEditingInvoice(invoice)
+      openEditForm(invoice.id)
+      setEditFormData({
+        invoice_number: invoice.invoice_number,
+        invoice_date: invoice.invoice_date,
+        po_id: invoice.po_id,
+        dispatch_note_number: invoice.dispatch_note_number || '',
+        dispatch_date: invoice.dispatch_date || '',
+        warehouse_location: invoice.warehouse_location || '',
+        warehouse_received_by: invoice.warehouse_received_by || '',
+        subtotal: invoice.subtotal,
+        tax_amount: invoice.tax_amount,
+        total_amount: invoice.total_amount,
+        remarks: invoice.remarks || '',
+        items: invoice.items.map(item => ({
+          medicine_id: item.medicine_id || null,
+          raw_material_id: item.raw_material_id || null,
+          packing_material_id: item.packing_material_id || null,
+          medicine_name: item.medicine?.medicine_name || 
+                         item.raw_material?.rm_name || 
+                         item.packing_material?.pm_name || 
+                         'N/A',
+          shipped_quantity: item.shipped_quantity,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate,
+          gst_rate: item.gst_rate || 0,
+          hsn_code: item.hsn_code || '',
+          batch_number: item.batch_number || '',
+          manufacturing_date: item.manufacturing_date || '',
+          expiry_date: item.expiry_date || '',
+          remarks: item.remarks || ''
+        }))
+      })
+      setEditDialogOpen(true)
+      // Ensure PO number and invoice_type are set in editFormData
+      if (invoice.po_id) {
+        setEditFormData(prev => ({
+          ...prev,
+          po_id: invoice.po_id,
+          invoice_type: invoice.invoice_type || '',
+        }))
+      }
     })
-    setEditDialogOpen(true)
   }
 
   const handleEditClose = () => {
@@ -1086,359 +1114,120 @@ const InvoicesPage = () => {
         </Alert>
       </Snackbar>
 
-      {/* Edit Invoice Dialog */}
-      <Dialog open={editDialogOpen} onClose={handleEditClose} maxWidth="lg" fullWidth>
+
+      {/* Unified Invoice Dialog for Create/Edit */}
+      <Dialog open={createDialogOpen || editDialogOpen} onClose={createDialogOpen ? handleCreateClose : handleEditClose} maxWidth="lg" fullWidth>
         <DialogTitle>
-          Edit Invoice: {editingInvoice?.invoice_number}
+          {'Create New Invoice'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
-            {/* Invoice Info */}
-            <Alert severity="info" sx={{ mb: 3 }}>
-              <Typography variant="body2">
-                <strong>PO:</strong> {editingInvoice?.po?.po_number} | 
-                <strong> Type:</strong> {editingInvoice?.invoice_type} | 
-                <strong> Vendor:</strong> {editingInvoice?.vendor?.vendor_name}
-              </Typography>
-            </Alert>
-
-            {/* Basic Fields */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   label="Invoice Number"
-                  value={editFormData.invoice_number}
-                  onChange={(e) => handleEditFormChange('invoice_number', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Invoice Date"
-                  type="date"
-                  value={editFormData.invoice_date}
-                  onChange={(e) => handleEditFormChange('invoice_date', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  required
-                />
-              </Grid>
-            </Grid>
-
-            {/* Dispatch and Warehouse Details - Available for all invoice types */}
-            <>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {editingInvoice?.invoice_type === 'FG'
-                  ? 'Finished Goods: Update dispatch note details and warehouse location'
-                  : 'Optional: Update dispatch and warehouse details if applicable'}
-              </Alert>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Dispatch Note Number"
-                    value={editFormData.dispatch_note_number}
-                    onChange={(e) => handleEditFormChange('dispatch_note_number', e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Dispatch Date"
-                    type="date"
-                    value={editFormData.dispatch_date}
-                    onChange={(e) => handleEditFormChange('dispatch_date', e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Warehouse Location"
-                    value={editFormData.warehouse_location}
-                    onChange={(e) => handleEditFormChange('warehouse_location', e.target.value)}
-                    helperText="Where goods are stored in warehouse"
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Received By (Warehouse Person)"
-                    value={editFormData.warehouse_received_by}
-                    onChange={(e) => handleEditFormChange('warehouse_received_by', e.target.value)}
-                    helperText="Who received the goods"
-                  />
-                </Grid>
-              </Grid>
-            </>
-
-            {/* Invoice Items */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Invoice Items</Typography>
-              <Button
-                startIcon={<AddIcon />}
-                variant="outlined"
-                size="small"
-                onClick={handleAddItem}
-              >
-                Add Item
-              </Button>
-            </Box>
-            <TableContainer component={Paper} variant="outlined" sx={{ mb: 3, maxHeight: 400 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Medicine</TableCell>
-                    <TableCell align="right">Qty Ordered (PO)</TableCell>
-                    <TableCell align="right">Shipped Qty</TableCell>
-                    <TableCell>Unit Price (₹)</TableCell>
-                    <TableCell>Tax %</TableCell>
-                    <TableCell>Batch #</TableCell>
-                    <TableCell>Expiry Date</TableCell>
-                    <TableCell align="right">Line Total (₹)</TableCell>
-                    <TableCell align="center">Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {editFormData.items.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        {item.medicine_id ? (
-                          <Typography variant="body2">{item.medicine_name}</Typography>
-                        ) : (
-                          <FormControl size="small" fullWidth>
-                            <Select
-                              value={item.medicine_id}
-                              onChange={(e) => handleMedicineSelect(index, e.target.value)}
-                              displayEmpty
-                            >
-                              <MenuItem value="">
-                                <em>Select Medicine</em>
-                              </MenuItem>
-                              {medicines.map(med => (
-                                <MenuItem key={med.id} value={med.id}>
-                                  {med.medicine_name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
-                          {item.ordered_quantity ? parseFloat(item.ordered_quantity).toLocaleString('en-IN') : '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={item.shipped_quantity}
-                          onChange={(e) => handleEditItemChange(index, 'shipped_quantity', e.target.value)}
-                          inputProps={{ min: 0, step: 0.01 }}
-                          sx={{ width: 100 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={item.unit_price}
-                          onChange={(e) => handleEditItemChange(index, 'unit_price', e.target.value)}
-                          inputProps={{ min: 0, step: 0.01 }}
-                          sx={{ width: 100 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={item.tax_rate}
-                          onChange={(e) => handleEditItemChange(index, 'tax_rate', e.target.value)}
-                          inputProps={{ min: 0, max: 100, step: 0.01 }}
-                          sx={{ width: 80 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          value={item.batch_number}
-                          onChange={(e) => handleEditItemChange(index, 'batch_number', e.target.value)}
-                          sx={{ width: 120 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="date"
-                          size="small"
-                          value={item.expiry_date}
-                          onChange={(e) => handleEditItemChange(index, 'expiry_date', e.target.value)}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{ width: 150 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2" fontWeight="medium">
-                          ₹{(item.total_with_tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleRemoveItem(index)}
-                          disabled={editFormData.items.length === 1}
-                        >
-                          <RemoveIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* Totals */}
-            <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="body2" color="text.secondary">Subtotal:</Typography>
-                  <Typography variant="h6">₹{editFormData.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="body2" color="text.secondary">Tax Amount:</Typography>
-                  <Typography variant="h6">₹{editFormData.tax_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="body2" color="text.secondary">Total Amount:</Typography>
-                  <Typography variant="h6" color="primary.main">₹{editFormData.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Remarks */}
-            <TextField
-              fullWidth
-              label="Remarks"
-              multiline
-              rows={2}
-              value={editFormData.remarks}
-              onChange={(e) => handleEditFormChange('remarks', e.target.value)}
-              sx={{ mt: 2 }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleEditClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleEditSubmit}
-            variant="contained"
-            color="primary"
-            disabled={submitting || !editFormData.invoice_number || editFormData.items.length === 0}
-          >
-            {submitting ? <CircularProgress size={24} /> : 'Update Invoice'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Create Invoice Dialog */}
-      <Dialog open={createDialogOpen} onClose={handleCreateClose} maxWidth="lg" fullWidth>
-        <DialogTitle>Create New Invoice</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Invoice Number"
-                  value={createFormData.invoice_number}
-                  onChange={(e) => handleCreateFormChange('invoice_number', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Invoice Date"
-                  type="date"
-                  value={createFormData.invoice_date}
-                  onChange={(e) => handleCreateFormChange('invoice_date', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
+                  value={editDialogOpen ? editFormData.invoice_number : createFormData.invoice_number}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('invoice_number', e.target.value) : handleCreateFormChange('invoice_number', e.target.value))}
                   required
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <FormControl fullWidth required>
-                  <InputLabel>Invoice Type</InputLabel>
-                  <Select
-                    value={createFormData.invoice_type}
-                    onChange={(e) => handleCreateFormChange('invoice_type', e.target.value)}
-                    label="Invoice Type"
-                  >
-                    <MenuItem value="RM">Raw Materials (RM)</MenuItem>
-                    <MenuItem value="PM">Packing Materials (PM)</MenuItem>
-                    <MenuItem value="FG">Finished Goods (FG)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <FormControl fullWidth required>
-                  <InputLabel>Vendor</InputLabel>
-                  <Select
-                    value={createFormData.vendor_id}
-                    onChange={(e) => handleCreateFormChange('vendor_id', e.target.value)}
-                    label="Vendor"
-                  >
-                    <MenuItem value=""><em>Select Vendor</em></MenuItem>
-                    {vendors.map(v => (
-                      <MenuItem key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Invoice Date"
+                  type="date"
+                  value={editDialogOpen ? editFormData.invoice_date : createFormData.invoice_date}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('invoice_date', e.target.value) : handleCreateFormChange('invoice_date', e.target.value))}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
-                  <InputLabel>PO (Optional - Auto-fills form)</InputLabel>
+                  <InputLabel>PO Number</InputLabel>
                   <Select
-                    value={createFormData.po_id || ''}
-                    onChange={(e) => handleCreateFormChange('po_id', e.target.value)}
-                    label="PO (Optional - Auto-fills form)"
+                    label="PO Number"
+                    value={editDialogOpen ? (editFormData.po_id || '') : (createFormData.po_id || '')}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (editDialogOpen) {
+                        handleEditFormChange('po_id', value)
+                        // Optionally: fetch PO details and update items/vendor/type in edit mode
+                      } else {
+                        handleCreateFormChange('po_id', value)
+                        // Existing logic already fetches PO details and updates form
+                      }
+                    }}
                   >
-                    <MenuItem value=""><em>None</em></MenuItem>
-                    {pos
-                      .filter(po => 
-                        // Only show POs that have been SENT to vendor
-                        po.status === 'SENT' &&
-                        // Match invoice type if selected
-                        (!createFormData.invoice_type || po.po_type === createFormData.invoice_type)
-                      )
-                      .map(po => (
-                        <MenuItem key={po.id} value={po.id}>
-                          {po.po_number} - {po.vendor?.vendor_name} ({po.status})
-                        </MenuItem>
-                      ))
-                    }
+                    <MenuItem value=""><em>Select PO</em></MenuItem>
+                    {(() => {
+                      // Show SENT or CLOSED POs in both modes
+                      const allowedStatuses = ['SENT', 'CLOSED'];
+                      let filteredPOs = pos.filter(po => allowedStatuses.includes(po.status));
+                      // Always include the assigned PO if missing
+                      let assignedPoId = editDialogOpen ? editFormData.po_id : createFormData.po_id;
+                      if (assignedPoId && !filteredPOs.some(po => po.id === assignedPoId)) {
+                        const assignedPO = pos.find(po => po.id === assignedPoId);
+                        if (assignedPO) filteredPOs = [...filteredPOs, assignedPO];
+                      }
+                      return filteredPOs.map(po => (
+                        <MenuItem key={po.id} value={po.id}>{po.po_number} ({po.po_type})</MenuItem>
+                      ));
+                    })()}
                   </Select>
                 </FormControl>
               </Grid>
             </Grid>
 
-            {/* Auto-population alert when PO is selected */}
-            {createFormData.po_id && createFormData.items?.length > 0 && (
+            {/* Invoice Type and Vendor selection (only for create) */}
+            {!editDialogOpen && (
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Invoice Type</InputLabel>
+                    <Select
+                      value={createFormData.invoice_type}
+                      onChange={(e) => handleCreateFormChange('invoice_type', e.target.value)}
+                      label="Invoice Type"
+                    >
+                      <MenuItem value="RM">Raw Materials (RM)</MenuItem>
+                      <MenuItem value="PM">Packing Materials (PM)</MenuItem>
+                      <MenuItem value="FG">Finished Goods (FG)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Vendor</InputLabel>
+                    <Select
+                      value={createFormData.vendor_id}
+                      onChange={(e) => handleCreateFormChange('vendor_id', e.target.value)}
+                      label="Vendor"
+                    >
+                      <MenuItem value=""><em>Select Vendor</em></MenuItem>
+                      {vendors.map(v => (
+                        <MenuItem key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            )}
+
+            {/* Auto-population alert when PO is selected (create only) */}
+            {!editDialogOpen && createFormData.po_id && createFormData.items?.length > 0 && (
               <Alert severity="success" sx={{ mb: 2 }}>
                 <strong>Invoice pre-filled from PO!</strong> Vendor, type, and {createFormData.items.length} item(s) loaded. 
                 Please enter unit prices and verify quantities before saving.
               </Alert>
             )}
 
-            {/* Dispatch and Warehouse Details - Available for all invoice types */}
+            {/* Dispatch and Warehouse Details */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12}>
                 <Alert severity="info">
-                  {createFormData.invoice_type === 'FG' 
+                  {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' 
                     ? 'Finished Goods: Enter dispatch and warehouse details'
                     : 'Optional: Enter dispatch and warehouse details if applicable'}
                 </Alert>
@@ -1447,8 +1236,8 @@ const InvoicesPage = () => {
                 <TextField
                   fullWidth
                   label="Dispatch Note Number"
-                  value={createFormData.dispatch_note_number}
-                  onChange={(e) => handleCreateFormChange('dispatch_note_number', e.target.value)}
+                  value={editDialogOpen ? editFormData.dispatch_note_number : createFormData.dispatch_note_number}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('dispatch_note_number', e.target.value) : handleCreateFormChange('dispatch_note_number', e.target.value))}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -1456,8 +1245,8 @@ const InvoicesPage = () => {
                   fullWidth
                   label="Dispatch Date"
                   type="date"
-                  value={createFormData.dispatch_date}
-                  onChange={(e) => handleCreateFormChange('dispatch_date', e.target.value)}
+                  value={editDialogOpen ? editFormData.dispatch_date : createFormData.dispatch_date}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('dispatch_date', e.target.value) : handleCreateFormChange('dispatch_date', e.target.value))}
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
@@ -1465,35 +1254,40 @@ const InvoicesPage = () => {
                 <TextField
                   fullWidth
                   label="Warehouse Location"
-                  value={createFormData.warehouse_location}
-                  onChange={(e) => handleCreateFormChange('warehouse_location', e.target.value)}
+                  value={editDialogOpen ? editFormData.warehouse_location : createFormData.warehouse_location}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('warehouse_location', e.target.value) : handleCreateFormChange('warehouse_location', e.target.value))}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   label="Received By"
-                  value={createFormData.warehouse_received_by}
-                  onChange={(e) => handleCreateFormChange('warehouse_received_by', e.target.value)}
+                  value={editDialogOpen ? editFormData.warehouse_received_by : createFormData.warehouse_received_by}
+                  onChange={(e) => (editDialogOpen ? handleEditFormChange('warehouse_received_by', e.target.value) : handleCreateFormChange('warehouse_received_by', e.target.value))}
                 />
               </Grid>
             </Grid>
 
+            {/* Invoice Items */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Invoice Items</Typography>
-              <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={handleCreateAddItem}>
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                size="small"
+                onClick={editDialogOpen ? handleAddItem : handleCreateAddItem}
+              >
                 Add Item
               </Button>
             </Box>
-
             <TableContainer component={Paper} variant="outlined" sx={{ mb: 3, maxHeight: 400 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
                     <TableCell>
-                      {createFormData.invoice_type === 'RM' && 'Raw Material *'}
-                      {createFormData.invoice_type === 'PM' && 'Packing Material *'}
-                      {createFormData.invoice_type === 'FG' && 'Medicine *'}
+                      {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && 'Raw Material *'}
+                      {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' && 'Packing Material *'}
+                      {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' && 'Medicine *'}
                     </TableCell>
                     <TableCell>HSN Code</TableCell>
                     <TableCell align="right">Qty Ordered (PO)</TableCell>
@@ -1509,21 +1303,14 @@ const InvoicesPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {createFormData.items.map((item, index) => {
-                    // Debug logging
-                    if (createFormData.invoice_type === 'RM') {
-                      console.log(`Item ${index} - raw_material_id:`, item.raw_material_id, typeof item.raw_material_id)
-                      console.log(`Available raw materials:`, rawMaterials.map(rm => ({ id: rm.id, type: typeof rm.id, name: rm.rm_name })))
-                    }
-                    
-                    return (
+                  {(editDialogOpen ? editFormData.items : createFormData.items).map((item, index) => (
                     <TableRow key={index}>
                       <TableCell>
                         <FormControl size="small" fullWidth required>
-                          {createFormData.invoice_type === 'RM' && (
+                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && (
                             <Select
                               value={item.raw_material_id || ''}
-                              onChange={(e) => handleCreateItemChange(index, 'raw_material_id', e.target.value)}
+                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'raw_material_id', e.target.value) : handleCreateItemChange(index, 'raw_material_id', e.target.value))}
                               displayEmpty
                             >
                               <MenuItem value=""><em>Select Raw Material</em></MenuItem>
@@ -1532,10 +1319,10 @@ const InvoicesPage = () => {
                               ))}
                             </Select>
                           )}
-                          {createFormData.invoice_type === 'PM' && (
+                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' && (
                             <Select
                               value={item.packing_material_id || ''}
-                              onChange={(e) => handleCreateItemChange(index, 'packing_material_id', e.target.value)}
+                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'packing_material_id', e.target.value) : handleCreateItemChange(index, 'packing_material_id', e.target.value))}
                               displayEmpty
                             >
                               <MenuItem value=""><em>Select Packing Material</em></MenuItem>
@@ -1544,10 +1331,10 @@ const InvoicesPage = () => {
                               ))}
                             </Select>
                           )}
-                          {createFormData.invoice_type === 'FG' && (
+                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' && (
                             <Select
                               value={item.medicine_id || ''}
-                              onChange={(e) => handleCreateItemChange(index, 'medicine_id', e.target.value)}
+                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'medicine_id', e.target.value) : handleCreateItemChange(index, 'medicine_id', e.target.value))}
                               displayEmpty
                             >
                               <MenuItem value=""><em>Select Medicine</em></MenuItem>
@@ -1563,7 +1350,7 @@ const InvoicesPage = () => {
                           size="small"
                           placeholder="HSN"
                           value={item.hsn_code}
-                          onChange={(e) => handleCreateItemChange(index, 'hsn_code', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'hsn_code', e.target.value) : handleCreateItemChange(index, 'hsn_code', e.target.value))}
                           sx={{ width: 100 }}
                         />
                       </TableCell>
@@ -1577,7 +1364,7 @@ const InvoicesPage = () => {
                           type="number"
                           size="small"
                           value={item.shipped_quantity}
-                          onChange={(e) => handleCreateItemChange(index, 'shipped_quantity', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'shipped_quantity', e.target.value) : handleCreateItemChange(index, 'shipped_quantity', e.target.value))}
                           inputProps={{ min: 0, step: 0.01 }}
                           sx={{ width: 100 }}
                         />
@@ -1587,7 +1374,7 @@ const InvoicesPage = () => {
                           type="number"
                           size="small"
                           value={item.unit_price}
-                          onChange={(e) => handleCreateItemChange(index, 'unit_price', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'unit_price', e.target.value) : handleCreateItemChange(index, 'unit_price', e.target.value))}
                           inputProps={{ min: 0, step: 0.01 }}
                           sx={{ width: 100 }}
                         />
@@ -1597,7 +1384,7 @@ const InvoicesPage = () => {
                           type="number"
                           size="small"
                           value={item.tax_rate}
-                          onChange={(e) => handleCreateItemChange(index, 'tax_rate', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'tax_rate', e.target.value) : handleCreateItemChange(index, 'tax_rate', e.target.value))}
                           inputProps={{ min: 0, max: 100, step: 0.01 }}
                           sx={{ width: 80 }}
                         />
@@ -1608,7 +1395,7 @@ const InvoicesPage = () => {
                           size="small"
                           placeholder="GST %"
                           value={item.gst_rate}
-                          onChange={(e) => handleCreateItemChange(index, 'gst_rate', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'gst_rate', e.target.value) : handleCreateItemChange(index, 'gst_rate', e.target.value))}
                           inputProps={{ min: 0, max: 100, step: 0.01 }}
                           sx={{ width: 80 }}
                         />
@@ -1617,7 +1404,7 @@ const InvoicesPage = () => {
                         <TextField
                           size="small"
                           value={item.batch_number}
-                          onChange={(e) => handleCreateItemChange(index, 'batch_number', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'batch_number', e.target.value) : handleCreateItemChange(index, 'batch_number', e.target.value))}
                           sx={{ width: 120 }}
                         />
                       </TableCell>
@@ -1627,7 +1414,7 @@ const InvoicesPage = () => {
                           size="small"
                           placeholder="Mfg Date"
                           value={item.manufacturing_date}
-                          onChange={(e) => handleCreateItemChange(index, 'manufacturing_date', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'manufacturing_date', e.target.value) : handleCreateItemChange(index, 'manufacturing_date', e.target.value))}
                           InputLabelProps={{ shrink: true }}
                           sx={{ width: 140 }}
                         />
@@ -1637,29 +1424,28 @@ const InvoicesPage = () => {
                           type="date"
                           size="small"
                           value={item.expiry_date}
-                          onChange={(e) => handleCreateItemChange(index, 'expiry_date', e.target.value)}
+                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'expiry_date', e.target.value) : handleCreateItemChange(index, 'expiry_date', e.target.value))}
                           InputLabelProps={{ shrink: true }}
                           sx={{ width: 150 }}
                         />
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" fontWeight="medium">
-                          ₹{(item.total_price || 0).toFixed(2)}
+                          ₹{(item.total_price || item.total_with_tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => handleCreateRemoveItem(index)}
-                          disabled={createFormData.items.length === 1}
+                          onClick={() => (editDialogOpen ? handleRemoveItem(index) : handleCreateRemoveItem(index))}
+                          disabled={(editDialogOpen ? editFormData.items.length : createFormData.items.length) === 1}
                         >
                           <RemoveIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                    )
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1668,15 +1454,15 @@ const InvoicesPage = () => {
               <Grid container spacing={2}>
                 <Grid item xs={4}>
                   <Typography variant="caption">Subtotal</Typography>
-                  <Typography variant="h6">₹{createFormData.subtotal.toFixed(2)}</Typography>
+                  <Typography variant="h6">₹{(editDialogOpen ? editFormData.subtotal : createFormData.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
                 </Grid>
                 <Grid item xs={4}>
                   <Typography variant="caption">Tax Amount</Typography>
-                  <Typography variant="h6">₹{createFormData.tax_amount.toFixed(2)}</Typography>
+                  <Typography variant="h6">₹{(editDialogOpen ? editFormData.tax_amount : createFormData.tax_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
                 </Grid>
                 <Grid item xs={4}>
                   <Typography variant="caption">Total Amount</Typography>
-                  <Typography variant="h6" color="primary">₹{createFormData.total_amount.toFixed(2)}</Typography>
+                  <Typography variant="h6" color="primary">₹{(editDialogOpen ? editFormData.total_amount : createFormData.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Typography>
                 </Grid>
               </Grid>
             </Paper>
@@ -1686,16 +1472,23 @@ const InvoicesPage = () => {
               label="Remarks"
               multiline
               rows={2}
-              value={createFormData.remarks}
-              onChange={(e) => handleCreateFormChange('remarks', e.target.value)}
+              value={editDialogOpen ? editFormData.remarks : createFormData.remarks}
+              onChange={(e) => (editDialogOpen ? handleEditFormChange('remarks', e.target.value) : handleCreateFormChange('remarks', e.target.value))}
               sx={{ mt: 2 }}
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCreateClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleCreateSubmit} variant="contained" disabled={submitting}>
-            {submitting ? <CircularProgress size={20} /> : 'Create Invoice'}
+          <Button onClick={editDialogOpen ? handleEditClose : handleCreateClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateSubmit}
+            variant="contained"
+            color="primary"
+            disabled={submitting || !(editDialogOpen ? editFormData.invoice_number : createFormData.invoice_number) || (editDialogOpen ? editFormData.items.length : createFormData.items.length) === 0}
+          >
+            {submitting ? <CircularProgress size={24} /> : (editDialogOpen ? 'Update Invoice' : 'Create Invoice')}
           </Button>
         </DialogActions>
       </Dialog>

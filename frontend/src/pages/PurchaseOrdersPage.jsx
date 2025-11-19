@@ -188,7 +188,11 @@ export default function PurchaseOrdersPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Medicine</TableCell>
+                    <TableCell>
+                      {selectedPO.po_type === 'RM' && 'Raw Material'}
+                      {selectedPO.po_type === 'PM' && 'Packing Material'}
+                      {selectedPO.po_type === 'FG' && 'Medicine'}
+                    </TableCell>
                     <TableCell>Ordered Qty</TableCell>
                     <TableCell>Fulfilled Qty</TableCell>
                     <TableCell>Unit</TableCell>
@@ -200,7 +204,11 @@ export default function PurchaseOrdersPage() {
                 <TableBody>
                   {(selectedPO.items || []).map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.medicine?.medicine_name}</TableCell>
+                      <TableCell>
+                        {selectedPO.po_type === 'RM' && (item.raw_material?.rm_name || item.raw_material_id || '-')}
+                        {selectedPO.po_type === 'PM' && (item.packing_material?.pm_name || item.packing_material_id || '-')}
+                        {selectedPO.po_type === 'FG' && (item.medicine?.medicine_name || item.medicine_id || '-')}
+                      </TableCell>
                       <TableCell>{item.ordered_quantity}</TableCell>
                       <TableCell>{item.fulfilled_quantity}</TableCell>
                       <TableCell>{item.unit}</TableCell>

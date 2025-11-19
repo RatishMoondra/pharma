@@ -688,6 +688,11 @@ async def mark_po_pending(
         raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
     if po.status != POStatus.DRAFT:
         raise AppException("Only DRAFT POs can be marked as pending approval", "ERR_VALIDATION", 400)
+
+    # Re-generate PO number to remove DRAFT from number
+    from app.utils.number_generator import generate_po_number
+    new_po_number = generate_po_number(db, po.po_type.value, is_draft=False)
+    po.po_number = new_po_number
     po.status = POStatus.PENDING_APPROVAL
     po.prepared_by = current_user.id
     po.prepared_at = datetime.utcnow()
