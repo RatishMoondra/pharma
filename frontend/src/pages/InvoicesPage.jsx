@@ -1410,8 +1410,8 @@ const InvoicesPage = () => {
                     <MenuItem value=""><em>None</em></MenuItem>
                     {pos
                       .filter(po => 
-                        // Only show POs that can be invoiced
-                        ['APPROVED', 'READY', 'SENT', 'ACKNOWLEDGED', 'OPEN', 'PARTIAL'].includes(po.status) &&
+                        // Only show POs that have been SENT to vendor
+                        po.status === 'SENT' &&
                         // Match invoice type if selected
                         (!createFormData.invoice_type || po.po_type === createFormData.invoice_type)
                       )
