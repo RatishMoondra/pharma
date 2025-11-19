@@ -20,6 +20,7 @@ import ConfigurationPage from './pages/ConfigurationPage'
 import TermsConditionsPage from './pages/TermsConditionsPage'
 import PrivateRoute from './guards/PrivateRoute'
 import Layout from './components/Layout'
+import MaterialBalanceImpactPage from './pages/MaterialBalanceImpactPage'
 
 const theme = createTheme({
   palette: {
@@ -133,6 +134,7 @@ function App() {
               </PrivateRoute>
             } 
           />
+          <Route path="/material-balance-impact" element={<MaterialBalanceImpactPage />} />
         </Route>
       </Routes>
     </ThemeProvider>

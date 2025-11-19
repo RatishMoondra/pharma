@@ -17,6 +17,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ArticleIcon from '@mui/icons-material/Article'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo-pharmaflow.png'
+import BalanceIcon from '@mui/icons-material/Balance'
 
 const drawerWidth = 240
 
@@ -36,8 +37,8 @@ const Sidebar = () => {
     { text: 'EOPA', icon: <ApprovalIcon />, path: '/eopa', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
     { text: 'Purchase Orders (Merged)', icon: <ShoppingCartIcon />, path: '/purchase-orders', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
     { text: 'Invoices', icon: <ReceiptIcon />, path: '/invoices', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'], section: 'workflow' },
-    { text: 'Material Management', icon: <LocalShippingIcon />, path: '/material', roles: ['ADMIN', 'WAREHOUSE_MANAGER'], section: 'workflow' },
     { text: 'Analytics & Insights', icon: <AssessmentIcon />, path: '/analytics', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'], section: 'analytics' },
+    { text: 'Material Balance Impact', icon: <BalanceIcon />, path: '/material-balance-impact', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT'], section: 'analytics' },
     { text: 'System Configuration', icon: <SettingsIcon />, path: '/configuration', roles: ['ADMIN'], section: 'admin' },
     { text: 'Terms & Conditions', icon: <ArticleIcon />, path: '/terms-conditions', roles: ['ADMIN'], section: 'admin' },
   ]

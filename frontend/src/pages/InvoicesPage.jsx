@@ -416,6 +416,7 @@ const InvoicesPage = () => {
     fetchMedicines()
     fetchRawMaterials()
     fetchPackingMaterials()
+    fetchPOsAndVendors() // Ensure vendors are loaded for edit dialog
   }, [])
 
   // Handle incoming PO data from navigation
@@ -1120,8 +1121,24 @@ const InvoicesPage = () => {
       {/* Unified Invoice Dialog for Create/Edit */}
       <Dialog open={createDialogOpen || editDialogOpen} onClose={createDialogOpen ? handleCreateClose : handleEditClose} maxWidth="lg" fullWidth>
         <DialogTitle>
-          {'Create New Invoice'}
+          {editDialogOpen ? 'Edit Invoice' : 'Create New Invoice'}
         </DialogTitle>
+        {editDialogOpen && (
+          <Box sx={{ position: 'absolute', top: 16, right: 32 }}>
+            <Tooltip title="Copy Invoice Details to Clipboard">
+              <IconButton
+                color="primary"
+                onClick={() => {
+                  const invoiceText = JSON.stringify(editFormData, null, 2)
+                  navigator.clipboard.writeText(invoiceText)
+                  setSuccessMessage('Invoice details copied to clipboard!')
+                }}
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1493,7 +1510,7 @@ const InvoicesPage = () => {
             Cancel
           </Button>
           <Button
-            onClick={handleCreateSubmit}
+            onClick={editDialogOpen ? handleEditSubmit : handleCreateSubmit}
             variant="contained"
             color="primary"
             disabled={submitting || !(editDialogOpen ? editFormData.invoice_number : createFormData.invoice_number) || (editDialogOpen ? editFormData.items.length : createFormData.items.length) === 0}

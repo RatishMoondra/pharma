@@ -27,33 +27,7 @@ const MaterialPage = () => {
   const [loading, setLoading] = useState(true)
   const { error, handleApiError, clearError } = useApiError()
 
-  const fetchMaterialReceipts = async () => {
-    try {
-      setLoading(true)
-      const response = await api.get('/api/material/receipts')
-      if (response.data.success) {
-        setReceipts(response.data.data)
-      }
-    } catch (err) {
-      handleApiError(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchMaterialBalance = async () => {
-    try {
-      setLoading(true)
-      const response = await api.get('/api/material/balance')
-      if (response.data.success) {
-        setBalance(response.data.data)
-      }
-    } catch (err) {
-      handleApiError(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  
 
   useEffect(() => {
     if (tab === 0) {

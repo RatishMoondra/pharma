@@ -49,23 +49,75 @@ import {
   Cancel as CancelIcon,
   PictureAsPdf as PictureAsPdfIcon,
   Email as EmailIcon,
+  InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 import { useStableRowEditing } from '../hooks/useStableRowEditing'
+import Tooltip from '@mui/material/Tooltip'
+import axios from 'axios'
 
-const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, onDownloadPDF, onSendEmail, getRowStyle }) => {
+const MaterialBalanceInfo = ({ rawMaterialId, vendorId, manufacturerId }) => {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (rawMaterialId && vendorId && manufacturerId) {
+      setLoading(true)
+      axios
+        .get(
+          `/material-balance/summary/${rawMaterialId}/${vendorId}/${manufacturerId}`
+        )
+        .then((res) => {
+          setSummary(res.data)
+        })
+        .catch(() => setSummary(null))
+        .finally(() => setLoading(false))
+    }
+  }, [rawMaterialId, vendorId, manufacturerId])
+
+  let tooltipContent = loading ? 'Loading...' : 'No data'
+  if (summary && summary.success && summary.data) {
+    const s = summary.data
+    tooltipContent = `Ordered: ${s.total_ordered} | Received: ${s.total_received} | Balance: ${s.total_balance}`
+  }
+
+  return (
+    <Tooltip title={tooltipContent} arrow placement="top">
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          marginLeft: 4,
+        }}
+      >
+        <InfoOutlinedIcon fontSize="small" color="info" />
+      </span>
+    </Tooltip>
+  )
+}
+
+const PORow = ({
+  po,
+  vendors,
+  onVendorUpdate,
+  onInvoiceSubmit,
+  onCreateInvoice,
+  onDownloadPDF,
+  onSendEmail,
+  getRowStyle,
+}) => {
   const [open, setOpen] = useState(false)
   const [tabValue, setTabValue] = useState(0)
   const [editingVendor, setEditingVendor] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState(po.vendor_id)
   const [savingVendor, setSavingVendor] = useState(false)
-  
+
   // Available vendor invoices (from external system/paper)
   const [availableInvoices, setAvailableInvoices] = useState([])
   const [selectedInvoiceNumber, setSelectedInvoiceNumber] = useState('')
   const [selectedInvoiceItems, setSelectedInvoiceItems] = useState([]) // Available invoice items from selected invoice
-  
+
   // Invoice entry state
   const [invoiceData, setInvoiceData] = useState({
     invoice_number: '',
@@ -73,7 +125,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
     subtotal: 0,
     tax_amount: 0,
     total_amount: 0,
-    items: []
+    items: [],
   })
 
   const handleVendorEdit = () => {
@@ -103,28 +155,29 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
     } catch (err) {
       console.error('Failed to fetch invoices:', err)
     }
-    
+
     // Only initialize items if we don't have them yet OR if we're resetting
     if (invoiceData.items.length === 0) {
-      const invoiceItems = po.items?.map(item => {
-        const orderedQty = parseFloat(item.ordered_quantity || 0)
-        const fulfilledQty = parseFloat(item.fulfilled_quantity || 0)
-        return {
-          medicine_id: item.medicine_id,
-          medicine_name: item.medicine?.medicine_name || 'N/A',
-          ordered_quantity: orderedQty,
-          fulfilled_quantity: fulfilledQty,
-          remaining_quantity: orderedQty - fulfilledQty,
-          shipped_quantity: 0,
-          unit_price: 0,
-          tax_rate: 18,
-          batch_number: '',
-          expiry_date: '',
-          line_total: 0,
-          tax_amount: 0,
-          total_with_tax: 0
-        }
-      }) || []
+      const invoiceItems =
+        po.items?.map((item) => {
+          const orderedQty = parseFloat(item.ordered_quantity || 0)
+          const fulfilledQty = parseFloat(item.fulfilled_quantity || 0)
+          return {
+            medicine_id: item.medicine_id,
+            medicine_name: item.medicine?.medicine_name || 'N/A',
+            ordered_quantity: orderedQty,
+            fulfilled_quantity: fulfilledQty,
+            remaining_quantity: orderedQty - fulfilledQty,
+            shipped_quantity: 0,
+            unit_price: 0,
+            tax_rate: 18,
+            batch_number: '',
+            expiry_date: '',
+            line_total: 0,
+            tax_amount: 0,
+            total_with_tax: 0,
+          }
+        }) || []
 
       setInvoiceData({
         invoice_number: '',
@@ -136,42 +189,46 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
         subtotal: 0,
         tax_amount: 0,
         total_amount: 0,
-        items: invoiceItems
+        items: invoiceItems,
       })
     }
   }
 
   const handleInvoiceSelect = (invoiceNumber) => {
     setSelectedInvoiceNumber(invoiceNumber)
-    
+
     if (!invoiceNumber) {
       // Reset to default
       setSelectedInvoiceItems([])
       initializeInvoice()
       return
     }
-    
-    const selectedInv = availableInvoices.find(inv => inv.invoice_number === invoiceNumber)
+
+    const selectedInv = availableInvoices.find(
+      (inv) => inv.invoice_number === invoiceNumber
+    )
     if (!selectedInv) {
       setSelectedInvoiceItems([])
       return
     }
-    
+
     // Store available invoice items for dropdown
     setSelectedInvoiceItems(selectedInv.items || [])
-    
+
     // Map invoice items to PO items
-    const updatedPoItems = invoiceData.items.map(poItem => {
+    const updatedPoItems = invoiceData.items.map((poItem) => {
       // Find matching invoice item by medicine_id
-      const invItem = selectedInv.items?.find(item => item.medicine_id === poItem.medicine_id)
-      
+      const invItem = selectedInv.items?.find(
+        (item) => item.medicine_id === poItem.medicine_id
+      )
+
       if (invItem) {
         const shippedQty = parseFloat(invItem.shipped_quantity || 0)
         const unitPrice = parseFloat(invItem.unit_price || 0)
         const taxRate = parseFloat(invItem.tax_rate || 0)
         const lineTotal = shippedQty * unitPrice
         const taxAmount = lineTotal * (taxRate / 100)
-        
+
         return {
           ...poItem,
           invoice_item_id: invItem.id, // Track which invoice item is mapped
@@ -182,17 +239,23 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
           expiry_date: invItem.expiry_date || '',
           line_total: lineTotal,
           tax_amount: taxAmount,
-          total_with_tax: lineTotal + taxAmount
+          total_with_tax: lineTotal + taxAmount,
         }
       }
-      
+
       return { ...poItem, invoice_item_id: null } // No automatic mapping
     })
-    
-    const subtotal = updatedPoItems.reduce((sum, item) => sum + (item.line_total || 0), 0)
-    const tax_amount = updatedPoItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0)
+
+    const subtotal = updatedPoItems.reduce(
+      (sum, item) => sum + (item.line_total || 0),
+      0
+    )
+    const tax_amount = updatedPoItems.reduce(
+      (sum, item) => sum + (item.tax_amount || 0),
+      0
+    )
     const total_amount = subtotal + tax_amount
-    
+
     setInvoiceData({
       invoice_number: selectedInv.invoice_number,
       invoice_date: selectedInv.invoice_date,
@@ -203,28 +266,28 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
       subtotal,
       tax_amount,
       total_amount,
-      items: updatedPoItems
+      items: updatedPoItems,
     })
   }
 
   const handleInvoiceItemMapping = (poItemIndex, invoiceItemId) => {
     const updatedItems = [...invoiceData.items]
     const poItem = updatedItems[poItemIndex]
-    
+
     if (!invoiceItemId) {
       // Clear mapping
       poItem.invoice_item_id = null
     } else {
       // Find the selected invoice item
-      const invItem = selectedInvoiceItems.find(item => item.id === parseInt(invoiceItemId))
-      
+      const invItem = selectedInvoiceItems.find((item) => item.id === parseInt(invoiceItemId))
+
       if (invItem) {
         const shippedQty = parseFloat(invItem.shipped_quantity || 0)
         const unitPrice = parseFloat(invItem.unit_price || 0)
         const taxRate = parseFloat(invItem.tax_rate || 0)
         const lineTotal = shippedQty * unitPrice
         const taxAmount = lineTotal * (taxRate / 100)
-        
+
         poItem.invoice_item_id = invItem.id
         poItem.shipped_quantity = shippedQty
         poItem.unit_price = unitPrice
@@ -236,9 +299,15 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
         poItem.total_with_tax = lineTotal + taxAmount
       }
     }
-    
-    const subtotal = updatedItems.reduce((sum, item) => sum + (item.line_total || 0), 0)
-    const tax_amount = updatedItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0)
+
+    const subtotal = updatedItems.reduce(
+      (sum, item) => sum + (item.line_total || 0),
+      0
+    )
+    const tax_amount = updatedItems.reduce(
+      (sum, item) => sum + (item.tax_amount || 0),
+      0
+    )
     const total_amount = subtotal + tax_amount
 
     setInvoiceData({
@@ -246,7 +315,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
       items: updatedItems,
       subtotal,
       tax_amount,
-      total_amount
+      total_amount,
     })
   }
 
@@ -259,14 +328,20 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
       const shippedQty = parseFloat(item.shipped_quantity || 0)
       const unitPrice = parseFloat(item.unit_price || 0)
       const taxRate = parseFloat(item.tax_rate || 0)
-      
+
       item.line_total = shippedQty * unitPrice
       item.tax_amount = item.line_total * (taxRate / 100)
       item.total_with_tax = item.line_total + item.tax_amount
     }
 
-    const subtotal = updatedItems.reduce((sum, item) => sum + (item.line_total || 0), 0)
-    const tax_amount = updatedItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0)
+    const subtotal = updatedItems.reduce(
+      (sum, item) => sum + (item.line_total || 0),
+      0
+    )
+    const tax_amount = updatedItems.reduce(
+      (sum, item) => sum + (item.tax_amount || 0),
+      0
+    )
     const total_amount = subtotal + tax_amount
 
     setInvoiceData({
@@ -274,7 +349,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
       items: updatedItems,
       subtotal,
       tax_amount,
-      total_amount
+      total_amount,
     })
   }
 
@@ -287,7 +362,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
       subtotal: 0,
       tax_amount: 0,
       total_amount: 0,
-      items: []
+      items: [],
     })
     setSelectedInvoiceNumber('')
     setSelectedInvoiceItems([])
@@ -302,10 +377,10 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
 
   return (
     <>
-      <TableRow 
-        sx={{ 
+      <TableRow
+        sx={{
           ...getRowStyle(po.id),
-          ...(open ? { bgcolor: 'action.selected' } : {})
+          ...(open ? { bgcolor: 'action.selected' } : {}),
         }}
       >
         <TableCell>
@@ -321,20 +396,28 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
         <TableCell>
           <Chip
             icon={
-              po.po_type === 'FG' ? <BusinessIcon fontSize="small" /> :
-              po.po_type === 'RM' ? <Inventory2Icon fontSize="small" /> :
-              po.po_type === 'PM' ? <LocalShippingIcon fontSize="small" /> : null
+              po.po_type === 'FG' ? (
+                <BusinessIcon fontSize="small" />
+              ) : po.po_type === 'RM' ? (
+                <Inventory2Icon fontSize="small" />
+              ) : po.po_type === 'PM' ? (
+                <LocalShippingIcon fontSize="small" />
+              ) : null
             }
             label={
-              po.po_type === 'FG' ? 'Finished Goods' :
-              po.po_type === 'RM' ? 'Raw Materials' :
-              po.po_type === 'PM' ? 'Packing Materials' : po.po_type
+              po.po_type === 'FG' ? (
+                'Finished Goods'
+              ) : po.po_type === 'RM' ? (
+                'Raw Materials'
+              ) : po.po_type === 'PM' ? (
+                'Packing Materials'
+              ) : (
+                po.po_type
+              )
             }
             size="small"
             color={
-              po.po_type === 'FG' ? 'primary' :
-              po.po_type === 'RM' ? 'success' :
-              po.po_type === 'PM' ? 'warning' : 'default'
+              po.po_type === 'FG' ? 'primary' : po.po_type === 'RM' ? 'success' : po.po_type === 'PM' ? 'warning' : 'default'
             }
           />
         </TableCell>
@@ -348,32 +431,40 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                   disabled={savingVendor}
                 >
                   {vendors
-                    .filter(v => 
-                      (po.po_type === 'FG' && v.vendor_type === 'MANUFACTURER') ||
-                      (po.po_type === 'RM' && v.vendor_type === 'RM') ||
-                      (po.po_type === 'PM' && v.vendor_type === 'PM')
+                    .filter(
+                      (v) =>
+                        (po.po_type === 'FG' && v.vendor_type === 'MANUFACTURER') ||
+                        (po.po_type === 'RM' && v.vendor_type === 'RM') ||
+                        (po.po_type === 'PM' && v.vendor_type === 'PM')
                     )
-                    .map(vendor => (
+                    .map((vendor) => (
                       <MenuItem key={vendor.id} value={vendor.id}>
                         {vendor.vendor_name} ({vendor.vendor_code})
                       </MenuItem>
-                    ))
-                  }
+                    ))}
                 </Select>
               </FormControl>
-              <IconButton size="small" onClick={handleVendorSave} disabled={savingVendor} color="success">
+              <IconButton
+                size="small"
+                onClick={handleVendorSave}
+                disabled={savingVendor}
+                color="success"
+              >
                 <SaveIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={handleVendorCancel} disabled={savingVendor} color="error">
+              <IconButton
+                size="small"
+                onClick={handleVendorCancel}
+                disabled={savingVendor}
+                color="error"
+              >
                 <CancelIcon fontSize="small" />
               </IconButton>
             </Box>
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box>
-                <Typography variant="body2">
-                  {po.vendor?.vendor_name || 'N/A'}
-                </Typography>
+                <Typography variant="body2">{po.vendor?.vendor_name || 'N/A'}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   {po.vendor?.vendor_code || ''}
                 </Typography>
@@ -391,9 +482,9 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
         </TableCell>
         <TableCell align="right">
           <Typography variant="body2" fontWeight="medium">
-            {parseFloat(po.total_ordered_qty || 0).toLocaleString('en-IN', { 
+            {parseFloat(po.total_ordered_qty || 0).toLocaleString('en-IN', {
               minimumFractionDigits: 2,
-              maximumFractionDigits: 2 
+              maximumFractionDigits: 2,
             })}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -405,8 +496,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
             label={po.status || 'OPEN'}
             size="small"
             color={
-              po.status === 'CLOSED' ? 'success' :
-              po.status === 'PARTIAL' ? 'warning' : 'default'
+              po.status === 'CLOSED' ? 'success' : po.status === 'PARTIAL' ? 'warning' : 'default'
             }
           />
         </TableCell>
@@ -415,8 +505,8 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
         </TableCell>
         <TableCell align="right">
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color="success"
               onClick={() => onCreateInvoice(po)}
               title="Create Invoice from PO"
@@ -424,16 +514,16 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
             >
               <ReceiptIcon fontSize="small" />
             </IconButton>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color="error"
               onClick={() => onDownloadPDF(po)}
               title="Download PDF"
             >
               <PictureAsPdfIcon fontSize="small" />
             </IconButton>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color="primary"
               onClick={() => onSendEmail(po)}
               title="Send Email"
@@ -451,9 +541,9 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
             <Box sx={{ m: 2 }}>
               <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
                 <Tab label="PO Line Items" />
-                <Tab 
-                  label="Enter Invoice" 
-                  icon={<ReceiptIcon />} 
+                <Tab
+                  label="Enter Invoice"
+                  icon={<ReceiptIcon />}
                   iconPosition="start"
                   disabled={po.status === 'CLOSED'}
                 />
@@ -485,13 +575,13 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                         const orderedQty = parseFloat(item.ordered_quantity || 0)
                         const fulfilledQty = parseFloat(item.fulfilled_quantity || 0)
                         const fulfillmentPercent = orderedQty > 0 ? (fulfilledQty / orderedQty) * 100 : 0
-                        
+
                         return (
-                          <TableRow 
+                          <TableRow
                             key={idx}
-                            sx={{ 
+                            sx={{
                               bgcolor: idx % 2 === 0 ? 'white' : 'grey.100',
-                              '&:hover': { bgcolor: 'primary.50' }
+                              '&:hover': { bgcolor: 'primary.50' },
                             }}
                           >
                             <TableCell>
@@ -500,9 +590,9 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              <Chip 
-                                label={item.hsn_code || item.medicine?.hsn_code || 'N/A'} 
-                                size="small" 
+                              <Chip
+                                label={item.hsn_code || item.medicine?.hsn_code || 'N/A'}
+                                size="small"
                                 color="info"
                                 variant="outlined"
                                 sx={{ fontSize: '0.7rem' }}
@@ -524,7 +614,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              <Chip 
+                              <Chip
                                 label={item.unit || 'pcs'}
                                 size="small"
                                 variant="outlined"
@@ -532,20 +622,29 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                               />
                             </TableCell>
                             <TableCell align="right">
-                              <Typography variant="body2" color={fulfilledQty > 0 ? 'success.main' : 'text.secondary'}>
+                              <Typography
+                                variant="body2"
+                                color={fulfilledQty > 0 ? 'success.main' : 'text.secondary'}
+                              >
                                 {fulfilledQty.toLocaleString('en-IN')}
                               </Typography>
                             </TableCell>
                             <TableCell align="center">
-                              <Chip 
+                              <Chip
                                 label={
-                                  fulfillmentPercent === 0 ? 'Open' :
-                                  fulfillmentPercent === 100 ? 'Closed' : `${fulfillmentPercent.toFixed(0)}%`
+                                  fulfillmentPercent === 0
+                                    ? 'Open'
+                                    : fulfillmentPercent === 100
+                                    ? 'Closed'
+                                    : `${fulfillmentPercent.toFixed(0)}%`
                                 }
                                 size="small"
                                 color={
-                                  fulfillmentPercent === 0 ? 'default' :
-                                  fulfillmentPercent === 100 ? 'success' : 'warning'
+                                  fulfillmentPercent === 0
+                                    ? 'default'
+                                    : fulfillmentPercent === 100
+                                    ? 'success'
+                                    : 'warning'
                                 }
                               />
                             </TableCell>
@@ -593,6 +692,12 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                                 </Box>
                               </TableCell>
                             )}
+                            <TableCell>
+                              <MaterialBalanceInfo
+                                rawMaterialId={item.raw_material_id}
+                                vendorId={po.vendor_id}
+                              />
+                            </TableCell>
                           </TableRow>
                         )
                       })}
@@ -743,7 +848,7 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                                   const invMedicineName = invItem.medicine?.medicine_name || invItem.medicine_name || 'Unknown'
                                   const qty = parseFloat(invItem.shipped_quantity || 0).toFixed(2)
                                   const price = parseFloat(invItem.unit_price || 0).toFixed(2)
-                                  
+
                                   return (
                                     <MenuItem key={invItem.id} value={invItem.id}>
                                       {invMedicineName} (Qty: {qty}, Price: ₹{price})
@@ -821,7 +926,16 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                     </TableBody>
                   </Table>
 
-                  <Box sx={{ mt: 2, p: 2.5, bgcolor: 'grey.100', borderRadius: 1, border: '2px solid', borderColor: 'grey.300' }}>
+                  <Box
+                    sx={{
+                      mt: 2,
+                      p: 2.5,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      border: '2px solid',
+                      borderColor: 'grey.300',
+                    }}
+                  >
                     <Grid container spacing={2} alignItems="center">
                       <Grid item xs={12} md={3}>
                         <Typography variant="body2" fontWeight="medium">
@@ -856,11 +970,11 @@ const PORow = ({ po, vendors, onVendorUpdate, onInvoiceSubmit, onCreateInvoice, 
                             '&.Mui-disabled': {
                               bgcolor: 'grey.400',
                               color: 'grey.700',
-                            }
+                            },
                           }}
                         >
-                          {!invoiceData.invoice_number?.trim() 
-                            ? 'Enter Invoice Number' 
+                          {!invoiceData.invoice_number?.trim()
+                            ? 'Enter Invoice Number'
                             : 'Submit Invoice'}
                         </Button>
                       </Grid>
@@ -899,7 +1013,7 @@ const POPage = () => {
     setLoading(true)
     try {
       clearError()
-      
+
       // Fetch EOPAs with PI details
       const eopaResponse = await api.get('/api/eopa/')
       if (eopaResponse.data.success) {
@@ -945,13 +1059,17 @@ const POPage = () => {
   const handleInvoiceSubmit = async (poId, invoiceData) => {
     try {
       clearError()
-      
-      const validItems = invoiceData.items.filter(item => 
-        parseFloat(item.shipped_quantity || 0) > 0
+
+      const validItems = invoiceData.items.filter(
+        (item) => parseFloat(item.shipped_quantity || 0) > 0
       )
 
       if (validItems.length === 0) {
-        handleApiError({ response: { data: { message: 'At least one item must have a shipped quantity greater than 0' } } })
+        handleApiError({
+          response: {
+            data: { message: 'At least one item must have a shipped quantity greater than 0' },
+          },
+        })
         return
       }
 
@@ -967,22 +1085,22 @@ const POPage = () => {
         dispatch_date: invoiceData.dispatch_date || null,
         warehouse_location: invoiceData.warehouse_location || null,
         warehouse_received_by: invoiceData.warehouse_received_by || null,
-        items: validItems.map(item => ({
+        items: validItems.map((item) => ({
           medicine_id: item.medicine_id,
           shipped_quantity: parseFloat(item.shipped_quantity),
           unit_price: parseFloat(item.unit_price),
           tax_rate: parseFloat(item.tax_rate),
           batch_number: item.batch_number || null,
-          expiry_date: item.expiry_date || null
-        }))
+          expiry_date: item.expiry_date || null,
+        })),
       }
 
       const response = await api.post(`/api/invoice/vendor/${poId}`, payload)
-      
+
       if (response.data.success) {
         // Update PO with new fulfillment data
         const updatedPO = response.data.data.po || response.data.data
-        setPos(prevPos => updateDataStably(prevPos, updatedPO))
+        setPos((prevPos) => updateDataStably(prevPos, updatedPO))
         markAsSaved(poId)
         setSuccessMessage(`Invoice ${invoiceData.invoice_number} processed successfully`)
       }
@@ -997,9 +1115,9 @@ const POPage = () => {
     try {
       clearError()
       const response = await api.get(`/api/po/${po.id}/download-pdf`, {
-        responseType: 'blob'
+        responseType: 'blob',
       })
-      
+
       // Create blob link to download
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
@@ -1009,7 +1127,7 @@ const POPage = () => {
       link.click()
       link.parentNode.removeChild(link)
       window.URL.revokeObjectURL(url)
-      
+
       setSuccessMessage(`PDF downloaded: ${po.po_number}.pdf`)
     } catch (err) {
       console.error('Error downloading PDF:', err)
@@ -1019,8 +1137,8 @@ const POPage = () => {
 
   const handleCreateInvoiceFromPO = (po) => {
     // Navigate to invoices page with PO data in state
-    navigate('/invoices', { 
-      state: { 
+    navigate('/invoices', {
+      state: {
         fromPO: true,
         poData: {
           po_id: po.id,
@@ -1028,7 +1146,7 @@ const POPage = () => {
           vendor_id: po.vendor_id,
           vendor_name: po.vendor?.vendor_name,
           invoice_type: po.po_type,
-          items: po.items?.map(item => ({
+          items: po.items?.map((item) => ({
             medicine_id: item.medicine_id,
             medicine_name: item.medicine?.medicine_name,
             ordered_quantity: item.ordered_quantity,
@@ -1038,9 +1156,9 @@ const POPage = () => {
             shipped_quantity: item.ordered_quantity - (item.fulfilled_quantity || 0),
             unit_price: 0,
             hsn_code: item.medicine?.hsn_code,
-            pack_size: item.medicine?.pack_size
-          })) || []
-        }
+            pack_size: item.medicine?.pack_size,
+          })) || [],
+        },
       }
     })
   }
@@ -1048,28 +1166,28 @@ const POPage = () => {
   const handleSendEmail = async (po) => {
     try {
       clearError()
-      
+
       // Get vendor email
       const vendorEmail = po.vendor?.email
       if (!vendorEmail) {
         handleApiError({ response: { data: { message: 'Vendor email not found. Please update vendor details.' } } })
         return
       }
-      
+
       const confirmed = window.confirm(
         `Send PO ${po.po_number} to ${po.vendor.vendor_name} (${vendorEmail})?\n\n` +
         `The email will include the PO PDF attachment.`
       )
-      
+
       if (!confirmed) return
-      
+
       const payload = {
         to_emails: [vendorEmail],
-        attach_pdf: true
+        attach_pdf: true,
       }
-      
+
       const response = await api.post(`/api/po/${po.id}/send-email`, payload)
-      
+
       if (response.data.success) {
         setSuccessMessage(`Email sent successfully to ${vendorEmail}`)
       } else {
@@ -1082,11 +1200,11 @@ const POPage = () => {
   }
 
   const getPOsForEOPA = (eopaId) => {
-    return pos.filter(po => po.eopa_id === eopaId)
+    return pos.filter((po) => po.eopa_id === eopaId)
   }
 
   // Filter EOPAs that have POs
-  const eopasWithPOs = eopas.filter(eopa => {
+  const eopasWithPOs = eopas.filter((eopa) => {
     const eopaPos = getPOsForEOPA(eopa.id)
     if (eopaPos.length === 0) return false
 
@@ -1096,7 +1214,7 @@ const POPage = () => {
     return (
       eopa.eopa_number?.toLowerCase().includes(searchLower) ||
       eopa.pi?.pi_number?.toLowerCase().includes(searchLower) ||
-      eopaPos.some(po => 
+      eopaPos.some((po) =>
         po.po_number?.toLowerCase().includes(searchLower) ||
         po.vendor?.vendor_name?.toLowerCase().includes(searchLower)
       )
@@ -1166,23 +1284,17 @@ const POPage = () => {
           </Typography>
         </Paper>
       ) : (
-        eopasWithPOs.map(eopa => {
+        eopasWithPOs.map((eopa) => {
           const eopaPos = getPOsForEOPA(eopa.id)
           const totalOrderedQty = eopaPos.reduce((sum, po) => sum + parseFloat(po.total_ordered_qty || 0), 0)
 
           return (
             <Accordion key={eopa.id} sx={{ mb: 2, boxShadow: 2 }}>
-              <AccordionSummary 
+              <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
                 sx={{ bgcolor: 'primary.50' }}
               >
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  width: '100%',
-                  pr: 2 
-                }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
                   <Box>
                     <Typography variant="h6" color="primary.main">
                       {eopa.eopa_number}
@@ -1192,20 +1304,20 @@ const POPage = () => {
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Chip 
+                    <Chip
                       label={`${eopaPos.length} PO${eopaPos.length !== 1 ? 's' : ''}`}
-                      color="primary" 
-                      size="small" 
+                      color="primary"
+                      size="small"
                     />
-                    <Chip 
+                    <Chip
                       label={`Qty: ${totalOrderedQty.toLocaleString('en-IN')}`}
-                      color="success" 
-                      size="small" 
+                      color="success"
+                      size="small"
                     />
                   </Box>
                 </Box>
               </AccordionSummary>
-              
+
               <AccordionDetails>
                 <TableContainer>
                   <Table>
@@ -1223,10 +1335,10 @@ const POPage = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {eopaPos.map(po => (
-                        <PORow 
-                          key={po.id} 
-                          po={po} 
+                      {eopaPos.map((po) => (
+                        <PORow
+                          key={po.id}
+                          po={po}
                           vendors={vendors}
                           onVendorUpdate={handleVendorUpdate}
                           onInvoiceSubmit={handleInvoiceSubmit}
@@ -1247,9 +1359,9 @@ const POPage = () => {
                       EOPA Total Ordered Quantity
                     </Typography>
                     <Typography variant="h6" color="primary.main" fontWeight="bold">
-                      {totalOrderedQty.toLocaleString('en-IN', { 
+                      {totalOrderedQty.toLocaleString('en-IN', {
                         minimumFractionDigits: 2,
-                        maximumFractionDigits: 2 
+                        maximumFractionDigits: 2,
                       })}
                     </Typography>
                   </Box>

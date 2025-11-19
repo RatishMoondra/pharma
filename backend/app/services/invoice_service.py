@@ -18,6 +18,7 @@ from app.models.vendor import Vendor
 from app.models.product import MedicineMaster
 from app.schemas.invoice import InvoiceCreate
 from app.exceptions.base import AppException
+from app.services.material_balance_service import insert_material_balance_ledger
 
 logger = logging.getLogger("pharma")
 
@@ -188,12 +189,34 @@ class InvoiceService:
                         None
                     )
                     item_name = po_item.raw_material.rm_name if po_item and po_item.raw_material else f"RM ID {item_data.raw_material_id}"
+                    # Insert material balance ledger row for RM
+                    if item_data.raw_material_id and po_item:
+                        insert_material_balance_ledger(
+                            self.db,
+                            po_id=po.id,
+                            invoice_id=invoice.id,
+                            raw_material_id=item_data.raw_material_id,
+                            vendor_id=po.vendor_id,
+                            ordered_qty=float(po_item.ordered_quantity),
+                            received_qty=float(item_data.shipped_quantity)
+                        )
                 elif invoice_type == InvoiceType.PM:
                     po_item = next(
                         (pi for pi in po.items if pi.packing_material_id == item_data.packing_material_id),
                         None
                     )
                     item_name = po_item.packing_material.pm_name if po_item and po_item.packing_material else f"PM ID {item_data.packing_material_id}"
+                    # Insert material balance ledger row for PM
+                    if item_data.packing_material_id and po_item:
+                        insert_material_balance_ledger(
+                            self.db,
+                            po_id=po.id,
+                            invoice_id=invoice.id,
+                            vendor_id=po.vendor_id,
+                            ordered_qty=float(po_item.ordered_quantity),
+                            received_qty=float(item_data.shipped_quantity),
+                            packing_material_id=item_data.packing_material_id
+                        )
                 else:  # FG
                     po_item = next(
                         (pi for pi in po.items if pi.medicine_id == item_data.medicine_id),
@@ -366,14 +389,14 @@ class InvoiceService:
                 joinedload(VendorInvoice.purchase_order),
                 joinedload(VendorInvoice.items)
             ).filter(VendorInvoice.id == invoice_id).first()
-            
+
             if not invoice:
                 raise AppException(
                     f"Invoice {invoice_id} not found",
                     "ERR_INVOICE_NOT_FOUND",
                     404
                 )
-            
+
             # Update invoice fields
             invoice.invoice_number = invoice_data.invoice_number
             invoice.invoice_date = invoice_data.invoice_date
@@ -385,23 +408,24 @@ class InvoiceService:
             invoice.warehouse_location = invoice_data.warehouse_location
             invoice.warehouse_received_by = invoice_data.warehouse_received_by
             invoice.remarks = invoice_data.remarks
-            
+
             # Delete existing items
             for item in invoice.items:
                 self.db.delete(item)
-            
-            # Add new items
+
+            po = invoice.purchase_order
+            # Add new items and update material balance for RM/PM
             for item_data in invoice_data.items:
                 item_subtotal = Decimal(str(item_data.shipped_quantity)) * Decimal(str(item_data.unit_price))
                 item_tax = item_subtotal * (Decimal(str(item_data.tax_rate)) / Decimal("100"))
-                
+
                 # Calculate GST amount if GST rate provided
                 gst_amount = None
                 if item_data.gst_rate:
                     gst_amount = item_subtotal * (Decimal(str(item_data.gst_rate)) / Decimal("100"))
-                
+
                 item_total = item_subtotal + item_tax
-                
+
                 invoice_item = VendorInvoiceItem(
                     invoice_id=invoice.id,
                     medicine_id=item_data.medicine_id,
@@ -421,7 +445,38 @@ class InvoiceService:
                     remarks=item_data.remarks
                 )
                 self.db.add(invoice_item)
-            
+
+                # Update material balance ledger for RM/PM
+                if po and po.po_type.value in ["RM", "PM"]:
+                    # Find PO item for ordered_qty
+                    po_item = None
+                    if po.po_type.value == "RM" and item_data.raw_material_id:
+                        po_item = next((pi for pi in po.items if pi.raw_material_id == item_data.raw_material_id), None)
+                        if po_item:
+                            from app.services.material_balance_service import insert_material_balance_ledger
+                            insert_material_balance_ledger(
+                                self.db,
+                                po_id=po.id,
+                                invoice_id=invoice.id,
+                                raw_material_id=item_data.raw_material_id,
+                                vendor_id=po.vendor_id,
+                                ordered_qty=float(po_item.ordered_quantity),
+                                received_qty=float(item_data.shipped_quantity)
+                            )
+                    elif po.po_type.value == "PM" and item_data.packing_material_id:
+                        po_item = next((pi for pi in po.items if pi.packing_material_id == item_data.packing_material_id), None)
+                        if po_item:
+                            from app.services.material_balance_service import insert_material_balance_ledger
+                            insert_material_balance_ledger(
+                                self.db,
+                                po_id=po.id,
+                                invoice_id=invoice.id,
+                                vendor_id=po.vendor_id,
+                                ordered_qty=float(po_item.ordered_quantity),
+                                received_qty=float(item_data.shipped_quantity),
+                                packing_material_id=item_data.packing_material_id
+                            )
+
             self.db.commit()
             
             logger.info({
