@@ -11,6 +11,7 @@ from app.models.po import PurchaseOrder, POItem, POStatus, POType
 from app.models.po_terms import POTermsConditions
 from app.models.material import MaterialReceipt
 from app.models.invoice import VendorInvoice, VendorInvoiceItem, InvoiceType, InvoiceStatus
+from app.models.terms_conditions import TermsConditionsMaster, VendorTermsConditions, PartnerVendorMedicines
 
 __all__ = [
     "Country",
@@ -35,5 +36,9 @@ __all__ = [
     "VendorInvoiceItem",
     "InvoiceType",
     "InvoiceStatus",
+    "TermsConditionsMaster",
+    "VendorTermsConditions",
+    "PartnerVendorMedicines",
 ]
+
 

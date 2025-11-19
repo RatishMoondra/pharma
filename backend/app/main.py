@@ -7,7 +7,7 @@ import uuid
 
 from app.database.session import engine
 from app.models import base
-from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice, analytics, configuration, raw_material, packing_material
+from app.routers import auth, vendors, pi, eopa, po, products, material, users, invoice, analytics, configuration, raw_material, packing_material, terms_conditions
 from app.routers import countries as countries_router
 from app.exceptions.handlers import app_exception_handler, validation_exception_handler
 from app.exceptions.base import AppException
@@ -70,6 +70,7 @@ app.include_router(invoice.router, prefix="/api/invoice", tags=["Vendor Invoices
 app.include_router(material.router, prefix="/api/material", tags=["Material Management"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics & Insights"])
 app.include_router(configuration.router, prefix="/api/config", tags=["Configuration"])
+app.include_router(terms_conditions.router)  # Already has /api/terms prefix
 
 @app.get("/")
 async def root():

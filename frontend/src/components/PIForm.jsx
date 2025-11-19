@@ -31,6 +31,8 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
   const [allVendors, setAllVendors] = useState([])
   const [partnerVendors, setPartnerVendors] = useState([])
   const [medicines, setMedicines] = useState([])
+  const [partnerMedicines, setPartnerMedicines] = useState([])
+  const [partnerTerms, setPartnerTerms] = useState([])
   
   const [formData, setFormData] = useState({
     country_id: '',
@@ -96,6 +98,47 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
       fetchMedicines()
     }
   }, [open])
+  
+  // Fetch partner medicines and terms when partner_vendor_id changes
+  useEffect(() => {
+    if (formData.partner_vendor_id) {
+      fetchPartnerMedicines(formData.partner_vendor_id)
+      fetchPartnerTerms(formData.partner_vendor_id)
+    } else {
+      setPartnerMedicines([])
+      setPartnerTerms([])
+    }
+  }, [formData.partner_vendor_id])
+
+  const fetchPartnerMedicines = async (vendorId) => {
+    try {
+      const response = await api.get('/api/terms/partner-medicines/', {
+        params: { vendor_id: vendorId },
+      })
+      if (response.data.success) {
+        setPartnerMedicines(response.data.data.map(pm => pm.medicine))
+      } else {
+        setPartnerMedicines([])
+      }
+    } catch (err) {
+      setPartnerMedicines([])
+    }
+  }
+
+  const fetchPartnerTerms = async (vendorId) => {
+    try {
+      const response = await api.get('/api/terms/vendor-terms/', {
+        params: { vendor_id: vendorId, is_active: true },
+      })
+      if (response.data.success) {
+        setPartnerTerms(response.data.data)
+      } else {
+        setPartnerTerms([])
+      }
+    } catch (err) {
+      setPartnerTerms([])
+    }
+  }
 
   // Filter vendors by country when country changes or vendors load
   useEffect(() => {
@@ -274,225 +317,256 @@ const PIForm = ({ open, onClose, onSubmit, isLoading = false, pi = null }) => {
           )}
         </Box>
       </DialogTitle>
-      <DialogContent>
-        {Object.keys(errors).length > 0 && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Please fix the errors in the form before submitting.
-          </Alert>
-        )}
-        
-        <Grid container spacing={2} sx={{ mt: 0.5 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label="Country"
-              name="country_id"
-              value={formData.country_id}
-              onChange={handleChange}
-              error={!!errors.country_id}
-              helperText={errors.country_id || 'Select country first to filter partner vendors'}
-              required
-              disabled={isLoading}
-            >
-              <MenuItem value="">Select Country</MenuItem>
-              {countries.map((country) => (
-                <MenuItem key={country.id} value={country.id}>
-                  {country.country_name} ({country.country_code}) - {country.language}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label="Partner Vendor"
-              name="partner_vendor_id"
-              value={formData.partner_vendor_id}
-              onChange={handleChange}
-              error={!!errors.partner_vendor_id}
-              helperText={
-                errors.partner_vendor_id || 
-                (!formData.country_id ? 'Select country first' : 
-                partnerVendors.length === 0 ? 'No partner vendors found for selected country' : 
-                `${partnerVendors.length} vendor${partnerVendors.length !== 1 ? 's' : ''} available`)
-              }
-              required
-              disabled={isLoading || !formData.country_id}
-            >
-              <MenuItem value="">Select Partner Vendor</MenuItem>
-              {partnerVendors.map((vendor) => (
-                <MenuItem key={vendor.id} value={vendor.id}>
-                  {vendor.vendor_name} ({vendor.vendor_code})
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              type="date"
-              label="PI Date"
-              name="pi_date"
-              value={formData.pi_date}
-              onChange={handleChange}
-              error={!!errors.pi_date}
-              helperText={errors.pi_date}
-              required
-              disabled={isLoading}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            {/* Empty grid for layout balance */}
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Remarks"
-              name="remarks"
-              value={formData.remarks}
-              onChange={handleChange}
-              multiline
-              rows={2}
-              disabled={isLoading}
-              placeholder="Optional notes or comments"
-            />
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ my: 3 }} />
-
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-              Items
-              <Chip 
-                label={`${items.length} item${items.length !== 1 ? 's' : ''}`} 
-                size="small" 
-                sx={{ ml: 1 }} 
-              />
+      {/* <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth> */}
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">
+              {isEditMode ? 'Edit Proforma Invoice (PI)' : 'Create Proforma Invoice (PI)'}
             </Typography>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={addItem}
-              disabled={isLoading}
-            >
-              Add Item
-            </Button>
+            {isEditMode && pi?.pi_number && (
+              <Chip label={pi.pi_number} color="primary" size="small" />
+            )}
           </Box>
-          
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead sx={{ bgcolor: 'grey.100' }}>
-                <TableRow>
-                  <TableCell width={50}>#</TableCell>
-                  <TableCell>Medicine *</TableCell>
-                  <TableCell width={120}>Quantity *</TableCell>
-                  <TableCell width={140}>Unit Price (₹) *</TableCell>
-                  <TableCell width={140}>Total (₹)</TableCell>
-                  <TableCell width={60} align="center">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item, index) => (
-                  <TableRow key={index} sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <TextField
-                        select
-                        fullWidth
-                        size="small"
-                        value={item.medicine_id}
-                        onChange={(e) => handleItemChange(index, 'medicine_id', e.target.value)}
-                        error={!!errors[`item_${index}_medicine`]}
-                        helperText={errors[`item_${index}_medicine`]}
-                        disabled={isLoading}
-                        placeholder="Select medicine"
-                      >
-                        <MenuItem value="">Select Medicine</MenuItem>
-                        {medicines.map((med) => (
-                          <MenuItem key={med.id} value={med.id}>
-                            {med.medicine_name} - {med.dosage_form}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        size="small"
-                        fullWidth
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        error={!!errors[`item_${index}_quantity`]}
-                        helperText={errors[`item_${index}_quantity`]}
-                        disabled={isLoading}
-                        inputProps={{ min: 0, step: 1 }}
-                        placeholder="0"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        size="small"
-                        fullWidth
-                        value={item.unit_price}
-                        onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
-                        error={!!errors[`item_${index}_price`]}
-                        helperText={errors[`item_${index}_price`]}
-                        disabled={isLoading}
-                        inputProps={{ min: 0, step: 0.01 }}
-                        placeholder="0.00"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                        ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+        </DialogTitle>
+        <DialogContent>
+          {Object.keys(errors).length > 0 && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Please fix the errors in the form before submitting.
+            </Alert>
+          )}
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Country"
+                name="country_id"
+                value={formData.country_id}
+                onChange={handleChange}
+                error={!!errors.country_id}
+                helperText={errors.country_id || 'Select country first to filter partner vendors'}
+                required
+                disabled={isLoading}
+              >
+                <MenuItem value="">Select Country</MenuItem>
+                {countries.map((country) => (
+                  <MenuItem key={country.id} value={country.id}>
+                    {country.country_name} ({country.country_code}) - {country.language}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Partner Vendor"
+                name="partner_vendor_id"
+                value={formData.partner_vendor_id}
+                onChange={handleChange}
+                error={!!errors.partner_vendor_id}
+                helperText={
+                  errors.partner_vendor_id || 
+                  (!formData.country_id ? 'Select country first' : 
+                  partnerVendors.length === 0 ? 'No partner vendors found for selected country' : 
+                  `${partnerVendors.length} vendor${partnerVendors.length !== 1 ? 's' : ''} available`)
+                }
+                required
+                disabled={isLoading || !formData.country_id}
+              >
+                <MenuItem value="">Select Partner Vendor</MenuItem>
+                {partnerVendors.map((vendor) => (
+                  <MenuItem key={vendor.id} value={vendor.id}>
+                    {vendor.vendor_name} ({vendor.vendor_code})
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="date"
+                label="PI Date"
+                name="pi_date"
+                value={formData.pi_date}
+                onChange={handleChange}
+                error={!!errors.pi_date}
+                helperText={errors.pi_date}
+                required
+                disabled={isLoading}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              {/* Empty grid for layout balance */}
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Remarks"
+                name="remarks"
+                value={formData.remarks}
+                onChange={handleChange}
+                multiline
+                rows={2}
+                disabled={isLoading}
+                placeholder="Optional notes or comments"
+              />
+            </Grid>
+            {/* Partner Terms & Conditions Display - single instance only */}
+            {formData.partner_vendor_id && partnerTerms.length > 0 && (
+              <Grid item xs={12}>
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="info.dark" sx={{ mb: 1 }}>
+                    Partner Terms & Conditions
+                  </Typography>
+                  {partnerTerms.map((term) => (
+                    <Box key={term.id} sx={{ mb: 1 }}>
+                      <Chip label={term.term?.category} size="small" sx={{ mr: 1 }} />
+                      <Chip label={`Priority: ${term.priority_override || term.term?.priority}`} size="small" color={term.priority_override ? 'secondary' : 'default'} sx={{ mr: 1 }} />
+                      <Typography variant="body2" sx={{ display: 'inline' }}>
+                        {term.term?.term_text}
+                      </Typography>
+                      {term.notes && (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                          Notes: {term.notes}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+          <Divider sx={{ my: 3 }} />
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                Items
+                <Chip 
+                  label={`${items.length} item${items.length !== 1 ? 's' : ''}`} 
+                  size="small" 
+                  sx={{ ml: 1 }} 
+                />
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={addItem}
+                disabled={isLoading}
+              >
+                Add Item
+              </Button>
+            </Box>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead sx={{ bgcolor: 'grey.100' }}>
+                  <TableRow>
+                    <TableCell width={50}>#</TableCell>
+                    <TableCell>Medicine *</TableCell>
+                    <TableCell width={120}>Quantity *</TableCell>
+                    <TableCell width={140}>Unit Price (₹) *</TableCell>
+                    <TableCell width={140}>Total (₹)</TableCell>
+                    <TableCell width={60} align="center">Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {items.map((item, index) => (
+                    <TableRow key={index} sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          value={item.medicine_id}
+                          onChange={(e) => handleItemChange(index, 'medicine_id', e.target.value)}
+                          error={!!errors[`item_${index}_medicine`]}
+                          helperText={errors[`item_${index}_medicine`]}
+                          disabled={isLoading}
+                          placeholder="Select medicine"
+                        >
+                          <MenuItem value="">Select Medicine</MenuItem>
+                          {(formData.partner_vendor_id ? partnerMedicines : medicines).map((med) => (
+                            <MenuItem key={med.id} value={med.id}>
+                              {med.medicine_name} {med.dosage_form ? `- ${med.dosage_form}` : ''}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          size="small"
+                          fullWidth
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                          error={!!errors[`item_${index}_quantity`]}
+                          helperText={errors[`item_${index}_quantity`]}
+                          disabled={isLoading}
+                          inputProps={{ min: 0, step: 1 }}
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          size="small"
+                          fullWidth
+                          value={item.unit_price}
+                          onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                          error={!!errors[`item_${index}_price`]}
+                          helperText={errors[`item_${index}_price`]}
+                          disabled={isLoading}
+                          inputProps={{ min: 0, step: 0.01 }}
+                          placeholder="0.00"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          ₹{((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => removeItem(index)}
+                          disabled={items.length === 1 || isLoading}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: 'primary.50' }}>
+                    <TableCell colSpan={4} align="right">
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                        Total Amount:
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={() => removeItem(index)}
-                        disabled={items.length === 1 || isLoading}
-                        color="error"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                    <TableCell colSpan={2}>
+                      <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                        ₹{calculateTotal()}
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
-                <TableRow sx={{ bgcolor: 'primary.50' }}>
-                  <TableCell colSpan={4} align="right">
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      Total Amount:
-                    </Typography>
-                  </TableCell>
-                  <TableCell colSpan={2}>
-                    <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
-                      ₹{calculateTotal()}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={handleClose} disabled={isLoading}>
-          Cancel
-        </Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={isLoading}>
-          {isLoading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update PI' : 'Create PI')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleClose} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} variant="contained" disabled={isLoading}>
+            {isLoading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update PI' : 'Create PI')}
+          </Button>
+        </DialogActions>
+      </Dialog>
   )
 }
 
-export default PIForm
+export default PIForm;

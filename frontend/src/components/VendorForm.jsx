@@ -9,13 +9,19 @@ import {
   MenuItem,
   Grid,
   Alert,
+  Tabs,
+  Tab,
+  Box,
 } from '@mui/material'
 import api from '../services/api'
+import VendorTermsTab from './VendorTermsTab'
+import PartnerMedicinesTab from './PartnerMedicinesTab'
 
 const VENDOR_TYPES = ['PARTNER', 'RM', 'PM', 'MANUFACTURER']
 
 const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false }) => {
   const [countries, setCountries] = useState([])
+  const [activeTab, setActiveTab] = useState(0)
   const [formData, setFormData] = useState({
     vendor_name: vendor?.vendor_name || '',
     vendor_type: vendor?.vendor_type || 'PARTNER',
@@ -137,192 +143,227 @@ const VendorForm = ({ open, onClose, onSubmit, vendor = null, isLoading = false 
         credit_days: 15,
       })
       setErrors({})
+      setActiveTab(0) // Reset to first tab
       onClose()
     }
+  }
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue)
   }
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{vendor ? 'Edit Vendor' : 'Add New Vendor'}</DialogTitle>
+      
+      {/* Tabs for existing vendor */}
+      {vendor && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
+          <Tabs value={activeTab} onChange={handleTabChange}>
+            <Tab label="Basic Info" />
+            <Tab label="Terms & Conditions" />
+            {vendor.vendor_type === 'PARTNER' && <Tab label="Medicine Whitelist" />}
+          </Tabs>
+        </Box>
+      )}
+      
       <DialogContent>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Vendor Name"
-              name="vendor_name"
-              value={formData.vendor_name}
-              onChange={handleChange}
-              error={!!errors.vendor_name}
-              helperText={errors.vendor_name}
-              required
-              disabled={isLoading}
-            />
+        {/* Tab 0: Basic Info (or create form) */}
+        {(!vendor || activeTab === 0) && (
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Vendor Name"
+                name="vendor_name"
+                value={formData.vendor_name}
+                onChange={handleChange}
+                error={!!errors.vendor_name}
+                helperText={errors.vendor_name}
+                required
+                disabled={isLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Vendor Type"
+                name="vendor_type"
+                value={formData.vendor_type}
+                onChange={handleChange}
+                error={!!errors.vendor_type}
+                helperText={errors.vendor_type}
+                required
+                disabled={isLoading}
+              >
+                {VENDOR_TYPES.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Country"
+                name="country_id"
+                value={formData.country_id}
+                onChange={handleChange}
+                error={!!errors.country_id}
+                helperText={errors.country_id || 'Controls language for printing materials'}
+                required
+                disabled={isLoading}
+              >
+                {countries.map((country) => (
+                  <MenuItem key={country.id} value={country.id}>
+                    {country.country_name} ({country.country_code}) - {country.language}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Contact Person"
+                name="contact_person"
+                value={formData.contact_person}
+                onChange={handleChange}
+                error={!!errors.contact_person}
+                helperText={errors.contact_person}
+                required
+                disabled={isLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                error={!!errors.phone}
+                helperText={errors.phone}
+                required
+                disabled={isLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                error={!!errors.email}
+                helperText={errors.email}
+                required
+                disabled={isLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="GST Number"
+                name="gst_number"
+                value={formData.gst_number}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Drug License Number"
+                name="drug_license_number"
+                value={formData.drug_license_number}
+                onChange={handleChange}
+                disabled={isLoading}
+                helperText="For pharmaceutical compliance"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                select
+                label="GMP Certified"
+                name="gmp_certified"
+                value={String(formData.gmp_certified)}
+                onChange={(e) => setFormData(prev => ({ ...prev, gmp_certified: e.target.value === 'true' }))}
+                disabled={isLoading}
+              >
+                <MenuItem value="false">No</MenuItem>
+                <MenuItem value="true">Yes</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                select
+                label="ISO Certified"
+                name="iso_certified"
+                value={String(formData.iso_certified)}
+                onChange={(e) => setFormData(prev => ({ ...prev, iso_certified: e.target.value === 'true' }))}
+                disabled={isLoading}
+              >
+                <MenuItem value="false">No</MenuItem>
+                <MenuItem value="true">Yes</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Credit Days"
+                name="credit_days"
+                type="number"
+                value={formData.credit_days}
+                onChange={handleChange}
+                disabled={isLoading}
+                helperText="Payment credit period"
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Address"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                error={!!errors.address}
+                helperText={errors.address}
+                required
+                multiline
+                rows={3}
+                disabled={isLoading}
+              />
+            </Grid>
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label="Vendor Type"
-              name="vendor_type"
-              value={formData.vendor_type}
-              onChange={handleChange}
-              error={!!errors.vendor_type}
-              helperText={errors.vendor_type}
-              required
-              disabled={isLoading}
-            >
-              {VENDOR_TYPES.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label="Country"
-              name="country_id"
-              value={formData.country_id}
-              onChange={handleChange}
-              error={!!errors.country_id}
-              helperText={errors.country_id || 'Controls language for printing materials'}
-              required
-              disabled={isLoading}
-            >
-              {countries.map((country) => (
-                <MenuItem key={country.id} value={country.id}>
-                  {country.country_name} ({country.country_code}) - {country.language}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Contact Person"
-              name="contact_person"
-              value={formData.contact_person}
-              onChange={handleChange}
-              error={!!errors.contact_person}
-              helperText={errors.contact_person}
-              required
-              disabled={isLoading}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Phone"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              error={!!errors.phone}
-              helperText={errors.phone}
-              required
-              disabled={isLoading}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              error={!!errors.email}
-              helperText={errors.email}
-              required
-              disabled={isLoading}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="GST Number"
-              name="gst_number"
-              value={formData.gst_number}
-              onChange={handleChange}
-              disabled={isLoading}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Drug License Number"
-              name="drug_license_number"
-              value={formData.drug_license_number}
-              onChange={handleChange}
-              disabled={isLoading}
-              helperText="For pharmaceutical compliance"
-            />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              select
-              label="GMP Certified"
-              name="gmp_certified"
-              value={String(formData.gmp_certified)}
-              onChange={(e) => setFormData(prev => ({ ...prev, gmp_certified: e.target.value === 'true' }))}
-              disabled={isLoading}
-            >
-              <MenuItem value="false">No</MenuItem>
-              <MenuItem value="true">Yes</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              select
-              label="ISO Certified"
-              name="iso_certified"
-              value={String(formData.iso_certified)}
-              onChange={(e) => setFormData(prev => ({ ...prev, iso_certified: e.target.value === 'true' }))}
-              disabled={isLoading}
-            >
-              <MenuItem value="false">No</MenuItem>
-              <MenuItem value="true">Yes</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              label="Credit Days"
-              name="credit_days"
-              type="number"
-              value={formData.credit_days}
-              onChange={handleChange}
-              disabled={isLoading}
-              helperText="Payment credit period"
-              inputProps={{ min: 0 }}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Address"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              error={!!errors.address}
-              helperText={errors.address}
-              required
-              multiline
-              rows={3}
-              disabled={isLoading}
-            />
-          </Grid>
-        </Grid>
+        )}
+        
+        {/* Tab 1: Terms & Conditions */}
+        {vendor && activeTab === 1 && (
+          <VendorTermsTab vendor={vendor} />
+        )}
+        
+        {/* Tab 2: Medicine Whitelist (Partner only) */}
+        {vendor && vendor.vendor_type === 'PARTNER' && activeTab === 2 && (
+          <PartnerMedicinesTab vendor={vendor} />
+        )}
       </DialogContent>
+      
       <DialogActions>
-        <Button onClick={handleClose} disabled={isLoading}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={isLoading}>
-          {isLoading ? 'Saving...' : vendor ? 'Update' : 'Create'}
+        <Button onClick={handleClose} disabled={isLoading}>
+          {vendor && activeTab !== 0 ? 'Close' : 'Cancel'}
         </Button>
+        {(!vendor || activeTab === 0) && (
+          <Button onClick={handleSubmit} variant="contained" disabled={isLoading}>
+            {isLoading ? 'Saving...' : vendor ? 'Update' : 'Create'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   )

@@ -16,6 +16,7 @@ import InvoicesPage from './pages/InvoicesPage'
 import MaterialPage from './pages/MaterialPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import ConfigurationPage from './pages/ConfigurationPage'
+import TermsConditionsPage from './pages/TermsConditionsPage'
 import PrivateRoute from './guards/PrivateRoute'
 import Layout from './components/Layout'
 
@@ -128,6 +129,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['ADMIN']}>
                 <ConfigurationPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="terms-conditions" 
+            element={
+              <PrivateRoute allowedRoles={['ADMIN']}>
+                <TermsConditionsPage />
               </PrivateRoute>
             } 
           />

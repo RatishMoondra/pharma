@@ -11,7 +11,8 @@ from app.models.product import ProductMaster, MedicineMaster
 from app.models.pi import PI, PIItem
 from app.models.eopa import EOPA, EOPAItem
 from app.models.po import PurchaseOrder, POItem
-from app.models.material import MaterialReceipt, MaterialBalance, DispatchAdvice, WarehouseGRN
+from app.models.material import MaterialReceipt, DispatchAdvice, WarehouseGRN
+from app.models.terms_conditions import TermsConditionsMaster, VendorTermsConditions, PartnerVendorMedicines
 
 # this is the Alembic Config object
 config = context.config

@@ -14,6 +14,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import SettingsIcon from '@mui/icons-material/Settings'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ArticleIcon from '@mui/icons-material/Article'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo-pharmaflow.png'
 
@@ -39,6 +40,7 @@ const Sidebar = () => {
     { text: 'Material Management', icon: <LocalShippingIcon />, path: '/material', roles: ['ADMIN', 'WAREHOUSE_MANAGER'], section: 'workflow' },
     { text: 'Analytics & Insights', icon: <AssessmentIcon />, path: '/analytics', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'], section: 'analytics' },
     { text: 'System Configuration', icon: <SettingsIcon />, path: '/configuration', roles: ['ADMIN'], section: 'admin' },
+    { text: 'Terms & Conditions', icon: <ArticleIcon />, path: '/terms-conditions', roles: ['ADMIN'], section: 'admin' },
   ]
 
   const filteredMenuItems = menuItems.filter(item => 
