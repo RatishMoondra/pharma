@@ -727,6 +727,8 @@ const InvoicesPage = () => {
         invoice_number: invoice.invoice_number,
         invoice_date: invoice.invoice_date,
         po_id: invoice.po_id,
+        vendor_id: invoice.vendor_id || '',
+        invoice_type: invoice.invoice_type || '',
         dispatch_note_number: invoice.dispatch_note_number || '',
         dispatch_date: invoice.dispatch_date || '',
         warehouse_location: invoice.warehouse_location || '',
@@ -1180,40 +1182,48 @@ const InvoicesPage = () => {
               </Grid>
             </Grid>
 
-            {/* Invoice Type and Vendor selection (only for create) */}
-            {!editDialogOpen && (
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={4}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Invoice Type</InputLabel>
-                    <Select
-                      value={createFormData.invoice_type}
-                      onChange={(e) => handleCreateFormChange('invoice_type', e.target.value)}
-                      label="Invoice Type"
-                    >
-                      <MenuItem value="RM">Raw Materials (RM)</MenuItem>
-                      <MenuItem value="PM">Packing Materials (PM)</MenuItem>
-                      <MenuItem value="FG">Finished Goods (FG)</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Vendor</InputLabel>
-                    <Select
-                      value={createFormData.vendor_id}
-                      onChange={(e) => handleCreateFormChange('vendor_id', e.target.value)}
-                      label="Vendor"
-                    >
-                      <MenuItem value=""><em>Select Vendor</em></MenuItem>
-                      {vendors.map(v => (
-                        <MenuItem key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+            {/* Invoice Type and Vendor selection (always visible) */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth required>
+                  <InputLabel>Invoice Type</InputLabel>
+                  <Select
+                    value={editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type}
+                    onChange={(e) => (editDialogOpen ? handleEditFormChange('invoice_type', e.target.value) : handleCreateFormChange('invoice_type', e.target.value))}
+                    label="Invoice Type"
+                  >
+                    <MenuItem value="RM">Raw Materials (RM)</MenuItem>
+                    <MenuItem value="PM">Packing Materials (PM)</MenuItem>
+                    <MenuItem value="FG">Finished Goods (FG)</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
-            )}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth required>
+                  <InputLabel>Vendor</InputLabel>
+                  <Select
+                    value={editDialogOpen ? editFormData.vendor_id : createFormData.vendor_id}
+                    onChange={(e) => (editDialogOpen ? handleEditFormChange('vendor_id', e.target.value) : handleCreateFormChange('vendor_id', e.target.value))}
+                    label="Vendor"
+                  >
+                    <MenuItem value=""><em>Select Vendor</em></MenuItem>
+                    {(editDialogOpen ? vendors.filter(v => {
+                      if (editFormData.invoice_type === 'RM') return v.vendor_type === 'RM';
+                      if (editFormData.invoice_type === 'PM') return v.vendor_type === 'PM';
+                      if (editFormData.invoice_type === 'FG') return v.vendor_type === 'MANUFACTURER';
+                      return true;
+                    }) : vendors.filter(v => {
+                      if (createFormData.invoice_type === 'RM') return v.vendor_type === 'RM';
+                      if (createFormData.invoice_type === 'PM') return v.vendor_type === 'PM';
+                      if (createFormData.invoice_type === 'FG') return v.vendor_type === 'MANUFACTURER';
+                      return true;
+                    })).map(v => (
+                      <MenuItem key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code})</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
 
             {/* Auto-population alert when PO is selected (create only) */}
             {!editDialogOpen && createFormData.po_id && createFormData.items?.length > 0 && (
