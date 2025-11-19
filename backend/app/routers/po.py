@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
@@ -674,42 +675,67 @@ async def test_email_configuration(
         )
 
 
-@router.post("/{po_id}/submit-for-approval", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
-async def submit_po_for_approval(
+
+@router.post("/{po_id}/mark-pending", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def mark_po_pending(
     po_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Submit PO for approval (DRAFT → PENDING_APPROVAL)"""
+    """Mark PO as pending approval (DRAFT → PENDING_APPROVAL)"""
     po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
     if not po:
         raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
-    
     if po.status != POStatus.DRAFT:
-        raise AppException("Only DRAFT POs can be submitted for approval", "ERR_VALIDATION", 400)
-    
+        raise AppException("Only DRAFT POs can be marked as pending approval", "ERR_VALIDATION", 400)
     po.status = POStatus.PENDING_APPROVAL
     po.prepared_by = current_user.id
     po.prepared_at = datetime.utcnow()
     po.updated_at = datetime.utcnow()
-    
     db.commit()
     db.refresh(po)
-    
     logger.info({
-        "event": "PO_SUBMITTED_FOR_APPROVAL",
+        "event": "PO_MARKED_PENDING_APPROVAL",
         "po_id": po.id,
         "po_number": po.po_number,
         "user": current_user.username
     })
-    
     return {
         "success": True,
-        "message": f"PO {po.po_number} submitted for approval",
+        "message": f"PO {po.po_number} marked as pending approval",
         "data": POResponse.model_validate(po).model_dump(),
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
+@router.post("/{po_id}/send", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def send_po(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send PO (READY → SENT) without email logic"""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    if po.status != POStatus.READY:
+        raise AppException("Only READY POs can be sent", "ERR_VALIDATION", 400)
+    po.status = POStatus.SENT
+    po.sent_at = datetime.utcnow()
+    po.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(po)
+    logger.info({
+        "event": "PO_SENT",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "user": current_user.username
+    })
+    return {
+        "success": True,
+        "message": f"PO {po.po_number} marked as SENT",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
 
 @router.post("/{po_id}/approve", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN]))])
 async def approve_po(

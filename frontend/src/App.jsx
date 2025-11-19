@@ -12,6 +12,7 @@ import PIWorkflowVisualPage from './pages/PIWorkflowVisualPage'
 import EOPAPage from './pages/EOPAPage'
 import POPage from './pages/POPage'
 import POApprovalPage from './pages/POApprovalPage'
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 import InvoicesPage from './pages/InvoicesPage'
 import MaterialPage from './pages/MaterialPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -85,18 +86,10 @@ function App() {
             } 
           />
           <Route 
-            path="po" 
+            path="purchase-orders" 
             element={
               <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
-                <POPage />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="po-approval" 
-            element={
-              <PrivateRoute allowedRoles={['ADMIN', 'PROCUREMENT_OFFICER']}>
-                <POApprovalPage />
+                <PurchaseOrdersPage />
               </PrivateRoute>
             } 
           />
