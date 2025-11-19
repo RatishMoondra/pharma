@@ -36,10 +36,24 @@ def insert_material_balance_ledger(db: Session, po_id: int, invoice_id: int, ven
         db.refresh(ledger)
         return ledger
 
-def get_material_balance_summary(db: Session, raw_material_id: int, vendor_id: int):
+def get_material_balance_summary(db: Session, raw_material_id: int):
     query = db.query(MaterialBalance).filter_by(
-        raw_material_id=raw_material_id,
-        vendor_id=vendor_id,
+        raw_material_id=raw_material_id
+    )
+    total_ordered = query.with_entities(func.sum(MaterialBalance.ordered_qty)).scalar() or 0.0
+    total_received = query.with_entities(func.sum(MaterialBalance.received_qty)).scalar() or 0.0
+    total_balance = query.with_entities(func.sum(MaterialBalance.balance_qty)).scalar() or 0.0
+    recent_transactions = query.order_by(MaterialBalance.last_updated.desc()).limit(10).all()
+    return MaterialBalanceSummary(
+        total_ordered=total_ordered,
+        total_received=total_received,
+        total_balance=total_balance,
+        recent_transactions=[MaterialBalanceLedgerRow.from_orm(row) for row in recent_transactions]
+    )
+
+def get_packing_balance_summary(db: Session, packing_material_id: int):
+    query = db.query(MaterialBalance).filter_by(
+        packing_material_id=packing_material_id
     )
     total_ordered = query.with_entities(func.sum(MaterialBalance.ordered_qty)).scalar() or 0.0
     total_received = query.with_entities(func.sum(MaterialBalance.received_qty)).scalar() or 0.0

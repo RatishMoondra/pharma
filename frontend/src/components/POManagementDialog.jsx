@@ -35,7 +35,96 @@ import CheckIcon from '@mui/icons-material/Check'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
+// Example import for Material-UI icons
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
+
+
+// Mini-component for RM info tooltip
+const RawMaterialInfo = ({ raw_material_id }) => {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const handleFetch = async () => {
+    if (summary || loading) return
+    setLoading(true)
+    try {
+      // Replace with your actual summary endpoint
+      console.log('Fetching RM summary for ID:', raw_material_id);
+      console.log(`/api/material-balance/summary/${raw_material_id}`);
+      const res = await api.get(`/api/material-balance/summary/${raw_material_id}`)
+      setSummary(res.data)
+      console.log('Packing Material Balance Summary:', res.data);
+    } catch (err) {
+      setSummary({ ordered: '-', received: '-', balance: '-' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Tooltip
+      title={
+        loading
+          ? <CircularProgress size={16} />
+          : summary
+            ? `Ordered: ${summary.total_ordered} | Received: ${summary.total_received} | Balance: ${summary.total_balance}`
+            : 'Show RM summary'
+      }
+      arrow
+      open={open}
+      onOpen={() => { setOpen(true); handleFetch() }}
+      onClose={() => setOpen(false)}
+    >
+      <IconButton size="small">
+        <InfoOutlinedIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  )
+}
+
+// Mini-component for RM info tooltip
+const PackingMaterialInfo = ({ packing_material_id }) => {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const handleFetch = async () => {
+    if (summary || loading) return
+    setLoading(true)
+    try {
+      // Replace with your actual summary endpoint
+      const res = await api.get(`/api/material-balance/pmsummary/${packing_material_id}`)
+      setSummary(res.data)
+      console.log('Packing Material Balance Summary:', res.data);
+    } catch (err) {
+      setSummary({ ordered: '-', received: '-', balance: '-' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Tooltip
+      title={
+        loading
+          ? <CircularProgress size={16} />
+          : summary
+            ? `Ordered: ${summary.total_ordered} | Received: ${summary.total_received} | Balance: ${summary.total_balance}`
+            : 'Show RM summary'
+      }
+      arrow
+      open={open}
+      onOpen={() => { setOpen(true); handleFetch() }}
+      onClose={() => setOpen(false)}
+    >
+      <IconButton size="small">
+        <InfoOutlinedIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  )
+}
 const getVendorTypeIcon = (type) => {
   switch (type) {
     case 'MANUFACTURER':
@@ -819,16 +908,22 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Box sx={{ flex: 1 }}>
                               {poType === 'RM' && (
-                                <Typography variant="body2">
-                                  <strong>{item.raw_material_code}</strong> - {item.raw_material_name}
-                                </Typography>
+                                <>
+                                  <Typography variant="body2">
+                                    <strong>{item.raw_material_code}</strong> - {item.raw_material_name}
+                                  </Typography>
+                                  <RawMaterialInfo raw_material_id={item.raw_material_id} />
+                                </>
                               )}
                               {poType === 'PM' && (
-                                <Typography variant="body2">
-                                  <strong>{item.packing_material_code}</strong> - {item.packing_material_name}
-                                  {item.language && <Chip label={item.language} size="small" sx={{ ml: 1 }} />}
-                                  {item.artwork_version && <Chip label={item.artwork_version} size="small" sx={{ ml: 0.5 }} />}
-                                </Typography>
+                                <>
+                                  <Typography variant="body2">
+                                    <strong>{item.packing_material_code}</strong> - {item.packing_material_name}
+                                    {item.language && <Chip label={item.language} size="small" sx={{ ml: 1 }} />}
+                                    {item.artwork_version && <Chip label={item.artwork_version} size="small" sx={{ ml: 0.5 }} />}
+                                  </Typography>
+                                  <PackingMaterialInfo packing_material_id={item.packing_material_id} />
+                                </>
                               )}
                               {poType === 'FG' && (
                                 <Typography variant="body2">{item.medicine_name}</Typography>
