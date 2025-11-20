@@ -24,7 +24,7 @@ class MedicineBasic(BaseModel):
     id: int
     medicine_name: str
     dosage_form: str
-    
+    hsn_code: str       # ← REQUIRED
     class Config:
         from_attributes = True
 
@@ -34,6 +34,7 @@ class RawMaterialBasic(BaseModel):
     id: int
     rm_name: str
     rm_code: Optional[str] = None
+    hsn_code: str       # ← REQUIRED
 
     class Config:
         from_attributes = True
@@ -44,6 +45,8 @@ class PackingMaterialBasic(BaseModel):
     id: int
     pm_name: str
     pm_code: Optional[str] = None
+    hsn_code: str       # ← REQUIRED
+    unit_of_measure: Optional[str] = None  # Unit of Measure
 
     class Config:
         from_attributes = True

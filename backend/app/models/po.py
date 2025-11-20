@@ -21,7 +21,7 @@ class POStatus(str, enum.Enum):
     READY = "READY"                    # Final check done, ready to send
     SENT = "SENT"                      # Sent to vendor
     ACKNOWLEDGED = "ACKNOWLEDGED"      # Vendor acknowledged receipt
-    OPEN = "OPEN"                      # No fulfillment yet (after acknowledgment)
+    # OPEN = "OPEN"                      # No fulfillment yet (after acknowledgment)
     PARTIAL = "PARTIAL"                # Partially fulfilled
     CLOSED = "CLOSED"                  # Fully fulfilled
     CANCELLED = "CANCELLED"            # Cancelled

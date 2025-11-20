@@ -493,7 +493,7 @@ const PORow = ({
         </TableCell>
         <TableCell align="center">
           <Chip
-            label={po.status || 'OPEN'}
+            label={po.status || 'DRAFT'}
             size="small"
             color={
               po.status === 'CLOSED' ? 'success' : po.status === 'PARTIAL' ? 'warning' : 'default'

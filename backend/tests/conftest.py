@@ -454,7 +454,7 @@ def sample_fg_po(test_db, sample_eopa, manufacturer_vendor, medicine_paracetamol
         po_type=POType.FG,
         eopa_id=sample_eopa.id,
         vendor_id=manufacturer_vendor.id,
-        status=POStatus.OPEN,
+        status=POStatus.DRAFT,
         total_ordered_qty=Decimal("1000"),
         total_fulfilled_qty=Decimal("0"),
         delivery_date=date.today() + timedelta(days=30),

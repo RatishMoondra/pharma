@@ -75,6 +75,7 @@ const RawMaterialPage = () => {
       const response = await api.get('/api/raw-materials/')
       if (response.data.success) {
         setRawMaterials(response.data.data)
+        console.log('Fetched raw materials:', response.data.data)
       }
     } catch (err) {
       handleApiError(err)

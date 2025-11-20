@@ -11,6 +11,7 @@ from datetime import datetime
 
 class PackingMaterialBase(BaseModel):
     """Base schema for Packing Material"""
+    pm_code: str = Field(..., max_length=200, description="Packing material code")
     pm_name: str = Field(..., max_length=200, description="Packing material name")
     description: Optional[str] = Field(None, description="Detailed description")
     pm_type: Optional[str] = Field(None, max_length=50, description="Label, Carton, Insert, Blister, etc.")

@@ -312,7 +312,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
         try {
           const pmBomRes = await api.get(`/api/medicines/${medicine.id}/packing-materials/`)
           const pmBomItems = pmBomRes.data.data || []
-          console.log(`  📦 PM BOM Items (${pmBomItems.length}):`, pmBomItems)
+          console.log(`  📦 PM BOM Items (${pmBomItems.length}):`, pmBomItems, pmBomRes.data.data)
           
           pmBomItems.forEach(bomItem => {
             const explodedQty = parseFloat(eopaQty) * parseFloat(bomItem.qty_required_per_unit)
@@ -968,7 +968,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                       <TableCell>
                         <FormControl fullWidth size="small" disabled={!item.selected}>
                           <Select
-                            value={item.unit}
+                            value={item.uom || item.unit || ''}
                             onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'unit', e.target.value)}
                           >
                             <MenuItem value="pcs">pcs</MenuItem>
@@ -977,6 +977,8 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                             <MenuItem value="mg">mg</MenuItem>
                             <MenuItem value="L">L</MenuItem>
                             <MenuItem value="ml">ml</MenuItem>
+                            <MenuItem value="box">box</MenuItem>
+                            <MenuItem value="piece">piece</MenuItem>
                             <MenuItem value="boxes">boxes</MenuItem>
                             <MenuItem value="bottles">bottles</MenuItem>
                             <MenuItem value="labels">labels</MenuItem>

@@ -83,7 +83,7 @@ def test_invoice_processing():
     try:
         # Get an OPEN PO
         po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.status == POStatus.OPEN
+            PurchaseOrder.status == POStatus.DRAFT
         ).first()
         
         if not po:

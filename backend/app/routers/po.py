@@ -1014,7 +1014,7 @@ async def generate_po_by_vendor(
         eopa_id=eopa_id,
         vendor_id=vendor_id,
         delivery_date=date.today() + timedelta(days=30),  # Default 30 days
-        status="OPEN",
+        status=POStatus.DRAFT,
         created_by=current_user.id
     )
     

@@ -11,6 +11,7 @@ from datetime import datetime
 
 class RawMaterialBase(BaseModel):
     """Base schema for Raw Material"""
+    rm_code: str = Field(..., max_length=200, description="Raw material code")
     rm_name: str = Field(..., max_length=200, description="Raw material name")
     description: Optional[str] = Field(None, description="Detailed description")
     category: Optional[str] = Field(None, max_length=50, description="API, Excipient, Binder, etc.")

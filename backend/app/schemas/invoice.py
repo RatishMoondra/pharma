@@ -190,7 +190,8 @@ class PackingMaterialBasic(BaseModel):
     id: int
     pm_name: str
     pm_code: Optional[str] = None
-    
+    unit_of_measure: Optional[str] = None  # Unit of Measure
+        
     class Config:
         from_attributes = True
 
