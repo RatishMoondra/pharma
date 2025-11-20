@@ -5,7 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  * Tests: UI components, workflows, form validations
  */
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests/components',
+  ctTemplate: './playwright/index.html',
   
   /* Run tests in parallel */
   fullyParallel: true,

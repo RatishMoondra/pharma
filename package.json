@@ -1,0 +1,27 @@
+{
+  "name": "pawan",
+  "version": "1.0.0",
+  "description": "A web-based pharmaceutical procurement, manufacturing, and dispatch workflow system built with FastAPI (backend) and React (frontend).",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RatishMoondra/pharma.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RatishMoondra/pharma/issues"
+  },
+  "homepage": "https://github.com/RatishMoondra/pharma#readme",
+  "devDependencies": {
+    "@playwright/experimental-ct-react": "^1.56.1",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.1"
+  }
+}
