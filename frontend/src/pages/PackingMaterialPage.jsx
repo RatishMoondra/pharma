@@ -1,23 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  Container,
   Typography,
   Button,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
+  Chip,
   Alert,
   Snackbar,
-  CircularProgress,
   TextField,
   InputAdornment,
-  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,14 +20,69 @@ import {
   MenuItem,
   Checkbox,
   FormControlLabel,
+  CircularProgress,
 } from '@mui/material'
+import { DataGrid, GridToolbar, GridToolbarContainer, gridClasses } from '@mui/x-data-grid'
+import { alpha, styled } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied'
 import SearchIcon from '@mui/icons-material/Search'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
+
+const ODD_OPACITY = 0.2;
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  border: 'none',
+  '& .MuiDataGrid-cell': {
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: '0.875rem',
+  },
+  '& .MuiDataGrid-columnHeaders': {
+    backgroundColor: '#f5f5f5',
+    color: theme.palette.primary.main,
+    fontWeight: 'bold',
+    fontSize: '0.9rem',
+    borderBottom: '2px solid #ccc',
+  },
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[50],
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
+      '@media (hover: none)': { backgroundColor: 'transparent' },
+    },
+    '&.Mui-selected': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+      '&:hover': {
+        backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity + theme.palette.action.hoverOpacity),
+        '@media (hover: none)': {
+          backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+        },
+      },
+    },
+  },
+}))
+
+function CustomToolbar() {
+  return (
+    <GridToolbarContainer sx={{ p: 1, display: 'flex', justifyContent: 'flex-start', borderBottom: '1px solid #e0e0e0' }}>
+      <GridToolbar />
+    </GridToolbarContainer>
+  )
+}
+
+function CustomNoRowsOverlay() {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <SentimentDissatisfiedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+      <Typography variant="h6" color="text.secondary">No Packing Materials Found</Typography>
+      <Typography variant="body2" color="text.secondary">Try adjusting your search terms.</Typography>
+    </Box>
+  )
+}
 
 const PackingMaterialPage = () => {
   const [packingMaterials, setPackingMaterials] = useState([])
@@ -83,7 +129,7 @@ const PackingMaterialPage = () => {
       setLoading(true)
       const response = await api.get('/api/packing-materials/')
       if (response.data.success) {
-        setPackingMaterials(response.data.data)
+        setPackingMaterials(response.data.data.map(pm => ({ ...pm, id: pm.id })))
       }
     } catch (err) {
       handleApiError(err)
@@ -96,7 +142,6 @@ const PackingMaterialPage = () => {
     try {
       const response = await api.get('/api/vendors/')
       if (response.data.success) {
-        // Filter only PM vendors
         setVendors(response.data.data.filter(v => v.vendor_type === 'PM'))
       }
     } catch (err) {
@@ -221,25 +266,159 @@ const PackingMaterialPage = () => {
     }
   }
 
-  const filteredPackingMaterials = packingMaterials.filter(pm =>
-    pm.pm_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    pm.pm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    pm.pm_type?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredPackingMaterials = useMemo(() => {
+    if (!searchQuery) return packingMaterials
+    const query = searchQuery.toLowerCase()
+    return packingMaterials.filter(pm =>
+      pm.pm_code?.toLowerCase().includes(query) ||
+      pm.pm_name?.toLowerCase().includes(query) ||
+      pm.pm_type?.toLowerCase().includes(query)
+    )
+  }, [packingMaterials, searchQuery])
 
   const pmTypeOptions = ['Label', 'Carton', 'Insert', 'Blister', 'Bottle', 'Cap', 'Seal', 'Wrapper', 'Sachet', 'Other']
   const languageOptions = ['EN', 'FR', 'AR', 'SP', 'HI', 'DE', 'IT', 'PT']
   const uomOptions = ['PCS', 'SHEETS', 'ROLLS', 'BOXES', 'UNIT']
 
+  // DataGrid columns
+  const COLUMNS = [
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      minWidth: 100,
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      headerAlign: 'center',
+      flex: 0.8,
+      renderCell: (params) => (
+        <Box>
+          <IconButton size="small" onClick={() => handleOpenForm(params.row)} color="primary">
+            <EditIcon />
+          </IconButton>
+          <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
+            <DeleteIcon />
+          </IconButton>
+        </Box>
+      ),
+    },
+    {
+      field: 'pm_code',
+      headerName: 'PM Code',
+      minWidth: 120,
+      flex: 1,
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight="bold">{params.value}</Typography>
+      ),
+    },
+    {
+      field: 'pm_name',
+      headerName: 'PM Name',
+      minWidth: 180,
+      flex: 1.5,
+      renderCell: (params) => (
+        <Box>
+          <Typography variant="body2">{params.value}</Typography>
+          {params.row.description && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              {params.row.description}
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
+      field: 'pm_type',
+      headerName: 'Type',
+      minWidth: 120,
+      flex: 1,
+      renderCell: (params) => (
+        params.value ? <Chip label={params.value} size="small" color="info" /> : '-'
+      ),
+    },
+    {
+      field: 'language',
+      headerName: 'Lang',
+      minWidth: 80,
+      flex: 0.8,
+      renderCell: (params) => (
+        params.value ? <Chip label={params.value} size="small" color="primary" /> : '-'
+      ),
+    },
+    {
+      field: 'artwork_version',
+      headerName: 'Artwork Ver',
+      minWidth: 100,
+      flex: 1,
+      renderCell: (params) => (
+        <Typography variant="caption">{params.value || 'v1.0'}</Typography>
+      ),
+    },
+    {
+      field: 'specs',
+      headerName: 'Specs',
+      minWidth: 160,
+      flex: 1.2,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => {
+        const pm = params.row
+        return (
+          <Box>
+            {pm.gsm && <Typography variant="caption" display="block">GSM: {pm.gsm}</Typography>}
+            {pm.ply && <Typography variant="caption" display="block">Ply: {pm.ply}</Typography>}
+            {pm.dimensions && <Typography variant="caption" display="block">{pm.dimensions}</Typography>}
+          </Box>
+        )
+      },
+    },
+    {
+      field: 'unit_of_measure',
+      headerName: 'UOM',
+      minWidth: 80,
+      flex: 0.8,
+    },
+    {
+      field: 'default_vendor',
+      headerName: 'Default Vendor',
+      minWidth: 160,
+      flex: 1.2,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => {
+        const vendor = vendors.find(v => v.id === params.row.default_vendor_id)
+        return vendor ? (
+          <Typography variant="body2">
+            {vendor.vendor_name}
+            <br />
+            {vendor.vendor_code}
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">Not assigned</Typography>
+        )
+      },
+    },
+    {
+      field: 'is_active',
+      headerName: 'Status',
+      minWidth: 100,
+      flex: 1,
+      renderCell: (params) => (
+        <Chip
+          label={params.value ? 'Active' : 'Inactive'}
+          size="small"
+          color={params.value ? 'success' : 'default'}
+        />
+      ),
+    },
+  ]
+
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ width: '100%', p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Inventory2Icon sx={{ fontSize: 40, color: 'primary.main' }} />
-          <Typography variant="h4" component="h1">
-            Packing Material Master
-          </Typography>
+          <Typography variant="h4">Packing Material Master</Typography>
         </Box>
         <Button
           variant="contained"
@@ -250,123 +429,43 @@ const PackingMaterialPage = () => {
         </Button>
       </Box>
 
-      {/* Search */}
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          placeholder="Search by PM code, name, or type..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
+      <TextField
+        fullWidth
+        placeholder="Global Search (PM code, name, type, etc.)..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      <Box sx={{ height: 800, width: '100%' }}>
+        <StripedDataGrid
+          loading={loading}
+          rows={filteredPackingMaterials}
+          columns={COLUMNS}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 25 },
+            },
           }}
+          pageSizeOptions={[10, 25, 50]}
+          disableRowSelectionOnClick
+          slots={{
+            toolbar: CustomToolbar,
+            noRowsOverlay: CustomNoRowsOverlay,
+          }}
+          density="comfortable"
+          getRowClassName={(params) =>
+            params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+          }
         />
       </Box>
-
-      {/* Table */}
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PM Code</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PM Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Language</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Artwork Ver</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Specs</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>UOM</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Default Vendor</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredPackingMaterials.map((pm, idx) => (
-                <TableRow
-                  key={pm.id}
-                  sx={{
-                    bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
-                    '&:hover': { bgcolor: 'primary.50' }
-                  }}
-                >
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">{pm.pm_code}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{pm.pm_name}</Typography>
-                    {pm.description && (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {pm.description}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {pm.pm_type && (
-                      <Chip label={pm.pm_type} size="small" color="info" />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={pm.language || 'EN'} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption">{pm.artwork_version || 'v1.0'}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    {pm.gsm && <Typography variant="caption" display="block">GSM: {pm.gsm}</Typography>}
-                    {pm.ply && <Typography variant="caption" display="block">Ply: {pm.ply}</Typography>}
-                    {pm.dimensions && <Typography variant="caption" display="block">{pm.dimensions}</Typography>}
-                  </TableCell>
-                  <TableCell>{pm.unit_of_measure}</TableCell>
-                  <TableCell>
-                    {pm.default_vendor ? (
-                      <Box>
-                        <Typography variant="body2">{pm.default_vendor.vendor_name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {pm.default_vendor.vendor_code}
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">Not assigned</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={pm.is_active ? 'Active' : 'Inactive'}
-                      size="small"
-                      color={pm.is_active ? 'success' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => handleOpenForm(pm)} color="primary">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(pm.id)} color="error">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {filteredPackingMaterials.length === 0 && !loading && (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography color="text.secondary">
-            {searchQuery ? 'No packing materials found matching your search' : 'No packing materials yet. Click "Add Packing Material" to get started.'}
-          </Typography>
-        </Box>
-      )}
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="md" fullWidth>
@@ -673,7 +772,6 @@ const PackingMaterialPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Success Snackbar */}
       <Snackbar
         open={!!successMessage}
         autoHideDuration={3000}
@@ -685,7 +783,6 @@ const PackingMaterialPage = () => {
         </Alert>
       </Snackbar>
 
-      {/* Error Snackbar */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
@@ -696,7 +793,7 @@ const PackingMaterialPage = () => {
           {error}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   )
 }
 

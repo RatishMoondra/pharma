@@ -1,23 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  Container,
   Typography,
   Button,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
+  Chip,
   Alert,
   Snackbar,
   CircularProgress,
   TextField,
   InputAdornment,
-  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -30,187 +22,256 @@ import {
   Checkbox,
   FormControlLabel,
 } from '@mui/material'
+
+import {
+  DataGrid,
+  GridToolbar,
+  GridToolbarContainer,
+  gridClasses
+} from '@mui/x-data-grid'
+import { alpha, styled } from '@mui/material/styles' // 🟢 ADDED alpha and styled import
+
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
 import ScienceIcon from '@mui/icons-material/Science'
+import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied';
+
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 
+
+const ODD_OPACITY = 0.2;
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  border: 'none',
+  '& .MuiDataGrid-cell': {
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: '0.875rem',
+  },
+  '& .MuiDataGrid-columnHeaders': {
+    backgroundColor: '#f5f5f5',
+    color: theme.palette.primary.main,
+    fontWeight: 'bold',
+    fontSize: '0.9rem',
+    borderBottom: '2px solid #ccc',
+  },
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[50],
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
+      '@media (hover: none)': { backgroundColor: 'transparent' },
+    },
+    '&.Mui-selected': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+      '&:hover': {
+        backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity + theme.palette.action.hoverOpacity),
+        '@media (hover: none)': {
+          backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+        },
+      },
+    },
+  },
+}));
+
+function CustomToolbar() {
+  return (
+    <GridToolbarContainer sx={{ p: 1, display: 'flex', justifyContent: 'flex-start', borderBottom: '1px solid #e0e0e0' }}>
+      <GridToolbar />
+    </GridToolbarContainer>
+  );
+}
+
+function CustomNoRowsOverlay() {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <SentimentDissatisfiedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+      <Typography variant="h6" color="text.secondary">No Raw Materials Found</Typography>
+      <Typography variant="body2" color="text.secondary">Try adjusting your search terms.</Typography>
+    </Box>
+  );
+}
+
+
 const RawMaterialPage = () => {
-  const [rawMaterials, setRawMaterials] = useState([])
-  const [vendors, setVendors] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [formOpen, setFormOpen] = useState(false)
-  const [editingRM, setEditingRM] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const { error, handleApiError, clearError } = useApiError()
+  const [rawMaterials, setRawMaterials] = useState([])
+  const [vendors, setVendors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingRM, setEditingRM] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const { error, handleApiError, clearError } = useApiError()
 
-  const [formData, setFormData] = useState({
-    rm_name: '',
-    description: '',
-    category: '',
-    unit_of_measure: 'KG',
-    standard_purity: '',
-    hsn_code: '',
-    gst_rate: '',
-    default_vendor_id: '',
-    cas_number: '',
-    storage_conditions: '',
-    shelf_life_months: '',
-    is_active: true,
-  })
+  const [formData, setFormData] = useState({
+    rm_name: '',
+    description: '',
+    category: '',
+    unit_of_measure: 'KG',
+    standard_purity: '',
+    hsn_code: '',
+    gst_rate: '',
+    default_vendor_id: '',
+    cas_number: '',
+    storage_conditions: '',
+    shelf_life_months: '',
+    is_active: true,
+  })
 
-  useEffect(() => {
-    fetchRawMaterials()
-    fetchVendors()
-  }, [])
+  useEffect(() => {
+    fetchRawMaterials()
+    fetchVendors()
+  }, [])
 
-  const fetchRawMaterials = async () => {
-    try {
-      setLoading(true)
-      const response = await api.get('/api/raw-materials/')
-      if (response.data.success) {
-        setRawMaterials(response.data.data)
-        console.log('Fetched raw materials:', response.data.data)
-      }
-    } catch (err) {
-      handleApiError(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const fetchRawMaterials = async () => {
+    try {
+      setLoading(true)
+      const response = await api.get('/api/raw-materials/')
+      if (response.data.success) {
+        setRawMaterials(response.data.data)
+        console.log('Fetched raw materials:', response.data.data)
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const fetchVendors = async () => {
-    try {
-      const response = await api.get('/api/vendors/')
-      if (response.data.success) {
-        // Filter only RM vendors
-        setVendors(response.data.data.filter(v => v.vendor_type === 'RM'))
-      }
-    } catch (err) {
-      console.error('Failed to fetch vendors:', err)
-    }
-  }
+  const fetchVendors = async () => {
+    try {
+      const response = await api.get('/api/vendors/')
+      if (response.data.success) {
+        // Filter only RM vendors
+        setVendors(response.data.data.filter(v => v.vendor_type === 'RM'))
+      }
+    } catch (err) {
+      console.error('Failed to fetch vendors:', err)
+    }
+  }
 
-  const handleOpenForm = (rm = null) => {
-    if (rm) {
-      setEditingRM(rm)
-      setFormData({
-        rm_code: rm.rm_code || '',
-        rm_name: rm.rm_name || '',
-        description: rm.description || '',
-        category: rm.category || '',
-        unit_of_measure: rm.unit_of_measure || 'KG',
-        standard_purity: rm.standard_purity || '',
-        hsn_code: rm.hsn_code || '',
-        gst_rate: rm.gst_rate || '',
-        default_vendor_id: rm.default_vendor_id || '',
-        cas_number: rm.cas_number || '',
-        storage_conditions: rm.storage_conditions || '',
-        shelf_life_months: rm.shelf_life_months || '',
-        is_active: rm.is_active !== undefined ? rm.is_active : true,
-      })
-    } else {
-      setEditingRM(null)
-      setFormData({
-        rm_name: '',
-        description: '',
-        category: '',
-        unit_of_measure: 'KG',
-        standard_purity: '',
-        hsn_code: '',
-        gst_rate: '',
-        default_vendor_id: '',
-        cas_number: '',
-        storage_conditions: '',
-        shelf_life_months: '',
-        is_active: true,
-      })
-    }
-    setFormOpen(true)
-  }
+  const handleOpenForm = (rm = null) => {
+    if (rm) {
+      setEditingRM(rm)
+      setFormData({
+        rm_code: rm.rm_code || '',
+        rm_name: rm.rm_name || '',
+        description: rm.description || '',
+        category: rm.category || '',
+        unit_of_measure: rm.unit_of_measure || 'KG',
+        standard_purity: rm.standard_purity === null || rm.standard_purity === undefined ? '' : String(rm.standard_purity),
+        hsn_code: rm.hsn_code || '',
+        gst_rate: rm.gst_rate === null || rm.gst_rate === undefined ? '' : String(rm.gst_rate),
+        default_vendor_id: rm.default_vendor_id || '',
+        cas_number: rm.cas_number || '',
+        storage_conditions: rm.storage_conditions || '',
+        shelf_life_months: rm.shelf_life_months === null || rm.shelf_life_months === undefined ? '' : String(rm.shelf_life_months),
+        is_active: rm.is_active !== undefined ? rm.is_active : true,
+      })
+    } else {
+      setEditingRM(null)
+      setFormData({
+        rm_name: '',
+        description: '',
+        category: '',
+        unit_of_measure: 'KG',
+        standard_purity: '',
+        hsn_code: '',
+        gst_rate: '',
+        default_vendor_id: '',
+        cas_number: '',
+        storage_conditions: '',
+        shelf_life_months: '',
+        is_active: true,
+      })
+    }
+    setFormOpen(true)
+  }
 
-  const handleCloseForm = () => {
-    setFormOpen(false)
-    setEditingRM(null)
-  }
+  const handleCloseForm = () => {
+    setFormOpen(false)
+    setEditingRM(null)
+  }
 
-  const handleChange = (e) => {
-    const { name, value, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'is_active' ? checked : value
-    }))
-  }
+  const handleChange = (e) => {
+    const { name, value, checked } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'is_active' ? checked : value
+    }))
+  }
 
-  const handleSubmit = async () => {
-    try {
-      setSubmitting(true)
+  const handleSubmit = async () => {
+    try {
+      setSubmitting(true)
 
-      // Convert empty strings to null for numeric fields
-      const payload = {
-        ...formData,
-        standard_purity: formData.standard_purity ? parseFloat(formData.standard_purity) : null,
-        gst_rate: formData.gst_rate ? parseFloat(formData.gst_rate) : null,
-        shelf_life_months: formData.shelf_life_months ? parseInt(formData.shelf_life_months) : null,
-        default_vendor_id: formData.default_vendor_id || null,
-      }
+      // Convert empty strings to null for numeric fields
+      const payload = {
+        ...formData,
+        standard_purity: formData.standard_purity ? parseFloat(formData.standard_purity) : null,
+        gst_rate: formData.gst_rate ? parseFloat(formData.gst_rate) : null,
+        shelf_life_months: formData.shelf_life_months ? parseInt(formData.shelf_life_months) : null,
+        default_vendor_id: formData.default_vendor_id || null,
+      }
 
-      let response
-      if (editingRM) {
-        response = await api.put(`/api/raw-materials/${editingRM.id}`, payload)
-      } else {
-        response = await api.post('/api/raw-materials/', payload)
-      }
+      let response
+      if (editingRM) {
+        response = await api.put(`/api/raw-materials/${editingRM.id}`, payload)
+      } else {
+        response = await api.post('/api/raw-materials/', payload)
+      }
 
-      if (response.data.success) {
-        setSuccessMessage(editingRM ? 'Raw material updated successfully' : 'Raw material created successfully')
-        handleCloseForm()
-        fetchRawMaterials()
-      }
-    } catch (err) {
-      handleApiError(err)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+      if (response.data.success) {
+        setSuccessMessage(editingRM ? 'Raw material updated successfully' : 'Raw material created successfully')
+        handleCloseForm()
+        fetchRawMaterials()
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this raw material?')) return
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this raw material?')) return
 
-    try {
-      const response = await api.delete(`/api/raw-materials/${id}`)
-      if (response.data.success) {
-        setSuccessMessage('Raw material deleted successfully')
-        fetchRawMaterials()
-      }
-    } catch (err) {
-      handleApiError(err)
-    }
-  }
+    try {
+      const response = await api.delete(`/api/raw-materials/${id}`)
+      if (response.data.success) {
+        setSuccessMessage('Raw material deleted successfully')
+        fetchRawMaterials()
+      }
+    } catch (err) {
+      handleApiError(err)
+    }
+  }
 
-  const filteredRawMaterials = rawMaterials.filter(rm =>
-    rm.rm_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rm.rm_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    rm.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredRawMaterials = useMemo(() => {
+    if (!searchQuery) return rawMaterials.map(rm => ({ ...rm, id: rm.id }));
+    const query = searchQuery.toLowerCase();
+    return rawMaterials
+      .map(rm => ({ ...rm, id: rm.id }))
+      .filter(rm =>
+        rm.rm_code?.toLowerCase().includes(query) ||
+        rm.rm_name?.toLowerCase().includes(query) ||
+        rm.category?.toLowerCase().includes(query) ||
+        rm.default_vendor?.vendor_name?.toLowerCase().includes(query)
+      );
+  }, [rawMaterials, searchQuery]);
 
-  const categoryOptions = ['API', 'Excipient', 'Binder', 'Solvent', 'Preservative', 'Coating Agent', 'Filler', 'Lubricant', 'Other']
-  const uomOptions = ['KG', 'GRAM', 'LITER', 'ML', 'UNIT']
+  const categoryOptions = ['API', 'Excipient', 'Binder', 'Solvent', 'Preservative', 'Coating Agent', 'Filler', 'Lubricant', 'Other']
+  const uomOptions = ['KG', 'GRAM', 'LITER', 'ML', 'UNIT']
+
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ width: '100%', p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <ScienceIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-          <Typography variant="h4" component="h1">
-            Raw Material Master
-          </Typography>
+          <Typography variant="h4">Raw Material Master</Typography>
         </Box>
         <Button
           variant="contained"
@@ -221,117 +282,167 @@ const RawMaterialPage = () => {
         </Button>
       </Box>
 
-      {/* Search */}
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          placeholder="Search by RM code, name, or category..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
+      <TextField
+        fullWidth
+        placeholder="Global Search (RM code, name, category, or vendor)..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      <Box sx={{ height: 800, width: '100%' }}>
+        <StripedDataGrid
+          loading={loading}
+          rows={filteredRawMaterials}
+          columns={[
+            {
+              field: 'actions',
+              headerName: 'Actions',
+              minWidth: 100,
+              sortable: false,
+              filterable: false,
+              align: 'center',
+              headerAlign: 'center',
+              flex: 0.8,
+              renderCell: (params) => (
+                <Box>
+                  <IconButton size="small" onClick={() => handleOpenForm(params.row)} color="primary">
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
+              ),
+            },
+            {
+              field: 'rm_code',
+              headerName: 'RM Code',
+              minWidth: 120,
+              flex: 1,
+              renderCell: (params) => (
+                <Typography variant="body2" fontWeight="bold">{params.value}</Typography>
+              ),
+            },
+            {
+              field: 'rm_name',
+              headerName: 'RM Name',
+              minWidth: 180,
+              flex: 1.5,
+              renderCell: (params) => (
+                <Box>
+                  <Typography variant="body2">{params.value}</Typography>
+                  {params.row.description && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {params.row.description}
+                    </Typography>
+                  )}
+                </Box>
+              ),
+            },
+            {
+              field: 'category',
+              headerName: 'Category',
+              minWidth: 120,
+              flex: 1,
+              renderCell: (params) => (
+                params.value ? <Chip label={params.value} size="small" color="info" /> : '-'
+              ),
+            },
+            {
+              field: 'unit_of_measure',
+              headerName: 'UOM',
+              minWidth: 80,
+              flex: 0.8,
+            },
+            {
+              field: 'standard_purity',
+              headerName: 'Purity %',
+              minWidth: 100,
+              flex: 1,
+              renderCell: (params) => (
+                params.value ? (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: params.value < 95 ? 'bold' : 'normal',
+                      color: params.value < 95 ? 'warning.dark' : 'text.primary',
+                    }}
+                  >
+                    {params.value}%
+                  </Typography>
+                ) : '-'
+              ),
+            },
+            {
+              field: 'default_vendor',
+              headerName: 'Default Vendor',
+              minWidth: 180,
+              flex: 1.5,
+              renderCell: (params) => (
+                params.value ? (
+                  <Box>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {params.value.vendor_name + '\n' + params.value.vendor_code}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">Not assigned</Typography>
+                )
+              ),
+            },
+            {
+              field: 'hsn_code',
+              headerName: 'HSN Code',
+              minWidth: 100,
+              flex: 1,
+              renderCell: (params) => params.value || '-',
+            },
+            {
+              field: 'gst_rate',
+              headerName: 'GST %',
+              minWidth: 80,
+              flex: 0.8,
+              renderCell: (params) => params.value ? `${params.value}%` : '-',
+            },
+            {
+              field: 'is_active',
+              headerName: 'Status',
+              minWidth: 100,
+              flex: 1,
+              renderCell: (params) => (
+                <Chip
+                  label={params.value ? 'Active' : 'Inactive'}
+                  size="small"
+                  color={params.value ? 'success' : 'default'}
+                />
+              ),
+            },
+          ]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 25 },
+            },
           }}
+          pageSizeOptions={[10, 25, 50]}
+          disableRowSelectionOnClick
+          slots={{
+            toolbar: CustomToolbar,
+            noRowsOverlay: CustomNoRowsOverlay,
+          }}
+          density="comfortable"
+          getRowClassName={(params) =>
+            params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+          }
         />
       </Box>
-
-      {/* Table */}
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>RM Code</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>RM Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Category</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>UOM</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Purity %</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Default Vendor</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>HSN Code</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>GST %</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredRawMaterials.map((rm, idx) => (
-                <TableRow
-                  key={rm.id}
-                  sx={{
-                    bgcolor: idx % 2 === 0 ? 'white' : 'grey.50',
-                    '&:hover': { bgcolor: 'primary.50' }
-                  }}
-                >
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">{rm.rm_code}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{rm.rm_name}</Typography>
-                    {rm.description && (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {rm.description}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {rm.category && (
-                      <Chip label={rm.category} size="small" color="info" />
-                    )}
-                  </TableCell>
-                  <TableCell>{rm.unit_of_measure}</TableCell>
-                  <TableCell>
-                    {rm.standard_purity ? `${rm.standard_purity}%` : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {rm.default_vendor ? (
-                      <Box>
-                        <Typography variant="body2">{rm.default_vendor.vendor_name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {rm.default_vendor.vendor_code}
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">Not assigned</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>{rm.hsn_code || '-'}</TableCell>
-                  <TableCell>{rm.gst_rate ? `${rm.gst_rate}%` : '-'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={rm.is_active ? 'Active' : 'Inactive'}
-                      size="small"
-                      color={rm.is_active ? 'success' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => handleOpenForm(rm)} color="primary">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(rm.id)} color="error">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {filteredRawMaterials.length === 0 && !loading && (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography color="text.secondary">
-            {searchQuery ? 'No raw materials found matching your search' : 'No raw materials yet. Click "Add Raw Material" to get started.'}
-          </Typography>
-        </Box>
-      )}
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="md" fullWidth>
@@ -516,7 +627,6 @@ const RawMaterialPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Success Snackbar */}
       <Snackbar
         open={!!successMessage}
         autoHideDuration={3000}
@@ -528,7 +638,6 @@ const RawMaterialPage = () => {
         </Alert>
       </Snackbar>
 
-      {/* Error Snackbar */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
@@ -539,7 +648,7 @@ const RawMaterialPage = () => {
           {error}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   )
 }
 

@@ -5,100 +5,108 @@ import {
   CircularProgress,
   Typography,
   Stack,
+  Paper, // Added Paper for structured tooltip content
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import api from '../../services/api'; // Adjust path as needed
 
+// Helper to determine the key for material ID
+const getMaterialKey = (type) => {
+  if (type === 'RM') return 'raw_material_id';
+  if (type === 'PM') return 'packing_material_id';
+  return null;
+};
+
 /**
- * Tooltip for displaying Raw Material (RM) balance summary.
+ * Common component for displaying Material (RM/PM) balance summary.
  */
-export const RawMaterialInfo = ({ raw_material_id }) => {
+const MaterialBalanceInfo = ({ materialId, materialType, materialName }) => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const apiPath = materialType === 'RM' ? 'summary' : 'pmsummary';
 
   const handleFetch = async () => {
     if (summary || loading) return;
     setLoading(true);
     try {
-      const res = await api.get(`/api/material-balance/summary/${raw_material_id}`);
+      const res = await api.get(`/api/material-balance/${apiPath}/${materialId}`);
+      // Assuming res.data structure is { total_ordered: 100, total_received: 50, total_balance: 50 }
       setSummary(res.data);
     } catch (err) {
-      setSummary({ total_ordered: '-', total_received: '-', total_balance: '-' });
+      setSummary({ total_ordered: 'N/A', total_received: 'N/A', total_balance: 'N/A' });
     } finally {
       setLoading(false);
     }
   };
 
   const tooltipTitle = loading ? (
-    <CircularProgress size={16} color="inherit" />
-  ) : summary ? (
-    <Stack>
-      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>Material Balance Summary</Typography>
-      <Typography variant="caption">Ordered: {summary.total_ordered}</Typography>
-      <Typography variant="caption">Received: {summary.total_received}</Typography>
-      <Typography variant="caption">Balance: {summary.total_balance}</Typography>
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ p: 0.5 }}>
+      <CircularProgress size={16} color="inherit" />
+      <Typography variant="caption">Loading Balance...</Typography>
     </Stack>
-  ) : 'Show RM summary';
+  ) : summary ? (
+    <Paper elevation={3} sx={{ p: 1, bgcolor: 'background.paper', borderLeft: '4px solid', borderColor: 'primary.main', minWidth: 200 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5, color: 'primary.dark' }}>
+        {materialName} ({materialType})
+      </Typography>
+      <Stack spacing={0.5}>
+        <Typography variant="caption" color="text.secondary">
+          <span style={{ fontWeight: 'bold' }}>Ordered:</span> {summary.total_ordered}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          <span style={{ fontWeight: 'bold' }}>Received:</span> {summary.total_received}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ color: 'success.dark', fontWeight: 'bold' }}>
+          Balance: {summary.total_balance}
+        </Typography>
+      </Stack>
+    </Paper>
+  ) : (
+    <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+      Click to view {materialType} Balance for {materialName}
+    </Typography>
+  );
 
   return (
     <Tooltip
       title={tooltipTitle}
       arrow
       open={open}
-      onOpen={() => { setOpen(true); handleFetch(); }}
+      onOpen={() => {
+        setOpen(true);
+        handleFetch();
+      }}
       onClose={() => setOpen(false)}
+      placement="right"
     >
-      <IconButton size="small" sx={{ p: 0.2 }}>
-        <InfoOutlinedIcon fontSize="small" color="action" />
+      <IconButton 
+        size="small" 
+        sx={{ 
+          color: 'info.main', 
+          '&:hover': { color: 'info.dark' } 
+        }}
+      >
+        <InfoOutlinedIcon fontSize="inherit" />
       </IconButton>
     </Tooltip>
   );
 };
 
-/**
- * Tooltip for displaying Packing Material (PM) balance summary.
- */
-export const PackingMaterialInfo = ({ packing_material_id }) => {
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+// --- Export Components (wrappers for backward compatibility) ---
 
-  const handleFetch = async () => {
-    if (summary || loading) return;
-    setLoading(true);
-    try {
-      const res = await api.get(`/api/material-balance/pmsummary/${packing_material_id}`);
-      setSummary(res.data);
-    } catch (err) {
-      setSummary({ total_ordered: '-', total_received: '-', total_balance: '-' });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const tooltipTitle = loading ? (
-    <CircularProgress size={16} color="inherit" />
-  ) : summary ? (
-    <Stack>
-      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>Material Balance Summary</Typography>
-      <Typography variant="caption">Ordered: {summary.total_ordered}</Typography>
-      <Typography variant="caption">Received: {summary.total_received}</Typography>
-      <Typography variant="caption">Balance: {summary.total_balance}</Typography>
-    </Stack>
-  ) : 'Show PM summary';
+export const RawMaterialInfo = ({ raw_material_id, raw_material_name }) => (
+  <MaterialBalanceInfo 
+    materialId={raw_material_id} 
+    materialType="RM" 
+    materialName={raw_material_name || `RM-${raw_material_id}`}
+  />
+);
 
-  return (
-    <Tooltip
-      title={tooltipTitle}
-      arrow
-      open={open}
-      onOpen={() => { setOpen(true); handleFetch(); }}
-      onClose={() => setOpen(false)}
-    >
-      <IconButton size="small" sx={{ p: 0.2 }}>
-        <InfoOutlinedIcon fontSize="small" color="action" />
-      </IconButton>
-    </Tooltip>
-  );
-};
+export const PackingMaterialInfo = ({ packing_material_id, packing_material_name }) => (
+  <MaterialBalanceInfo 
+    materialId={packing_material_id} 
+    materialType="PM" 
+    materialName={packing_material_name || `PM-${packing_material_id}`}
+  />
+);

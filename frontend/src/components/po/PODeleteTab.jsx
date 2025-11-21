@@ -12,7 +12,18 @@ import {
   Paper,
   Checkbox,
   Chip,
+  Tooltip, // Added Tooltip
 } from '@mui/material';
+
+// Custom status color mapping for deletion view
+const poStatusColors = {
+    DRAFT: 'warning',
+    PENDING_APPROVAL: 'primary',
+    APPROVED: 'info',
+    READY: 'secondary',
+    CLOSED: 'success',
+    PARTIAL: 'default',
+};
 
 /**
  * Renders the content for the PO Deletion tab (RM, PM, or FG).
@@ -34,7 +45,7 @@ const PODeleteTab = ({ poType, existingList, onPOSelectionToggle, onPOSelectAllT
   return (
     <Box sx={{ mt: 2 }}>
       <Alert severity="warning" sx={{ mb: 2 }}>
-        Select **{poType}** POs to delete. This action cannot be undone.
+        Select **{poType}** POs to delete. Only POs in **DRAFT** status can be safely deleted. Deleting others may require manual intervention.
       </Alert>
       
       <TableContainer component={Paper} variant="outlined">
@@ -42,26 +53,31 @@ const PODeleteTab = ({ poType, existingList, onPOSelectionToggle, onPOSelectAllT
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.100' }}>
               <TableCell padding="checkbox">
-                <Checkbox
-                  checked={isAllSelected}
-                  indeterminate={isIndeterminate}
-                  onChange={(e) => onPOSelectAllToggle(poType, e.target.checked)}
-                />
+                <Tooltip title={isAllSelected ? "Deselect All" : "Select All"} arrow>
+                  <Checkbox
+                    checked={isAllSelected}
+                    indeterminate={isIndeterminate}
+                    onChange={() => onPOSelectAllToggle(poType)}
+                  />
+                </Tooltip>
               </TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>PO Number</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Vendor</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Items</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Created Date</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Items</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Created On</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {existingList.map((po, index) => (
-              <TableRow
-                key={po.id}
-                sx={{
-                  bgcolor: po.selected ? 'error.50' : 'white',
-                  '&:hover': { bgcolor: 'action.hover' }
+              // Highlight rows that are NOT DRAFT to denote deletion danger
+              <TableRow 
+                key={po.id} 
+                hover 
+                onClick={() => onPOSelectionToggle(poType, index)}
+                sx={{ 
+                    cursor: 'pointer',
+                    bgcolor: po.status !== 'DRAFT' ? 'error.lighter' : 'transparent', // Visual warning for locked POs
                 }}
               >
                 <TableCell padding="checkbox">
@@ -71,7 +87,7 @@ const PODeleteTab = ({ poType, existingList, onPOSelectionToggle, onPOSelectAllT
                   />
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.dark' }}>
                     {po.po_number}
                   </Typography>
                 </TableCell>
@@ -82,11 +98,15 @@ const PODeleteTab = ({ poType, existingList, onPOSelectionToggle, onPOSelectAllT
                   <Chip
                     label={po.status}
                     size="small"
-                    color={po.status === 'CLOSED' ? 'success' : po.status === 'PARTIAL' ? 'warning' : 'default'}
+                    // Use consistent, defined colors
+                    color={poStatusColors[po.status.toUpperCase()] || 'default'} 
+                    sx={{ fontWeight: 'medium' }}
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Typography variant="body2">{po.items?.length || 0}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {po.items?.length || 0}
+                  </Typography>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
@@ -99,8 +119,8 @@ const PODeleteTab = ({ poType, existingList, onPOSelectionToggle, onPOSelectAllT
         </Table>
       </TableContainer>
       
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-        Total POs selected for deletion: **{selectedCount}** / {existingList.length}
+      <Typography variant="subtitle2" color="text.primary" sx={{ mt: 2, display: 'block', fontWeight: 'bold' }}>
+        Selected for deletion: <span style={{ color: selectedCount > 0 ? 'error.main' : 'text.secondary' }}>{selectedCount}</span> / {existingList.length} POs
       </Typography>
     </Box>
   );

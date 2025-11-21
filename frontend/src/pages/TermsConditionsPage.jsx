@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // 🟢 Added useMemo
 import {
   Container,
   Paper,
@@ -26,10 +26,10 @@ import {
   Switch,
   Snackbar,
   Alert,
-  Tabs,
-  Tab,
   CircularProgress,
+  TableSortLabel, // 🟢 Added TableSortLabel
 } from '@mui/material';
+import { alpha, styled } from '@mui/material/styles'; // 🟢 Added alpha and styled
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -61,12 +61,57 @@ const getCategoryColor = (category) => {
   return colors[category] || 'default';
 };
 
+// 🟢 SORTING HELPER FUNCTIONS (Copied from RawMaterialPage.jsx)
+const descendingComparator = (a, b, property) => {
+  if (b[property] < a[property]) return -1;
+  if (b[property] > a[property]) return 1;
+  return 0;
+}
+
+const getComparator = (order, orderBy) => {
+  return order === 'desc'
+    ? (a, b) => descendingComparator(a, b, orderBy)
+    : (a, b) => -descendingComparator(a, b, orderBy);
+}
+
+const stableSort = (array, comparator) => {
+  const stabilized = array.map((el, idx) => [el, idx]);
+  stabilized.sort((a, b) => {
+    const cmp = comparator(a[0], b[0]);
+    if (cmp !== 0) return cmp;
+    return a[1] - b[1];
+  });
+  return stabilized.map((el) => el[0]);
+}
+
+// 🟢 Striped Row Styling (Modified to include inactive background color)
+const StripedTableRow = styled(TableRow)(({ theme, index, isactive }) => ({
+  backgroundColor: isactive === 'false' 
+    ? theme.palette.action.disabledBackground // Distinct color for inactive terms
+    : index % 2 === 0 ? 'white' : theme.palette.grey[50], // Striped colors for active terms
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.05),
+  },
+}));
+
 const TermsConditionsPage = () => {
   const [terms, setTerms] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Existing Filters (Now used for client-side filtering)
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [searchText, setSearchText] = useState('');
+
+  // 🟢 NEW SORTING & COLUMN FILTERING STATE
+  const [order, setOrder] = useState('asc');
+  const [orderBy, setOrderBy] = useState('priority');
+  const [columnFilters, setColumnFilters] = useState({
+    priority: '',
+    category: '',
+    term_text: '',
+  });
+
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTerm, setEditingTerm] = useState(null);
   const [formData, setFormData] = useState({
@@ -77,19 +122,16 @@ const TermsConditionsPage = () => {
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // 🟢 Fetch all terms once on mount
   useEffect(() => {
     fetchTerms();
-  }, [selectedCategory, showActiveOnly, searchText]);
+  }, []); // Dependency array cleared to fetch all data once
 
   const fetchTerms = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (selectedCategory) params.category = selectedCategory;
-      if (showActiveOnly) params.is_active = true;
-      if (searchText) params.search = searchText;
-
-      const response = await api.get('/api/terms/', { params });
+      // Fetch all terms to enable client-side sorting and column filtering
+      const response = await api.get('/api/terms/'); 
       if (response.data.success) {
         setTerms(response.data.data);
       }
@@ -101,6 +143,63 @@ const TermsConditionsPage = () => {
     }
   };
 
+  // 🟢 SORTING HANDLERS
+  const handleSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  // 🟢 COLUMN FILTER HANDLER
+  const handleColumnFilterChange = (field, value) => {
+    setColumnFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // 🟢 COMBINED FILTERING AND SORTING LOGIC
+  const filteredTerms = useMemo(() => {
+    let filtered = terms;
+    const query = searchText.toLowerCase();
+
+    // 1. Global Search Filter (from the top text field)
+    if (query) {
+        filtered = filtered.filter(term =>
+            term.term_text?.toLowerCase().includes(query) ||
+            term.category?.toLowerCase().includes(query) ||
+            term.priority?.toString().includes(query)
+        );
+    }
+
+    // 2. Category Filter (from the top select)
+    if (selectedCategory) {
+        filtered = filtered.filter(term => term.category === selectedCategory);
+    }
+
+    // 3. Active Only Filter (from the top switch)
+    if (showActiveOnly) {
+        filtered = filtered.filter(term => term.is_active);
+    }
+
+    // 4. Column Filters (additive filter regardless of global search)
+    filtered = filtered.filter(term => {
+      return Object.entries(columnFilters).every(([key, val]) => {
+        if (!val) return true;
+
+        // Handle numeric filter (priority)
+        if (key === 'priority') {
+          return term.priority?.toString().includes(val);
+        }
+
+        // Handle string properties (category, term_text)
+        return term[key]?.toLowerCase().includes(val.toLowerCase());
+      });
+    });
+
+    // 5. Apply Sorting
+    return stableSort(filtered, getComparator(order, orderBy));
+
+  }, [terms, searchText, selectedCategory, showActiveOnly, order, orderBy, columnFilters]);
+
+  // Rest of the handlers (handleOpenDialog, handleCloseDialog, handleChange, handleSubmit, handleDelete, showSnackbar, handleCloseSnackbar) remain unchanged
   const handleOpenDialog = (term = null) => {
     if (term) {
       setEditingTerm(term);
@@ -187,6 +286,7 @@ const TermsConditionsPage = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
@@ -203,11 +303,11 @@ const TermsConditionsPage = () => {
         </Button>
       </Box>
 
-      {/* Filters */}
+      {/* Filters (Now only update state for client-side filtering) */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Category Filter */}
-          <FormControl sx={{ minWidth: 200 }}>
+          <FormControl sx={{ minWidth: 200 }} size="small">
             <InputLabel>Category</InputLabel>
             <Select
               value={selectedCategory}
@@ -223,12 +323,13 @@ const TermsConditionsPage = () => {
             </Select>
           </FormControl>
 
-          {/* Search */}
+          {/* Search (Global Search) */}
           <TextField
-            label="Search term text"
+            label="Global Search (Term Text, Category, Priority)"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             variant="outlined"
+            size="small"
             sx={{ flexGrow: 1, minWidth: 300 }}
             InputProps={{
               endAdornment: <SearchIcon />,
@@ -257,32 +358,88 @@ const TermsConditionsPage = () => {
         ) : (
           <Table>
             <TableHead>
+              {/* 🟢 Main Header Row (Styled to match VendorsPage) */}
+              <TableRow sx={{ bgcolor: 'primary.main' }}> 
+                <TableCell width="60" sx={{ color: 'white', fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={orderBy === 'priority'}
+                    direction={orderBy === 'priority' ? order : 'asc'}
+                    onClick={() => handleSort('priority')}
+                  >Priority</TableSortLabel>
+                </TableCell>
+                <TableCell width="120" sx={{ color: 'white', fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={orderBy === 'category'}
+                    direction={orderBy === 'category' ? order : 'asc'}
+                    onClick={() => handleSort('category')}
+                  >Category</TableSortLabel>
+                </TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={orderBy === 'term_text'}
+                    direction={orderBy === 'term_text' ? order : 'asc'}
+                    onClick={() => handleSort('term_text')}
+                  >Term Text</TableSortLabel>
+                </TableCell>
+                <TableCell width="100" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell width="180" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>
+                  <TableSortLabel
+                    active={orderBy === 'created_at'}
+                    direction={orderBy === 'created_at' ? order : 'asc'}
+                    onClick={() => handleSort('created_at')}
+                  >Created</TableSortLabel>
+                </TableCell>
+                <TableCell width="120" align="center" sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
+              </TableRow>
+              
+              {/* 🟢 Column Filter Row */}
               <TableRow>
-                <TableCell width="60">Priority</TableCell>
-                <TableCell width="120">Category</TableCell>
-                <TableCell>Term Text</TableCell>
-                <TableCell width="100" align="center">Status</TableCell>
-                <TableCell width="180" align="center">Created</TableCell>
-                <TableCell width="120" align="center">Actions</TableCell>
+                <TableCell>
+                  <TextField
+                    size="small"
+                    placeholder="Priority"
+                    value={columnFilters.priority}
+                    onChange={e => handleColumnFilterChange('priority', e.target.value)}
+                    sx={{ width: 80 }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <TextField
+                    size="small"
+                    placeholder="Category"
+                    value={columnFilters.category}
+                    onChange={e => handleColumnFilterChange('category', e.target.value)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <TextField
+                    size="small"
+                    placeholder="Search Term"
+                    value={columnFilters.term_text}
+                    onChange={e => handleColumnFilterChange('term_text', e.target.value)}
+                    fullWidth
+                  />
+                </TableCell>
+                <TableCell /> {/* Status - No filter */}
+                <TableCell /> {/* Created - No filter */}
+                <TableCell /> {/* Actions - No filter */}
               </TableRow>
             </TableHead>
             <TableBody>
-              {terms.length === 0 ? (
+              {filteredTerms.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No terms found. {!showActiveOnly && 'Try adjusting your filters.'}
+                      No terms found. Try adjusting your filters.
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                terms.map((term) => (
-                  <TableRow
+                filteredTerms.map((term, idx) => (
+                  <StripedTableRow // 🟢 Use StripedTableRow
                     key={term.id}
-                    sx={{
-                      bgcolor: term.is_active ? 'inherit' : 'action.disabledBackground',
-                      '&:hover': { bgcolor: 'action.hover' },
-                    }}
+                    index={idx}
+                    isactive={term.is_active.toString()} // Pass active status for conditional background
                   >
                     <TableCell>
                       <Chip
@@ -338,7 +495,7 @@ const TermsConditionsPage = () => {
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
-                  </TableRow>
+                  </StripedTableRow>
                 ))
               )}
             </TableBody>
@@ -346,7 +503,7 @@ const TermsConditionsPage = () => {
         )}
       </TableContainer>
 
-      {/* Add/Edit Dialog */}
+      {/* Add/Edit Dialog (Unchanged) */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingTerm ? 'Edit Term' : 'Add New Term'}
@@ -415,7 +572,7 @@ const TermsConditionsPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
+      {/* Snackbar (Unchanged) */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}

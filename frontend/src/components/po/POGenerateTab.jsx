@@ -8,8 +8,13 @@ import {
   Checkbox,
   Chip,
   Button,
+  Tooltip, // Added Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import LockIcon from '@mui/icons-material/Lock'; // Added Lock Icon
+import WarningIcon from '@mui/icons-material/Warning'; // Added Warning Icon
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Added Check Icon
+
 // Ensure the explicit .jsx extension is used here
 import { getVendorTypeIcon } from '../../utils/poUtilities.jsx'; 
 import POItemTable from './POItemTable';
@@ -40,124 +45,127 @@ const POGenerateTab = ({
     );
   }
   
-  // Logic to determine existing PO status (simplified for clean rendering)
+  // Logic to determine existing PO status
   const draftPOs = existingList.filter(po => po.status === 'DRAFT');
   const lockedPOs = existingList.filter(po => po.status !== 'DRAFT');
-  const allVendorsLocked = posList.every(vendor => {
-    const po = getExistingPOForVendor(poType, vendor.vendor_id);
-    return po && po.status !== 'DRAFT';
-  });
 
   return (
     <Box sx={{ mt: 2 }}>
-      {/* Existing PO Status Alerts */}
-      {draftPOs.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          **DRAFT {poType} POs found (editable):** {draftPOs.map(po => po.po_number).join(', ')}. You can edit quantities and items for DRAFT POs.
-        </Alert>
-      )}
-      {lockedPOs.length > 0 && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          **Approved/Locked {poType} POs:** {lockedPOs.map(po => `${po.po_number} (${po.status})`).join(', ')}
-          {allVendorsLocked
-            ? '. All POs are locked and cannot be edited. They must return to DRAFT status first.'
-            : '. These POs are locked and cannot be edited until they return to DRAFT status.'
-          }
-        </Alert>
-      )}
+      
+      {/* NEW: Inline Status Summary Chips */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        {draftPOs.length > 0 && (
+          <Tooltip title={`These POs are in DRAFT status and will be UPDATED upon generation.`}>
+            <Chip 
+              icon={<WarningIcon />}
+              label={`${draftPOs.length} DRAFT POs Found`}
+              color="warning" 
+              variant="outlined"
+              size="small"
+              sx={{ fontWeight: 'bold' }}
+            />
+          </Tooltip>
+        )}
+        {lockedPOs.length > 0 && (
+          <Tooltip title={`These POs are in NON-DRAFT status and CANNOT be updated via this tool.`}>
+            <Chip 
+              icon={<LockIcon />}
+              label={`${lockedPOs.length} Locked POs`}
+              color="error" 
+              variant="outlined"
+              size="small"
+              sx={{ fontWeight: 'bold' }}
+            />
+          </Tooltip>
+        )}
+        {posList.length > 0 && lockedPOs.length === 0 && draftPOs.length === 0 && (
+           <Chip 
+              icon={<CheckCircleIcon />}
+              label={`All New ${poType} POs`}
+              color="success" 
+              variant="outlined"
+              size="small"
+            />
+        )}
+      </Stack>
 
-      {/* Initial Success Alert */}
-      {!(draftPOs.length > 0 || lockedPOs.length > 0) && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          **Ready to generate {poType} POs!** The system has automatically detected **{posList.length}** vendor(s) 
-          from your medicines. Review quantities and click "Generate {poType} POs" to create all POs at once.
-        </Alert>
-      )}
-
-      <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-        {poType} Purchase Orders ({posList.filter(v => v.selected).length} vendor(s) selected)
-      </Typography>
-
-      {/* Vendor Group List */}
-      <Stack spacing={3}>
+      {/* Vendor Groups */}
+      <Stack spacing={2}>
         {posList.map((vendorGroup, vendorIndex) => {
-          const existingPO = getExistingPOForVendor(poType, vendorGroup.vendor_id);
-          const hasExistingPO = !!existingPO;
-          const isDraftPO = existingPO?.status === 'DRAFT';
-          const isEditable = !hasExistingPO || isDraftPO;
-          const isLocked = hasExistingPO && !isDraftPO;
-
+          const po = getExistingPOForVendor(poType, vendorGroup.vendor_id);
+          const isDraftPO = po && po.status === 'DRAFT';
+          const isLocked = po && po.status !== 'DRAFT';
+          
           return (
-            <Paper
+            <Paper 
               key={vendorGroup.vendor_id}
               variant="outlined"
-              sx={{
-                p: 3,
-                // 🟢 FIX: Replaced 'warning.light' with a very subtle, safe hex code (#FFF3E0) 
-                // to prevent the background color from bleeding or being too intense.
-                bgcolor: isLocked ? 'grey.50' : isDraftPO ? '#FFF3E0' : 'white', 
+              sx={{ 
+                p: 2, 
+                // Subtle visual distinction for status: DRAFT is editable (warning), LOCKED is disabled (grey)
+                bgcolor: isLocked ? 'grey.50' : isDraftPO ? 'warning.lighter' : 'background.paper',
                 border: isDraftPO ? '2px solid' : '1px solid',
                 borderColor: isDraftPO ? 'warning.main' : 'divider',
+                opacity: isLocked ? 0.7 : 1,
               }}
             >
-              {/* Vendor Header */}
-              <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-                <Checkbox
-                  checked={vendorGroup.selected && isEditable}
-                  onChange={() => onVendorSelectToggle(poType, vendorIndex)}
-                  disabled={isLocked}
-                />
-                <Stack sx={{ flexGrow: 1 }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Typography variant="h6" color={isLocked ? 'text.disabled' : 'primary.main'} sx={{ fontWeight: 'bold' }}>
-                      {vendorGroup.vendor_name}
+              
+              {/* Vendor Header - Made clickable for selection toggle */}
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ mb: 1, p: 0.5, cursor: isLocked ? 'default' : 'pointer' }}
+                onClick={isLocked ? null : () => onVendorSelectToggle(poType, vendorIndex)}
+              >
+                <Stack direction="row" alignItems="center" spacing={1.5}>
+                  <Checkbox 
+                    checked={vendorGroup.selected}
+                    disabled={isLocked}
+                    // Stop propagation to prevent dual toggling
+                    onChange={(e) => { 
+                      e.stopPropagation(); 
+                      onVendorSelectToggle(poType, vendorIndex); 
+                    }}
+                  />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: isLocked ? 'text.disabled' : 'primary.dark' }}>
+                    {vendorGroup.vendor_name}
+                  </Typography>
+                  <Tooltip title={`PO Status: ${po ? po.status : 'None'}`}>
+                      {po && (
+                          <Chip 
+                              label={po.status} 
+                              size="small" 
+                              icon={isLocked ? <LockIcon fontSize="small" /> : <WarningIcon fontSize="small" />}
+                              color={isLocked ? 'error' : 'warning'}
+                              sx={{ fontWeight: 'bold' }}
+                          />
+                      )}
+                  </Tooltip>
+                  {isLocked && (
+                    <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
+                        (LOCKED - Cannot Edit)
                     </Typography>
-                    {existingPO && (
-                      <>
-                        <Chip
-                          label={existingPO.po_number}
-                          size="small"
-                          variant="outlined"
-                          sx={{
-                            borderStyle: 'dashed',
-                            borderWidth: 2,
-                            borderColor: isDraftPO ? 'warning.main' : 'success.main',
-                            color: isDraftPO ? 'warning.main' : 'success.main',
-                            fontWeight: 'bold'
-                          }}
-                        />
-                        <Chip
-                          label={existingPO.status}
-                          size="small"
-                          color={isDraftPO ? 'warning' : existingPO.status === 'APPROVED' ? 'success' : 'default'}
-                        />
-                      </>
-                    )}
-                  </Stack>
-                  <Typography variant="caption" color="text.secondary">
-                    {isLocked 
-                      ? `PO ${existingPO.status} - Locked (cannot edit)` 
-                      : isDraftPO 
-                        ? `${vendorGroup.items.length} item(s) - DRAFT (editable)` 
-                        : `${vendorGroup.items.length} item(s)`
+                  )}
+                </Stack>
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {po 
+                        ? `${vendorGroup.items.length} item(s) - ${isDraftPO ? 'DRAFT (Editable)' : 'LOCKED'}` 
+                        : `${vendorGroup.items.length} item(s) - NEW PO`
                     }
                   </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={(e) => { e.stopPropagation(); onAddLineItem(poType, vendorIndex); }}
+                    variant="outlined"
+                    disabled={isLocked}
+                  >
+                    Add Item
+                  </Button>
                 </Stack>
-                <Button
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={() => onAddLineItem(poType, vendorIndex)}
-                  variant="outlined"
-                  disabled={isLocked}
-                >
-                  Add Item
-                </Button>
-                <Chip
-                  icon={getVendorTypeIcon(poType)}
-                  label={poType}
-                  size="medium"
-                  color={poType === 'FG' ? 'primary' : poType === 'RM' ? 'success' : 'warning'}
-                />
               </Stack>
               
               {/* Items Table (Delegated) */}
