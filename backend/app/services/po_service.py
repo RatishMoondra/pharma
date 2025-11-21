@@ -526,7 +526,8 @@ class POGenerationService:
                     
                     self.db.add(po)
                     self.db.flush()  # Get PO ID
-                
+                    
+                po_number = po.po_number
                 # Create PO items (one per raw material)
                 total_ordered_qty = Decimal("0.00")
                 

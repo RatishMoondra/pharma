@@ -738,7 +738,7 @@ const InvoicesPage = () => {
         tax_amount: invoice.tax_amount,
         total_amount: invoice.total_amount,
         remarks: invoice.remarks || '',
-        items: invoice.items.map(item => ({
+        items: (invoice.items ?? []).map(item => ({
           medicine_id: item.medicine_id || null,
           raw_material_id: item.raw_material_id || null,
           packing_material_id: item.packing_material_id || null,
@@ -746,6 +746,7 @@ const InvoicesPage = () => {
                          item.raw_material?.rm_name || 
                          item.packing_material?.pm_name || 
                          'N/A',
+          ordered_quantity: item.ordered_quantity, // <-- PATCHED: include ordered_quantity
           shipped_quantity: item.shipped_quantity,
           unit_price: item.unit_price,
           tax_rate: item.tax_rate,

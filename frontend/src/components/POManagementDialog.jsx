@@ -839,7 +839,8 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                         <Checkbox
                           checked={item.selected}
                           onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'selected', e.target.checked)}
-                        />
+                          disabled={isLocked}
+                        />  
                       </TableCell>
                       <TableCell>
                         {item.isNew || item.isEditing ? (
@@ -962,7 +963,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                           onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'quantity', e.target.value)}
                           inputProps={{ min: 0, step: 0.001 }}
                           fullWidth
-                          disabled={!item.selected}
+                          disabled={!item.selected || isLocked}
                         />
                       </TableCell>
                       <TableCell>
@@ -970,6 +971,7 @@ const POManagementDialog = ({ open, onClose, eopa, mode, onSuccess }) => {
                           <Select
                             value={item.uom || item.unit || ''}
                             onChange={(e) => handleItemChange(poType, vendorIndex, itemIndex, 'unit', e.target.value)}
+                            disabled={!item.selected || isLocked}
                           >
                             <MenuItem value="pcs">pcs</MenuItem>
                             <MenuItem value="kg">kg</MenuItem>
