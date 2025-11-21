@@ -109,6 +109,14 @@ class POItemResponse(BaseModel):
     raw_material: Optional[RawMaterialBasic] = None
     packing_material: Optional[PackingMaterialBasic] = None
     
+
+    def model_dump(self, *args, **kwargs):
+        data = super().model_dump(*args, **kwargs)
+        # Ensure ordered_quantity is always present
+        if 'ordered_quantity' not in data:
+            data['ordered_quantity'] = getattr(self, 'ordered_quantity', None)
+        return data
+
     class Config:
         from_attributes = True
 
@@ -205,6 +213,25 @@ class POUpdate(BaseModel):
     checked_by: Optional[int] = None
     approved_by: Optional[int] = None
     verified_by: Optional[int] = None
+
+
+
+# For PO update requests
+class POItemUpdate(BaseModel):
+    id: Optional[int] = None
+    medicine_id: Optional[int] = None
+    ordered_quantity: float
+    unit: Optional[str] = None
+    language: Optional[str] = None
+    artwork_version: Optional[str] = None
+
+class POUpdateRequest(BaseModel):
+    vendor_id: Optional[int] = None
+    items: List[POItemUpdate] = []
+    remarks: Optional[str] = None
+    status: Optional[POStatus] = None
+    delivery_date: Optional[date] = None
+    # Add other fields as needed
 
 
 class POResponse(POBase):

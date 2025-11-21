@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
@@ -8,7 +8,7 @@ import time
 from typing import List
 
 from app.database.session import get_db
-from app.schemas.po import POCreate, POResponse
+from app.schemas.po import POCreate, POResponse, POUpdateRequest
 from app.models.po import PurchaseOrder, POItem, POType, POStatus
 from app.models.vendor import Vendor
 from app.models.eopa import EOPA, EOPAStatus
@@ -375,6 +375,13 @@ async def list_pos(
     
     # Convert to response
     response_data = [POResponse.model_validate(po).model_dump() for po in pos]
+    # Debug: log PO items for first PO
+    if response_data and response_data[0].get('items'):
+        logger.info({
+            'event': 'PO_LIST_ITEMS_DEBUG',
+            'po_id': response_data[0].get('id'),
+            'items': response_data[0]['items']
+        })
     
     total_time = time.time() - start_time
     logger.info(f"PO list endpoint total time: {total_time:.2f}s")
@@ -416,7 +423,7 @@ async def get_po(
 @router.put("/{po_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
 async def update_po(
     po_id: int,
-    vendor_id: int = None,
+    po_data: POUpdateRequest = Body(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -426,6 +433,12 @@ async def update_po(
     Allows changing the vendor for a PO if needed.
     Only ADMIN and PROCUREMENT_OFFICER can update.
     """
+    logger.info({
+        "event": "PO_UPDATE_PAYLOAD_RECEIVED",
+        "po_id": po_id,
+        "vendor_id": po_data.vendor_id,
+        "items": po_data.items
+    })
     po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
     
     if not po:
@@ -434,27 +447,53 @@ async def update_po(
     if po.status == POStatus.CLOSED:
         raise AppException("Cannot update a closed PO", "ERR_VALIDATION", 400)
     
-    if vendor_id:
+    if po_data.vendor_id:
         # Verify vendor exists and matches PO type
-        vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+        vendor = db.query(Vendor).filter(Vendor.id == po_data.vendor_id).first()
         if not vendor:
             raise AppException("Vendor not found", "ERR_NOT_FOUND", 404)
-        
         # Validate vendor type matches PO type
         expected_vendor_type = {
             POType.FG: "MANUFACTURER",
             POType.RM: "RM",
             POType.PM: "PM"
         }.get(po.po_type)
-        
         if vendor.vendor_type != expected_vendor_type:
             raise AppException(
                 f"Vendor type mismatch. Expected {expected_vendor_type}, got {vendor.vendor_type}",
                 "ERR_VALIDATION",
                 400
             )
-        
-        po.vendor_id = vendor_id
+        po.vendor_id = po_data.vendor_id
+        po.updated_at = datetime.utcnow()
+
+    # Update PO items if provided
+    if po_data.items:
+        for item_data in po_data.items:
+            # Match POItem by correct field based on PO type
+            if po.po_type == POType.FG:
+                po_item = db.query(POItem).filter(POItem.medicine_id == item_data.medicine_id, POItem.po_id == po_id).first()
+            elif po.po_type == POType.RM:
+                po_item = db.query(POItem).filter(POItem.raw_material_id == getattr(item_data, 'raw_material_id', None), POItem.po_id == po_id).first()
+            elif po.po_type == POType.PM:
+                po_item = db.query(POItem).filter(POItem.packing_material_id == getattr(item_data, 'packing_material_id', None), POItem.po_id == po_id).first()
+            else:
+                po_item = None
+            logger.info({
+                "event": "PO_ITEM_UPDATE_ATTEMPT",
+                "item_data": item_data,
+                "po_item": po_item,
+                "po_item_id": po_item.id if po_item else None,
+                "po_id": po_id
+            })
+            if po_item:
+                # Only update if PO is not closed
+                if po.status != POStatus.CLOSED:
+                    if item_data.ordered_quantity is not None:
+                        from decimal import Decimal
+                        po_item.ordered_quantity = Decimal(str(item_data.ordered_quantity))
+                    if item_data.unit is not None:
+                        po_item.unit = item_data.unit
         po.updated_at = datetime.utcnow()
     
     db.commit()
@@ -464,7 +503,7 @@ async def update_po(
         "event": "PO_UPDATED",
         "po_id": po.id,
         "po_number": po.po_number,
-        "vendor_id": vendor_id,
+        "vendor_id": po_data.vendor_id,
         "updated_by": current_user.username
     })
     

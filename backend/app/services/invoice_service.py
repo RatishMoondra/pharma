@@ -323,6 +323,7 @@ class InvoiceService:
                     po_item = po_items_dict.get(inv_item.medicine_id)
                     if po_item:
                         inv_item.ordered_quantity = po_item.ordered_quantity
+                        
         
         return invoices
     

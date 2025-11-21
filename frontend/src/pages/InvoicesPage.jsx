@@ -704,11 +704,10 @@ const InvoicesPage = () => {
 
       const response = await api.post('/api/invoice/create', payload)
       if (response.data.success) {
-        const newInvoice = response.data.data
-        setInvoices(prevInvoices => addDataStably(prevInvoices, newInvoice, true))
-        markAsSaved(newInvoice.id)
         setSuccessMessage('Invoice created successfully!')
         setCreateDialogOpen(false)
+        // Force refresh to get latest shipped_quantity and all fields
+        fetchInvoices()
       }
     } catch (err) {
       handleApiError(err)
@@ -895,11 +894,10 @@ const InvoicesPage = () => {
       const response = await api.put(`/api/invoice/${editingInvoice.id}`, payload)
 
       if (response.data.success) {
-        const updatedInvoice = response.data.data
-        setInvoices(prevInvoices => updateDataStably(prevInvoices, updatedInvoice))
-        markAsSaved(editingInvoice.id)
         setSuccessMessage(`Invoice ${editFormData.invoice_number} updated successfully`)
         handleEditClose()
+        // Force refresh to get latest shipped_quantity and all fields
+        fetchInvoices()
       }
     } catch (err) {
       handleApiError(err)
