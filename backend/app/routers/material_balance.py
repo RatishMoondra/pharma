@@ -1,3 +1,5 @@
+from app.exceptions.base import AppException
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database.session import get_db
@@ -10,6 +12,18 @@ from app.schemas.material_balance import MaterialBalanceSummary
 router = APIRouter(prefix="/api/material-balance", tags=["Material Balance"])
 
 
+@router.delete('/{id}', response_model=dict)
+def delete_material_balance(id: int, db: Session = Depends(get_db)):
+    row = db.query(MaterialBalance).filter(MaterialBalance.id == id).first()
+    if not row:
+        raise AppException('Material balance record not found', 'ERR_NOT_FOUND', 404)
+    db.delete(row)
+    db.commit()
+    return {
+        'success': True,
+        'message': 'Material balance record deleted successfully',
+        'id': id
+    }
 @router.get("/summary/{raw_material_id}", response_model=MaterialBalanceSummary)
 def material_balance_summary(raw_material_id: int, db: Session = Depends(get_db)):
     return get_material_balance_summary(db, raw_material_id)

@@ -27,6 +27,24 @@ export default function MaterialBalanceImpactPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('ALL'); // ALL, RAW, PACKING
+  const [success, setSuccess] = useState(null);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this material balance record?')) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.delete(`/api/material-balance/${id}`);
+      setSuccess('Material balance record deleted successfully.');
+      await handleFetch();
+    } catch (err) {
+      setError('Failed to delete material balance record.');
+      console.error('Delete error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFetch = async () => {
     setLoading(true);
@@ -68,6 +86,16 @@ export default function MaterialBalanceImpactPage() {
       <TableCell>{row.received_qty}</TableCell>
       <TableCell>{row.balance_qty}</TableCell>
       <TableCell>{new Date(row.last_updated).toLocaleString()}</TableCell>
+      <TableCell>
+        <Button
+          variant="outlined"
+          color="error"
+          size="small"
+          onClick={() => handleDelete(row.id)}
+        >
+          Delete
+        </Button>
+      </TableCell>
     </TableRow>
   );
 
@@ -99,6 +127,9 @@ export default function MaterialBalanceImpactPage() {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>
+      )}
       {filteredRows.length > 0 ? (
         <TableContainer component={Paper}>
           <Table>
@@ -112,6 +143,7 @@ export default function MaterialBalanceImpactPage() {
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Received Qty</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Balance Qty</TableCell>
                 <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Last Updated</TableCell>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
