@@ -284,42 +284,57 @@ async def create_po(
     
     # Get vendor from first medicine item (all items should be from same vendor based on medicine master)
     first_item = eopa.items[0]
-    medicine = db.query(MedicineMaster).filter(MedicineMaster.id == first_item.medicine_id).first()
+    medicine = db.query(MedicineMaster).filter(MedicineMaster.id == first_item.pi_item.medicine_id).first()
     if not medicine:
         raise AppException("Medicine not found in Medicine Master", "ERR_VENDOR_MISMATCH", 400)
-    
-    vendor_id = medicine.vendor_id
-    
+
+
+    # Select vendor based on PO type
+    if po_data.po_type.value == "FG":
+        vendor_id = medicine.manufacturer_vendor_id
+    elif po_data.po_type.value == "RM":
+        vendor_id = medicine.rm_vendor_id
+    elif po_data.po_type.value == "PM":
+        vendor_id = medicine.pm_vendor_id
+    else:
+        vendor_id = None
+
+    if not vendor_id:
+        raise AppException("Vendor not mapped for this PO type in Medicine Master", "ERR_VENDOR_MISMATCH", 400)
+
     # Generate PO number
     po_number = generate_po_number(db, po_data.po_type.value)
-    
+
+    # Ensure po_date is not null
+    from datetime import date
+    po_date = po_data.po_date or date.today()
+
     # Create PO
     po = PurchaseOrder(
         po_number=po_number,
-        po_date=po_data.po_date,
+        po_date=po_date,
         po_type=po_data.po_type,
         eopa_id=po_data.eopa_id,
         vendor_id=vendor_id,
-        total_amount=eopa.total_amount,
         delivery_date=po_data.delivery_date,
         remarks=po_data.remarks,
         created_by=current_user.id
     )
-    
+
     db.add(po)
     db.flush()
-    
+
     # Copy EOPA items to PO items
     for eopa_item in eopa.items:
         po_item = POItem(
             po_id=po.id,
-            medicine_id=eopa_item.medicine_id,
-            quantity=eopa_item.quantity,
-            unit_price=eopa_item.unit_price,
-            total_price=eopa_item.total_price
+            medicine_id=eopa_item.pi_item.medicine_id,
+            ordered_quantity=eopa_item.quantity,
+            fulfilled_quantity=0
+            # Add other required fields if needed (unit, etc.)
         )
         db.add(po_item)
-    
+
     db.commit()
     db.refresh(po)
     

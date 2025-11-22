@@ -159,16 +159,15 @@ class POBase(BaseModel):
 class POCreate(BaseModel):
     eopa_id: int
     po_type: POType
+    po_date: Optional[date] = datetime.now().date()  # Added to match backend expectations
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
-    
     # Quality requirements
     require_coa: bool = False
     require_bmr: bool = False
     require_msds: bool = False
     sample_quantity: Optional[float] = None
     shelf_life_minimum: Optional[int] = None
-    
     # Shipping and billing
     ship_to: Optional[str] = None
     bill_to: Optional[str] = None

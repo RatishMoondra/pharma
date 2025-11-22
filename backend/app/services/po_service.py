@@ -533,11 +533,20 @@ class POGenerationService:
                 
                 for rm in raw_materials:
                     raw_material_id = rm.get("raw_material_id")
+                    if not raw_material_id:
+                        logger.warning({
+                            "event": "RM_PO_ITEM_SKIPPED_NO_RAW_MATERIAL_ID",
+                            "po_id": po.id,
+                            "vendor_id": vendor_id,
+                            "eopa_id": eopa_id,
+                            "rm": rm,
+                            "message": "Skipping PO item creation: raw_material_id is missing or None."
+                        })
+                        continue
                     qty_required = Decimal(str(rm.get("qty_required") or rm.get("quantity", 0)))
                     uom = rm.get("uom")
                     hsn_code = rm.get("hsn_code")
                     gst_rate = Decimal(str(rm.get("gst_rate", 0))) if rm.get("gst_rate") else None
-                    
                     # Create PO item with raw_material_id (not medicine_id for RM POs)
                     po_item = POItem(
                         po_id=po.id,
@@ -549,7 +558,6 @@ class POGenerationService:
                         hsn_code=hsn_code,
                         gst_rate=gst_rate
                     )
-                    
                     self.db.add(po_item)
                     total_ordered_qty += qty_required
                 
