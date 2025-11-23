@@ -56,7 +56,7 @@ const DashboardPage = () => {
 
   return (
     <Container maxWidth="lg">
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4">
         Dashboard
       </Typography>
       <Typography variant="body1" color="text.secondary" paragraph>

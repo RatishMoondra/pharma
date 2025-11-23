@@ -111,7 +111,7 @@ const PIWorkflowVisualPage = () => {
       {/* Header with Actions */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
+          <Typography variant="h4">
             Document Workflow
           </Typography>
           {piData && (

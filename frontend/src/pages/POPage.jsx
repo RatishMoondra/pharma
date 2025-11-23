@@ -1233,7 +1233,8 @@ const POPage = () => {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom fontWeight="bold" color="primary.main">
+        <Typography variant="h4"
+ gutterBottom fontWeight="bold" color="primary.main">
           Purchase Orders
         </Typography>
         <Typography variant="body2" color="text.secondary">

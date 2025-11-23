@@ -30,7 +30,7 @@ import {
   gridClasses
 } from '@mui/x-data-grid'
 import { alpha, styled } from '@mui/material/styles' // 🟢 ADDED alpha and styled import
-
+import ERPPage from '../components/ERPPage'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -51,11 +51,11 @@ const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
     fontSize: '0.875rem',
   },
   '& .MuiDataGrid-columnHeaders': {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'background.default',
     color: theme.palette.primary.main,
     fontWeight: 'bold',
     fontSize: '0.9rem',
-    borderBottom: '2px solid #ccc',
+    borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
   },
   [`& .${gridClasses.row}.even`]: {
     backgroundColor: theme.palette.grey[50],
@@ -267,20 +267,17 @@ const RawMaterialPage = () => {
 
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ScienceIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-          <Typography variant="h4">Raw Material Master</Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenForm()}
-        >
+    <ERPPage
+      title="Raw Material Master"
+      icon={<ScienceIcon sx={{ fontSize: 36, color: "primary.main" }} />}
+      actions={
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenForm(true)}>
           Add Raw Material
         </Button>
-      </Box>
+      }
+    >
+    <Box sx={{ width: '100%', p: 3 }}>
+      
 
       <TextField
         fullWidth
@@ -297,7 +294,7 @@ const RawMaterialPage = () => {
         }}
       />
 
-      <Box sx={{ height: 800, width: '100%' }}>
+      <Box sx={{ minHeight: 'calc(100vh - 200px)', width: '100%' }}>
         <StripedDataGrid
           loading={loading}
           rows={filteredRawMaterials}
@@ -649,6 +646,7 @@ const RawMaterialPage = () => {
         </Alert>
       </Snackbar>
     </Box>
+    </ERPPage>
   )
 }
 

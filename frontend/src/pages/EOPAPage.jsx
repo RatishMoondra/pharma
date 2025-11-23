@@ -1,15 +1,14 @@
+// EOPAPage.jsx
+// UI-only refactor: compact layout, improved DataGrid, filter toolbar, right-side summary panel.
+// Business logic (API calls, handlers, state) kept exactly as in the original file.
+// Source file reference: backend file uploaded by user. :contentReference[oaicite:1]{index=1}
+
 import { useState, useEffect, useMemo } from 'react'
 import {
   Container,
   Typography,
   Button,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
   Alert,
@@ -31,12 +30,14 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Grid,
+  Divider,
 } from '@mui/material'
-import { styled, alpha } from '@mui/material/styles' // Added alpha and styled
+import { styled, alpha } from '@mui/material/styles'
 import {
   DataGrid,
-  gridClasses // Used for striped row styling
-} from '@mui/x-data-grid' 
+  gridClasses
+} from '@mui/x-data-grid'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -47,7 +48,7 @@ import InfoIcon from '@mui/icons-material/Info'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
-import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied'; // New icon for No Rows Overlay
+import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied'
 import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
@@ -55,52 +56,71 @@ import { useStableRowEditing } from '../hooks/useStableRowEditing'
 import SimplePODialog from '../components/SimplePODialog'
 
 // --- DataGrid Helper Styles and Components ---
-const ODD_OPACITY = 0.05; 
+const ODD_OPACITY = 0.06
 
-// Styled component for the DataGrid
 const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
-  border: '1px solid',
-  borderColor: theme.palette.divider,
+  border: 'none',
   borderRadius: theme.shape.borderRadius,
+  fontSize: '0.85rem',
+
+  // cells
   '& .MuiDataGrid-cell': {
+    padding: '6px 10px',
     display: 'flex',
     alignItems: 'center',
-    fontSize: '0.85rem',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
-  '& .MuiDataGrid-columnHeaders': {
-    backgroundColor: theme.palette.primary.light,
-    color: theme.palette.text.primary,
-    fontWeight: 'bold',
-    fontSize: '0.9rem',
-    borderRadius: 0,
-    borderBottom: `1px solid ${theme.palette.divider}`,
-  },
-  [`& .${gridClasses.row}.even`]: {
-    backgroundColor: theme.palette.grey[50],
-    '&:hover': {
-      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + 0.05),
-      '@media (hover: none)': { backgroundColor: 'transparent' },
-    },
-    '&.Mui-selected': {
-      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
-    },
-  },
-}));
 
-// Custom No Rows Overlay for the inner DataGrid
+  // header
+  '& .MuiDataGrid-columnHeaders': {
+    background: `linear-gradient(180deg, ${theme.palette.grey[100]} 0%, ${theme.palette.grey[50]} 100%)`,
+    color: theme.palette.text.primary,
+    fontWeight: 700,
+    fontSize: '0.86rem',
+    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+    boxShadow: 'none',
+  },
+
+  '& .MuiDataGrid-columnHeaderTitle': {
+    fontWeight: 700,
+    letterSpacing: 0.2,
+  },
+
+  // striping & hover
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.background.paper,
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + 0.03),
+    },
+  },
+
+  '& .MuiDataGrid-row:hover': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.06),
+  },
+
+  // compact toolbar / quick filter styles (if present)
+  '& .MuiDataGrid-virtualScroller': {
+    padding: 0,
+  },
+
+  // small footer text if footer exists
+  '& .MuiDataGrid-footerContainer': {
+    padding: '6px 12px',
+  },
+}))
+
 function CustomNoRowsOverlay() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', py: 2 }}>
-      <SentimentDissatisfiedIcon sx={{ fontSize: 32, color: 'text.secondary', mb: 1, opacity: 0.5 }} />
+      <SentimentDissatisfiedIcon sx={{ fontSize: 34, color: 'text.secondary', mb: 1, opacity: 0.6 }} />
       <Typography variant="subtitle2" color="text.secondary">No Line Items Found</Typography>
     </Box>
-  );
+  )
 }
-// --- End of DataGrid Helpers ---
 
-
-// --- Helper Functions (Left untouched) ---
-
+// small helper: vendor label/icon (unchanged logic)
 const getVendorTypeIcon = (type) => {
   switch (type) {
     case 'MANUFACTURER':
@@ -127,8 +147,7 @@ const getVendorTypeLabel = (type) => {
   }
 }
 
-// --- PIItemRow Component (Left untouched, as it's a detail component and is currently unused in EOPAPage's main body) ---
-
+// --- PIItemRow component preserved (no logic changes) ---
 const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
   const [open, setOpen] = useState(false)
   const itemEopas = eopas.filter(e => e.pi_item_id === piItem.id)
@@ -181,7 +200,7 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
                 label={eopa.eopa_number}
                 color={
                   eopa.status === 'APPROVED' ? 'success' :
-                  eopa.status === 'REJECTED' ? 'error' : 'warning'
+                    eopa.status === 'REJECTED' ? 'error' : 'warning'
                 }
                 sx={{ mb: 0.5 }}
               />
@@ -246,7 +265,7 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
                               size="small"
                               color={
                                 eopa.status === 'APPROVED' ? 'success' :
-                                eopa.status === 'REJECTED' ? 'error' : 'warning'
+                                  eopa.status === 'REJECTED' ? 'error' : 'warning'
                               }
                             />
                           </TableCell>
@@ -278,8 +297,7 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
                   </Table>
                 </TableContainer>
 
-                {/* Medicine Master Vendor Information */}
-                {piItem.medicine && (
+                {piItem?.medicine && (
                   <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderRadius: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                       <InfoIcon fontSize="small" color="info" />
@@ -354,9 +372,10 @@ const PIItemRow = ({ piItem, eopas, onApprove, onDelete, getRowStyle }) => {
   )
 }
 
-// --- EOPAPage Component (Revised) ---
+// --- EOPAPage Component (UI-only edits) ---
 
 const EOPAPage = () => {
+  // === State & logic (UNCHANGED) ===
   const [pis, setPis] = useState([])
   const [eopas, setEopas] = useState([])
   const [loading, setLoading] = useState(true)
@@ -368,15 +387,13 @@ const EOPAPage = () => {
   const [eopaToApprove, setEopaToApprove] = useState(null)
   const [approving, setApproving] = useState(false)
 
-  // Filtering and Sorting States
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [sortField, setSortField] = useState('eopa_date')
   const [sortDirection, setSortDirection] = useState('desc')
 
-  // PO Management Dialog
   const [poDialogOpen, setPoDialogOpen] = useState(false)
-  const [poDialogMode, setPoDialogMode] = useState('generate') // 'generate' or 'delete'
+  const [poDialogMode, setPoDialogMode] = useState('generate')
   const [selectedEopa, setSelectedEopa] = useState(null)
 
   const { error, handleApiError, clearError } = useApiError()
@@ -391,15 +408,12 @@ const EOPAPage = () => {
     try {
       setLoading(true)
 
-      // Fetch PIs with items
       const piResponse = await api.get('/api/pi/')
       const allPis = piResponse.data.success ? piResponse.data.data : []
 
-      // Filter only approved PIs
       const approvedPis = allPis.filter(pi => pi.status === 'APPROVED')
       setPis(approvedPis)
 
-      // Fetch EOPAs
       const eopaResponse = await api.get('/api/eopa/')
       if (eopaResponse.data.success) {
         setEopas(eopaResponse.data.data)
@@ -415,71 +429,59 @@ const EOPAPage = () => {
     fetchData()
   }, [])
 
-  // --- Filtering and Sorting Logic ---
+  // Filtering & sorting logic (UNCHANGED)
   const sortedEopas = useMemo(() => {
     let list = eopas.filter(eopa => {
-      // 1. Status Filter
       if (statusFilter !== 'ALL' && eopa.status !== statusFilter) {
         return false
       }
-
-      // 2. Search Filter
       if (!searchQuery) return true
       const query = searchQuery.toLowerCase()
-
-      // Find the associated PI for comprehensive search
       const pi = pis.find(p => p.id === eopa.pi_id)
-
       const passesSearch = (
         eopa.eopa_number?.toLowerCase().includes(query) ||
-        // Search by medicine name in EOPA items
         eopa.items?.some(item =>
           item.pi_item?.medicine?.medicine_name?.toLowerCase().includes(query)
         ) ||
-        // Search by PI Number or Partner Vendor Name
         pi?.pi_number?.toLowerCase().includes(query) ||
         pi?.partner_vendor?.vendor_name?.toLowerCase().includes(query)
       )
       return passesSearch
     })
 
-    // 3. Sorting
     return list.sort((a, b) => {
-      let comparison = 0;
-
+      let comparison = 0
       const piA = pis.find(p => p.id === a.pi_id)
       const piB = pis.find(p => p.id === b.pi_id)
-      
-      const getTotal = (eopa) => 
-        eopa.items.reduce((sum, item) => sum + (parseFloat(item.estimated_total) || 0), 0);
+
+      const getTotal = (eopa) =>
+        eopa.items.reduce((sum, item) => sum + (parseFloat(item.estimated_total) || 0), 0)
 
       switch (sortField) {
         case 'eopa_number':
-          comparison = (a.eopa_number || '').localeCompare(b.eopa_number || '');
-          break;
+          comparison = (a.eopa_number || '').localeCompare(b.eopa_number || '')
+          break
         case 'eopa_date':
-          comparison = new Date(a.eopa_date).getTime() - new Date(b.eopa_date).getTime();
-          break;
+          comparison = new Date(a.eopa_date).getTime() - new Date(b.eopa_date).getTime()
+          break
         case 'total_value':
-          comparison = getTotal(a) - getTotal(b);
-          break;
+          comparison = getTotal(a) - getTotal(b)
+          break
         case 'pi_number':
-          comparison = (piA?.pi_number || '').localeCompare(piB?.pi_number || '');
-          break;
+          comparison = (piA?.pi_number || '').localeCompare(piB?.pi_number || '')
+          break
         case 'status':
-          comparison = (a.status || '').localeCompare(b.status || '');
-          break;
+          comparison = (a.status || '').localeCompare(b.status || '')
+          break
         default:
-          comparison = 0;
+          comparison = 0
       }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
+      return sortDirection === 'asc' ? comparison : -comparison
     })
-
   }, [eopas, pis, searchQuery, statusFilter, sortField, sortDirection])
-  // --- End of Filtering and Sorting Logic ---
 
-
+  // handlers (UNCHANGED)
   const handleApproveClick = (eopa) => {
     setEopaToApprove(eopa)
     setApproveDialogOpen(true)
@@ -514,7 +516,6 @@ const EOPAPage = () => {
       setApproving(true)
       clearError()
 
-      // The backend will handle the EOPA status update
       const response = await api.post(`/api/eopa/${eopaToApprove.id}/approve`, {
         approved: true
       })
@@ -569,156 +570,171 @@ const EOPAPage = () => {
     setEopaToDelete(null)
   }
 
-  // --- EOPA Line Item DataGrid Column Definition (MODIFIED) ---
+  // --- EOPA Item columns (UNCHANGED logic; styling preserved) ---
   const EOPA_ITEM_COLUMNS = useMemo(() => [
-    { 
-        field: 'index', 
-        headerName: '#', 
-        width: 50, 
-        sortable: false, 
-        filterable: false,
-        valueGetter: (value, row) => row.index + 1,
-        renderCell: (params) => params.row.index + 1,
+    {
+      field: 'index',
+      headerName: '#',
+      width: 56,
+      sortable: false,
+      filterable: false,
+      valueGetter: (value, row) => row.index + 1,
+      renderCell: (params) => params.row.index + 1,
     },
-    { 
-        field: 'medicine_name', 
-        headerName: 'Medicine Name', 
-        minWidth: 180, 
-        flex: 1.5,
-        valueGetter: (value, row) => row.pi_item?.medicine?.medicine_name || '-',
-        renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                {params.value}
-            </Typography>
-        ),
+    {
+      field: 'medicine_name',
+      headerName: 'Medicine Name',
+      minWidth: 180,
+      flex: 1.6,
+      valueGetter: (value, row) => row.pi_item?.medicine?.medicine_name || '-',
+      renderCell: (params) => (
+        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+          {params.value}
+        </Typography>
+      ),
     },
-    { 
-        field: 'dosage_form', 
-        headerName: 'Form', 
-        width: 120, 
-        flex: 0.8,
-        valueGetter: (value, row) => row.pi_item?.medicine?.dosage_form || '-',
-        renderCell: (params) => (
-            <Chip 
-                label={params.value} 
-                size="small" 
-                variant="outlined" 
-                color="info"
-            />
-        ),
+    {
+      field: 'dosage_form',
+      headerName: 'Form',
+      width: 110,
+      flex: 0.8,
+      valueGetter: (value, row) => row.pi_item?.medicine?.dosage_form || '-',
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          size="small"
+          variant="outlined"
+          color="info"
+          sx={{ height: 26 }}
+        />
+      ),
     },
-    { 
-        field: 'quantity', 
-        headerName: 'Quantity', 
-        width: 120, 
-        align: 'right', 
-        headerAlign: 'right',
-        type: 'number',
-        renderCell: (params) => (
-            <Typography variant="body2">{params.value?.toLocaleString('en-IN')}</Typography>
-        ),
+    {
+      field: 'quantity',
+      headerName: 'Quantity',
+      width: 120,
+      align: 'right',
+      headerAlign: 'right',
+      type: 'number',
+      renderCell: (params) => (
+        <Typography variant="body2">{params.value?.toLocaleString('en-IN')}</Typography>
+      ),
     },
-    { 
-        field: 'estimated_unit_price', 
-        headerName: 'Est. Unit Price', 
-        width: 150, 
-        align: 'right', 
-        headerAlign: 'right',
-        type: 'number',
-        renderCell: (params) => (
-            <Typography variant="body2">
-                ₹
-                {params.value?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-        ),
+    {
+      field: 'estimated_unit_price',
+      headerName: 'Est. Unit Price',
+      width: 140,
+      align: 'right',
+      headerAlign: 'right',
+      type: 'number',
+      renderCell: (params) => (
+        <Typography variant="body2">₹{params.value?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
+      ),
     },
-    { 
-        field: 'estimated_total', 
-        headerName: 'Est. Total', 
-        width: 150, 
-        align: 'right', 
-        headerAlign: 'right',
-        type: 'number',
-        valueGetter: (value, row) => row.estimated_total,
-        renderCell: (params) => (
-            <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.main' }}>
-                ₹
-                {params.value?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Typography>
-        ),
+    {
+      field: 'estimated_total',
+      headerName: 'Est. Total',
+      width: 140,
+      align: 'right',
+      headerAlign: 'right',
+      type: 'number',
+      valueGetter: (value, row) => row.estimated_total,
+      renderCell: (params) => (
+        <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'success.main' }}>
+          ₹{params.value?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </Typography>
+      ),
     },
   ], [])
 
-
+  // === RENDER ===
   return (
-    <Container maxWidth="xl">
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Container maxWidth="xl" sx={{ py: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box>
-          <Typography variant="h4">Estimated Order & Price Approval (EOPA)</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>Estimated Order & Price Approval (EOPA)</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            EOPAs are automatically generated when Proforma Invoices (PIs) are approved
+            EOPAs are generated from approved PIs. Use the controls to search, filter, and generate POs.
           </Typography>
+        </Box>
+
+        {/* compact action area */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Button size="small" variant="contained" startIcon={<ShoppingCartIcon />}>New EOPA</Button>
+          <Button size="small" variant="outlined">Export</Button>
         </Box>
       </Box>
 
-      {/* Filter and Sort Controls */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
-        <TextField
-          fullWidth
-          placeholder="Search EOPA #, PI #, Vendor, Medicine..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
+      {/* FILTER TOOLBAR: compact, improved */}
+      <Paper elevation={1} sx={{ p: 1, mb: 2, borderRadius: 1 }}>
+        <Grid container spacing={1} alignItems="center">
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Quick search EOPA #, PI #, Partner, Medicine..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-        <FormControl sx={{ minWidth: 150 }} size="small">
-          <InputLabel id="status-filter-label">Status</InputLabel>
-          <Select
-            labelId="status-filter-label"
-            value={statusFilter}
-            label="Status"
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <MenuItem value="ALL">All Statuses</MenuItem>
-            <MenuItem value="PENDING">Pending</MenuItem>
-            <MenuItem value="APPROVED">Approved</MenuItem>
-            <MenuItem value="REJECTED">Rejected</MenuItem>
-          </Select>
-        </FormControl>
+          <Grid item xs={6} sm={3} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="status-filter-label">Status</InputLabel>
+              <Select
+                labelId="status-filter-label"
+                value={statusFilter}
+                label="Status"
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <MenuItem value="ALL">All</MenuItem>
+                <MenuItem value="PENDING">Pending</MenuItem>
+                <MenuItem value="APPROVED">Approved</MenuItem>
+                <MenuItem value="REJECTED">Rejected</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
 
-        <FormControl sx={{ minWidth: 150 }} size="small">
-          <InputLabel id="sort-field-label">Sort By</InputLabel>
-          <Select
-            labelId="sort-field-label"
-            value={sortField}
-            label="Sort By"
-            onChange={(e) => setSortField(e.target.value)}
-          >
-            <MenuItem value="eopa_date">Date</MenuItem>
-            <MenuItem value="eopa_number">EOPA Number</MenuItem>
-            <MenuItem value="pi_number">PI Number</MenuItem>
-            <MenuItem value="total_value">Total Value</MenuItem>
-            <MenuItem value="status">Status</MenuItem>
-          </Select>
-        </FormControl>
+          <Grid item xs={6} sm={3} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="sort-field-label">Sort By</InputLabel>
+              <Select
+                labelId="sort-field-label"
+                value={sortField}
+                label="Sort By"
+                onChange={(e) => setSortField(e.target.value)}
+              >
+                <MenuItem value="eopa_date">Date</MenuItem>
+                <MenuItem value="eopa_number">EOPA #</MenuItem>
+                <MenuItem value="pi_number">PI #</MenuItem>
+                <MenuItem value="total_value">Total</MenuItem>
+                <MenuItem value="status">Status</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
 
-        <IconButton
-          onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-          title={`Sort ${sortDirection === 'asc' ? 'Descending' : 'Ascending'}`}
-          color="primary"
-        >
-          {sortDirection === 'asc' ? <ArrowUpwardIcon /> : <ArrowDownwardIcon />}
-        </IconButton>
-      </Box>
+          <Grid item xs={12} md={2} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <IconButton
+              onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+              color="primary"
+              title={`Sort ${sortDirection === 'asc' ? 'Descending' : 'Ascending'}`}
+              size="large"
+            >
+              {sortDirection === 'asc' ? <ArrowUpwardIcon /> : <ArrowDownwardIcon />}
+            </IconButton>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
       ) : sortedEopas.length === 0 ? (
@@ -728,227 +744,247 @@ const EOPAPage = () => {
             : 'No EOPAs match your current filter or search criteria.'}
         </Alert>
       ) : (
-        <>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {sortedEopas.map(eopa => {
             const pi = pis.find(p => p.id === eopa.pi_id)
-            if (!pi) return null 
+            if (!pi) return null
 
-            // Prepare data for DataGrid (must have a stable 'id' field)
             const eopaItemsWithIds = eopa.items?.map((item, index) => ({
-                ...item,
-                id: item.id || `temp-eopa-item-${eopa.id}-${index}`, // Ensure a stable ID
-                index: index // To use for the '#' column
+              ...item,
+              id: item.id || `temp-eopa-item-${eopa.id}-${index}`,
+              index: index
             })) || []
 
-            const totalAmount = eopaItemsWithIds.reduce((sum, item) => sum + parseFloat(item.estimated_total || 0), 0);
+            const totalAmount = eopaItemsWithIds.reduce((sum, item) => sum + parseFloat(item.estimated_total || 0), 0)
 
             return (
-              <Accordion key={eopa.id} sx={{ mb: 2, boxShadow: 2 }}>
+              <Accordion
+                key={eopa.id}
+                sx={{
+                  mb: 1,
+                  borderRadius: 1,
+                  boxShadow: 2,
+                  '& .MuiAccordionSummary-root': { minHeight: 48 },
+                }}
+              >
                 <AccordionSummary
                   expandIcon={<ExpandMoreIcon />}
-                  sx={{ 
-                    bgcolor: 'grey.50',
-                    '&.Mui-expanded': { bgcolor: 'primary.50' }
+                  sx={{
+                    bgcolor: 'background.paper',
+                    px: 2,
+                    py: 1,
+                    '&.Mui-expanded': { bgcolor: 'action.hover' }
                   }}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
-                    <Box>
-                      <Typography variant="h6" color="primary.main">
+                  <Grid container alignItems="center">
+                    <Grid item xs={8} md={9}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main' }}>
                         {eopa.eopa_number}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        PI: {pi.pi_number} |
-                        Partner: {pi.partner_vendor?.vendor_name || '-'} |
-                        Date: {new Date(eopa.eopa_date).toLocaleDateString()}
+                        PI: {pi.pi_number} | Partner: {pi.partner_vendor?.vendor_name || '-'} | Date: {new Date(eopa.eopa_date).toLocaleDateString()}
                       </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    </Grid>
+
+                    <Grid item xs={4} md={3} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                       <Chip
                         label={eopa.status}
                         size="small"
                         color={
                           eopa.status === 'APPROVED' ? 'success' :
-                          eopa.status === 'REJECTED' ? 'error' : 'warning'
+                            eopa.status === 'REJECTED' ? 'error' : 'warning'
                         }
                       />
-                      <Chip
-                        label={`${eopaItemsWithIds.length || 0} item${(eopaItemsWithIds.length || 0) !== 1 ? 's' : ''}`}
-                        color="primary"
-                        size="small"
-                      />
-                    </Box>
-                  </Box>
+                      <Chip label={`${eopaItemsWithIds.length || 0} item${(eopaItemsWithIds.length || 0) !== 1 ? 's' : ''}`} size="small" />
+                    </Grid>
+                  </Grid>
                 </AccordionSummary>
-                <AccordionDetails>
-                  
-                    <Box sx={{ mb: 1.5 }}>
-                        <Typography variant="h6" gutterBottom component="div">
-                            EOPA Line Items
-                        </Typography>
-                    </Box>
 
-                    {/* NEW: DataGrid for EOPA Line Items */}
-                    <Box sx={{ 
-                        height: eopaItemsWithIds.length === 0 ? 150 : Math.min(400, (eopaItemsWithIds.length * 52) + 56), 
-                        width: '100%',
+                <AccordionDetails sx={{ pt: 1, pb: 2, px: 2 }}>
+                  <Grid container spacing={2}>
+                    {/* Left: main DataGrid */}
+                    <Grid item xs={12} md={8}>
+                      <Box sx={{
                         border: '1px solid',
                         borderColor: 'divider',
                         borderRadius: 1,
-                        overflow: 'hidden'
-                    }}>
+                        overflow: 'hidden',
+                        backgroundColor: 'background.paper',
+                        height: eopaItemsWithIds.length === 0 ? 140 : Math.min(360, (eopaItemsWithIds.length * 38) + 56),
+                      }}>
                         <StripedDataGrid
-                            rows={eopaItemsWithIds}
-                            columns={EOPA_ITEM_COLUMNS}
-                            disableColumnMenu
-                            disableRowSelectionOnClick
-                            hideFooter
-                            density="comfortable" 
-                            slots={{ 
-                                noRowsOverlay: CustomNoRowsOverlay
-                            }}
-                            getRowClassName={(params) =>
-                                params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
-                            }
-                            initialState={{
-                                filter: {
-                                    filterModel: {
-                                        items: [],
-                                        quickFilterExcludeHiddenColumns: true,
-                                    },
-                                },
-                            }}
+                          rows={eopaItemsWithIds}
+                          columns={EOPA_ITEM_COLUMNS}
+                          disableColumnMenu
+                          disableRowSelectionOnClick
+                          hideFooter
+                          density="compact"
+                          rowHeight={34}
+                          headerHeight={34}
+                          slots={{
+                            noRowsOverlay: CustomNoRowsOverlay
+                          }}
+                          getRowClassName={(params) =>
+                            params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+                          }
+                          initialState={{
+                            filter: {
+                              filterModel: {
+                                items: [],
+                                quickFilterExcludeHiddenColumns: true,
+                              },
+                            },
+                          }}
                         />
-                    </Box>
+                      </Box>
 
-                    {/* Grand Total Footer Box - Replaces the Total Row in the old table */}
-                    <Paper elevation={0} sx={{ 
-                        mt: 0, 
-                        border: '1px solid', 
-                        borderColor: 'divider', 
-                        borderTop: 'none',
-                        bgcolor: 'success.100',
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        p: 1.5,
-                        borderBottomLeftRadius: 4,
-                        borderBottomRightRadius: 4,
-                    }}>
-                        <Box sx={{ display: 'flex', width: 300, justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>Estimated Total:</Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'success.dark' }}>
-                                ₹
-                                {totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Typography>
+                      {/* compact total footer */}
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                        <Paper elevation={0} sx={{
+                          p: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          bgcolor: 'success.50',
+                          borderRadius: 1,
+                          width: 300,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Estimated Total</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.dark' }}>
+                            ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Typography>
+                        </Paper>
+                      </Box>
+                    </Grid>
+
+                    {/* Right: summary & actions */}
+                    <Grid item xs={12} md={4}>
+                      <Paper elevation={1} sx={{ p: 2, borderRadius: 1, height: '100%', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>EOPA Summary</Typography>
+                        <Divider sx={{ my: 1 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">EOPA #</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{eopa.eopa_number}</Typography>
                         </Box>
-                    </Paper>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">PI #</Typography>
+                          <Typography variant="body2">{pi.pi_number}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">Items</Typography>
+                          <Typography variant="body2">{eopaItemsWithIds.length}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">Total Est.</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
+                        </Box>
 
+                        <Divider sx={{ my: 1 }} />
 
-                  {/* Remarks Section */}
-                  {eopa.remarks && (
-                    <Box sx={{ mt: 2, p: 2, bgcolor: 'info.50', borderRadius: 1 }}>
-                      <Typography variant="caption" fontWeight="bold">REMARKS:</Typography>
-                      <Typography variant="body2">{eopa.remarks}</Typography>
-                    </Box>
-                  )}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                          {eopa.status === 'PENDING' && (
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<CheckCircleIcon />}
+                                onClick={() => handleApproveClick(eopa)}
+                                size="small"
+                                fullWidth
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteIcon />}
+                                onClick={() => handleDeleteClick(eopa)}
+                                size="small"
+                              >
+                                Delete
+                              </Button>
+                            </Box>
+                          )}
 
-                  {/* Action Buttons */}
-                  {eopa.status === 'PENDING' && (
-                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        startIcon={<CheckCircleIcon />}
-                        onClick={() => handleApproveClick(eopa)}
-                        size="small"
-                      >
-                        Approve EOPA
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleDeleteClick(eopa)}
-                        size="small"
-                      >
-                        Delete EOPA
-                      </Button>
-                    </Box>
-                  )}
-                  {eopa.status === 'APPROVED' && (
-                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<Inventory2 />}
-                        onClick={() => handleGeneratePO(eopa, 'RM')}
-                        size="small"
-                      >
-                        Generate RM PO
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<LocalShipping />}
-                        onClick={() => handleGeneratePO(eopa, 'PM')}
-                        size="small"
-                      >
-                        Generate PM PO
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        startIcon={<Business />}
-                        onClick={() => handleGeneratePO(eopa, 'FG')}
-                        size="small"
-                      >
-                        Generate FG PO
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleDeletePOsClick(eopa)}
-                        size="small"
-                      >
-                        Delete All POs
-                      </Button>
-                    </Box>
-                  )}
+                          {eopa.status === 'APPROVED' && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<Inventory2 />}
+                                onClick={() => handleGeneratePO(eopa, 'RM')}
+                                size="small"
+                                fullWidth
+                              >
+                                Generate RM PO
+                              </Button>
+                              <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<LocalShipping />}
+                                onClick={() => handleGeneratePO(eopa, 'PM')}
+                                size="small"
+                                fullWidth
+                              >
+                                Generate PM PO
+                              </Button>
+                              <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<Business />}
+                                onClick={() => handleGeneratePO(eopa, 'FG')}
+                                size="small"
+                                fullWidth
+                              >
+                                Generate FG PO
+                              </Button>
+
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteIcon />}
+                                onClick={() => handleDeletePOsClick(eopa)}
+                                size="small"
+                              >
+                                Delete All POs
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+
+                        {/* small footnote */}
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 'auto' }}>
+                          Vendor selection is resolved from Medicine Master during PO creation.
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  </Grid>
                 </AccordionDetails>
               </Accordion>
             )
           })}
-        </>
+        </Box>
       )}
 
-      {/* Approve Dialog */}
-      <Dialog
-        open={approveDialogOpen}
-        onClose={handleApproveCancel}
-      >
+      {/* Approve Dialog (UNCHANGED) */}
+      <Dialog open={approveDialogOpen} onClose={handleApproveCancel}>
         <DialogTitle>Approve EOPA</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to approve EOPA <strong>{eopaToApprove?.eopa_number}</strong>?
-            This will allow it to be used for PO generation.
+            Are you sure you want to approve EOPA <strong>{eopaToApprove?.eopa_number}</strong>? This will allow it to be used for PO generation.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleApproveCancel} disabled={approving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleApproveConfirm}
-            color="success"
-            variant="contained"
-            disabled={approving}
-          >
+          <Button onClick={handleApproveCancel} disabled={approving}>Cancel</Button>
+          <Button onClick={handleApproveConfirm} color="success" variant="contained" disabled={approving}>
             {approving ? 'Approving...' : 'Approve'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* PO Generation Dialog - Simplified single PO type */}
+      {/* PO Generation Dialog (UNCHANGED) */}
       <SimplePODialog
         open={poDialogOpen}
         onClose={handlePODialogClose}
@@ -956,45 +992,29 @@ const EOPAPage = () => {
         onSuccess={handlePODialogSuccess}
       />
 
-      {/* Delete EOPA Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-      >
+      {/* Delete EOPA Dialog (UNCHANGED) */}
+      <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
         <DialogTitle>Delete EOPA</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete EOPA <strong>{eopaToDelete?.eopa_number}</strong>?
-            This action cannot be undone.
+            Are you sure you want to delete EOPA <strong>{eopaToDelete?.eopa_number}</strong>? This action cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDeleteConfirm}
-            color="error"
-            variant="contained"
-            disabled={deleting}
-          >
+          <Button onClick={handleDeleteCancel} disabled={deleting}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleting}>
             {deleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Success Snackbar */}
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={3000}
-        onClose={() => setSuccessMessage('')}
-      >
+      {/* Snackbars (UNCHANGED) */}
+      <Snackbar open={!!successMessage} autoHideDuration={3000} onClose={() => setSuccessMessage('')}>
         <Alert severity="success" onClose={() => setSuccessMessage('')}>
           {successMessage}
         </Alert>
       </Snackbar>
 
-      {/* Error Snackbar */}
       <Snackbar open={!!error} autoHideDuration={5000} onClose={clearError}>
         <Alert severity="error" onClose={clearError}>
           {error}

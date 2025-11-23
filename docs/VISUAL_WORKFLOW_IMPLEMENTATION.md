@@ -255,7 +255,8 @@ PI (piData)
   <Breadcrumbs />
   
   <Box> {/* Header with Actions */}
-    <Typography variant="h4">Document Workflow</Typography>
+    <Typography variant="h4"
+>Document Workflow</Typography>
     <Box> {/* Action Buttons */}
       <Button>Back to PI</Button>
       <Button>Print</Button>

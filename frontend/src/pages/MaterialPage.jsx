@@ -40,7 +40,8 @@ const MaterialPage = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4">Material Management</Typography>
+        <Typography variant="h4"
+>Material Management</Typography>
       </Box>
 
       <Tabs value={tab} onChange={(e, newValue) => setTab(newValue)} sx={{ mb: 3 }}>

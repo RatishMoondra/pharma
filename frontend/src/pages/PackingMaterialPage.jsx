@@ -42,11 +42,11 @@ const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
     fontSize: '0.875rem',
   },
   '& .MuiDataGrid-columnHeaders': {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'background.default',
     color: theme.palette.primary.main,
     fontWeight: 'bold',
     fontSize: '0.9rem',
-    borderBottom: '2px solid #ccc',
+    borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
   },
   [`& .${gridClasses.row}.even`]: {
     backgroundColor: theme.palette.grey[50],
@@ -444,7 +444,7 @@ const PackingMaterialPage = () => {
         }}
       />
 
-      <Box sx={{ height: 800, width: '100%' }}>
+      <Box sx={{ minHeight: 'calc(100vh - 200px)', width: '100%' }}>
         <StripedDataGrid
           loading={loading}
           rows={filteredPackingMaterials}

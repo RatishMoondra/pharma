@@ -815,7 +815,8 @@ const PIPage = () => {
   return (
     <Box sx={{ p: 3, width: '100%' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Proforma Invoice (PI)</Typography>
+        <Typography variant="h4"
+>Proforma Invoice (PI)</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}

@@ -6,7 +6,8 @@ import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
-import theme from './theme'
+// import theme from './theme'
+import { erpTheme } from "./theme/erpTheme";
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -22,7 +23,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={erpTheme}>
           <CssBaseline />
           <AuthProvider>
             <App />

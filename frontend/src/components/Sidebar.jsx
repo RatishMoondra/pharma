@@ -1,5 +1,11 @@
-import { Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton, Divider, Typography, Box, Tooltip } from '@mui/material'
+// src/components/Sidebar.jsx
+import React from 'react'
+import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Tooltip, Typography, IconButton } from '@mui/material'
 import { useNavigate, useLocation } from 'react-router-dom'
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import { useAuth } from '../context/AuthContext'
+import logo from '../assets/logo-pharmaflow.png'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import PublicIcon from '@mui/icons-material/Public'
 import PeopleIcon from '@mui/icons-material/People'
@@ -13,15 +19,13 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ReceiptIcon from '@mui/icons-material/Receipt'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import SettingsIcon from '@mui/icons-material/Settings'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ArticleIcon from '@mui/icons-material/Article'
-import { useAuth } from '../context/AuthContext'
-import logo from '../assets/logo-pharmaflow.png'
 import BalanceIcon from '@mui/icons-material/Balance'
 
 const drawerWidth = 240
+const collapsedWidth = 72
 
-const Sidebar = () => {
+const Sidebar = ({ collapsed = false, onToggle = () => {} }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
@@ -43,11 +47,10 @@ const Sidebar = () => {
     { text: 'Terms & Conditions', icon: <ArticleIcon />, path: '/terms-conditions', roles: ['ADMIN'], section: 'admin' },
   ]
 
-  const filteredMenuItems = menuItems.filter(item => 
+  const filteredMenuItems = menuItems.filter(item =>
     item.roles.includes(user?.role)
   )
 
-  // Group menu items by section
   const sections = {
     main: filteredMenuItems.filter(item => item.section === 'main'),
     master: filteredMenuItems.filter(item => item.section === 'master'),
@@ -56,157 +59,96 @@ const Sidebar = () => {
     admin: filteredMenuItems.filter(item => item.section === 'admin'),
   }
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-        },
-      }}
-    >
-      {/* Logo Section */}
-      <Box 
-        sx={{ 
-          p: 2, 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          bgcolor: 'primary.main',
-          minHeight: 64
-        }}
-      >
-        <Tooltip title="PharmaFlow 360" arrow placement="right">
-          <Box 
-            component="img" 
-            src={logo} 
-            alt="PharmaFlow 360" 
-            onClick={() => navigate('/dashboard')}
-            sx={{ 
-              height: 32,
-              objectFit: 'contain',
-              cursor: 'pointer',
-              '&:hover': {
-                opacity: 0.9,
-                transform: 'scale(1.05)',
-                transition: 'all 0.2s ease-in-out'
-              }
-            }}
-          />
-        </Tooltip>
-      </Box>
-      <Divider />
-      
-      {/* Main Section */}
-      {sections.main.length > 0 && (
-        <List>
-          {sections.main.map((item) => (
-            <ListItem key={item.text} disablePadding>
-              <ListItemButton
-                selected={location.pathname === item.path}
-                onClick={() => navigate(item.path)}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-      )}
+  const renderList = (items) => (
+    <List>
+      {items.map((item) => {
+        const active = location.pathname === item.path
+        return (
+          <ListItem key={item.text} disablePadding sx={{ px: 1 }}>
+            <ListItemButton
+              selected={active}
+              onClick={() => navigate(item.path)}
+              sx={{
+                py: 1,
+                borderRadius: 1,
+                '&.Mui-selected': { bgcolor: 'action.selected' },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, justifyContent: 'center' }}>
+                <Tooltip title={collapsed ? item.text : ''} placement="right" arrow>
+                  <Box>{item.icon}</Box>
+                </Tooltip>
+              </ListItemIcon>
+              {!collapsed && <ListItemText primary={item.text} />}
+            </ListItemButton>
+          </ListItem>
+        )
+      })}
+    </List>
+  )
 
-      {/* Master Data Section */}
+  return (
+    <Box sx={{ width: collapsed ? collapsedWidth : drawerWidth, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'space-between',
+        p: 2,
+        bgcolor: 'primary.main',
+        minHeight: 64
+      }}>
+        <Box component="img" src={logo} alt="logo" sx={{ height: collapsed ? 28 : 32, cursor: 'pointer' }} onClick={() => navigate('/dashboard')} />
+        {!collapsed && (
+          <IconButton onClick={onToggle} sx={{ color: 'white' }}>
+            <ChevronLeftIcon />
+          </IconButton>
+        )}
+        {collapsed && (
+          <IconButton onClick={onToggle} sx={{ color: 'white' }}>
+            <ChevronRightIcon />
+          </IconButton>
+        )}
+      </Box>
+
+      <Divider />
+
+      {sections.main.length > 0 && renderList(sections.main)}
       {sections.master.length > 0 && (
         <>
           <Divider />
           <Box sx={{ px: 2, py: 1, bgcolor: 'grey.100' }}>
-            <Typography variant="caption" color="text.secondary" fontWeight="bold">
-              MASTER DATA
-            </Typography>
+            {!collapsed && <Typography variant="caption" color="text.secondary" fontWeight="bold">MASTER DATA</Typography>}
           </Box>
-          <List>
-            {sections.master.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton
-                  selected={location.pathname === item.path}
-                  onClick={() => navigate(item.path)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          {renderList(sections.master)}
         </>
       )}
 
-      {/* Workflow Section */}
       {sections.workflow.length > 0 && (
         <>
           <Divider />
           <Box sx={{ px: 2, py: 1, bgcolor: 'grey.100' }}>
-            <Typography variant="caption" color="text.secondary" fontWeight="bold">
-              WORKFLOW
-            </Typography>
+            {!collapsed && <Typography variant="caption" color="text.secondary" fontWeight="bold">WORKFLOW</Typography>}
           </Box>
-          <List>
-            {sections.workflow.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton
-                  selected={location.pathname === item.path}
-                  onClick={() => navigate(item.path)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          {renderList(sections.workflow)}
         </>
       )}
 
-      {/* Analytics Section */}
       {sections.analytics.length > 0 && (
         <>
           <Divider />
-          <List>
-            {sections.analytics.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton
-                  selected={location.pathname === item.path}
-                  onClick={() => navigate(item.path)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          {renderList(sections.analytics)}
         </>
       )}
 
-      {/* Admin Section */}
+      <Box sx={{ flexGrow: 1 }} />
+
       {sections.admin.length > 0 && (
         <>
           <Divider />
-          <List>
-            {sections.admin.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton
-                  selected={location.pathname === item.path}
-                  onClick={() => navigate(item.path)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
+          {renderList(sections.admin)}
         </>
       )}
-    </Drawer>
+    </Box>
   )
 }
 

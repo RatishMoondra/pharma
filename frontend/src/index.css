@@ -34,3 +34,27 @@ body {
     height: 28px;
   }
 }
+
+/* ERP layout additions */
+:root {
+  --erp-sidebar-width: 240px;
+  --erp-topbar-height: 56px;
+}
+
+* { box-sizing: border-box; }
+
+/* compact scrollbar */
+::-webkit-scrollbar { height: 8px; width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(50,50,50,0.12); border-radius: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* focus ring */
+:focus { outline: 2px solid rgba(26,115,232,0.18); outline-offset: 2px; }
+
+/* main content */
+main { min-height: calc(100vh - var(--erp-topbar-height)); }
+
+/* small tweaks for DataGrid quick filter */
+.MuiDataGrid-root .MuiDataGrid-columnHeaderTitle { letter-spacing: 0.2px; }
+
+/* keep your logo sizing rules (you already added them) */
