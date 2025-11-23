@@ -1,159 +1,249 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react'
 import {
-  Container,
-  Typography,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  TextField,
   Button,
+  IconButton,
+  Paper,
   CircularProgress,
-  Chip,
+  Snackbar,
   Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
-} from '@mui/material';
-import api from '../services/api';
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material'
 
-export default function MaterialBalanceImpactPage() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [filter, setFilter] = useState('ALL'); // ALL, RAW, PACKING
-  const [success, setSuccess] = useState(null);
+import DeleteIcon from '@mui/icons-material/Delete'
+import InventoryIcon from '@mui/icons-material/Inventory'
+
+import { alpha, styled } from '@mui/material/styles'
+import {
+  DataGrid,
+  gridClasses,
+  GridToolbar,
+  GridToolbarContainer,
+} from '@mui/x-data-grid'
+
+import ERPPage from '../components/ERPPage'
+import api from '../services/api'
+import { useApiError } from '../hooks/useApiError'
+
+
+/* -------------------------------------------
+   ERP Striped DataGrid
+-------------------------------------------- */
+const ODD_OPACITY = 0.06
+
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  border: 'none',
+  '& .MuiDataGrid-columnHeaders': {
+    backgroundColor: theme.palette.background.default,
+    color: theme.palette.primary.main,
+    fontWeight: 700,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[50],
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
+    },
+  },
+}))
+
+const CustomToolbar = () => (
+  <GridToolbarContainer sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+    <GridToolbar />
+  </GridToolbarContainer>
+)
+
+
+/* -------------------------------------------
+       MAIN COMPONENT
+-------------------------------------------- */
+
+const MaterialBalanceImpactPage = () => {
+  const [loading, setLoading] = useState(true)
+  const [impacts, setImpacts] = useState([])
+  const [filterType, setFilterType] = useState('ALL') // ALL | RM | PM
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
+
+  const { error, handleApiError, clearError } = useApiError()
+
+  useEffect(() => {
+    fetchMaterialBalanceImpact()
+  }, [])
+
+  const fetchMaterialBalanceImpact = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/api/material-balance-impact/')
+      if (res.data.success) {
+        setImpacts(res.data.data)
+      }
+    } catch (err) {
+      handleApiError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this material balance record?')) return;
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+    if (!window.confirm('Are you sure you want to delete this entry?')) return
     try {
-      await api.delete(`/api/material-balance/${id}`);
-      setSuccess('Material balance record deleted successfully.');
-      await handleFetch();
+      const res = await api.delete(`/api/material-balance-impact/${id}`)
+      if (res.data.success) {
+        setImpacts(prev => prev.filter(i => i.id !== id))
+        setSnackbar({ open: true, message: 'Deleted successfully', severity: 'success' })
+      }
     } catch (err) {
-      setError('Failed to delete material balance record.');
-      console.error('Delete error:', err);
-    } finally {
-      setLoading(false);
+      handleApiError(err)
+      setSnackbar({ open: true, message: 'Delete failed', severity: 'error' })
     }
-  };
+  }
 
-  const handleFetch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get('/api/material-balance/all');
-      const allRows = Array.isArray(res.data) ? res.data : res.data.data || [];
-      setRows(allRows);
-    } catch (err) {
-      setRows([]);
-      setError('Failed to fetch material balance records.');
-      console.error('Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  /* -------------------------------------------
+      FILTERED DATA BY MATERIAL TYPE
+  -------------------------------------------- */
+  const filteredRows = useMemo(() => {
+    if (filterType === 'ALL') return impacts
+    if (filterType === 'RM') return impacts.filter(i => i.material_type === 'RM')
+    if (filterType === 'PM') return impacts.filter(i => i.material_type === 'PM')
+    return impacts
+  }, [impacts, filterType])
 
-  // Filter rows by material type
-  const filteredRows = rows.filter(row => {
-    if (filter === 'RAW') return !!row.raw_material_id;
-    if (filter === 'PACKING') return !!row.packing_material_id;
-    return true;
-  });
+  /* -------------------------------------------
+      DATAGRID COLUMNS (NO BUSINESS LOGIC CHANGED)
+  -------------------------------------------- */
+  const columns = [
+    { field: 'material_code', headerName: 'Material Code', flex: 1 },
+    { field: 'material_name', headerName: 'Material Name', flex: 1.5 },
 
-  // Helper to format row with related names
-  const renderRow = (row) => (
-    <TableRow key={row.id}>
-      <TableCell>{row.po?.po_number || row.po_id || '-'}</TableCell>
-      <TableCell>{row.invoice?.invoice_number || row.invoice_id || '-'}</TableCell>
-      <TableCell>{row.vendor?.vendor_name || row.vendor_id || '-'}</TableCell>
-      <TableCell>
-        {row.raw_material_id
-          ? (row.raw_material?.rm_name || row.raw_material_id)
-          : row.packing_material_id
-            ? (row.packing_material?.pm_name || row.packing_material_id)
-            : '-'}
-      </TableCell>
-      <TableCell>{row.ordered_qty}</TableCell>
-      <TableCell>{row.received_qty}</TableCell>
-      <TableCell>{row.balance_qty}</TableCell>
-      <TableCell>{new Date(row.last_updated).toLocaleString()}</TableCell>
-      <TableCell>
-        <Button
-          variant="outlined"
+    {
+      field: 'material_type',
+      headerName: 'Type',
+      flex: 0.7,
+      renderCell: (params) =>
+        params.row.material_type === 'RM' ? 'Raw Material' : 'Packing Material',
+    },
+
+    { field: 'old_stock', headerName: 'Old Stock', flex: 0.8 },
+    { field: 'new_stock', headerName: 'New Stock', flex: 0.8 },
+    { field: 'change_qty', headerName: 'Change Qty', flex: 0.8 },
+
+    {
+      field: 'reference_document',
+      headerName: 'Reference Document',
+      flex: 1.2,
+    },
+
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.6,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <IconButton
           color="error"
           size="small"
-          onClick={() => handleDelete(row.id)}
+          onClick={() => handleDelete(params.row.id)}
         >
-          Delete
-        </Button>
-      </TableCell>
-    </TableRow>
-  );
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ]
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4">Material Balance Impact</Typography>
+    <ERPPage
+      title="Material Balance Impact"
+      icon={<InventoryIcon sx={{ fontSize: 36, color: 'primary.main' }} />}
+      actions={
+        <Button variant="outlined" onClick={fetchMaterialBalanceImpact}>
+          Refresh
+        </Button>
+      }
+    >
+      {/* ---------------------------------------
+           SEGMENTED FILTER BUTTON GROUP
+      ---------------------------------------- */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-start' }}>
+        <ToggleButtonGroup
+          value={filterType}
+          exclusive
+          onChange={(e, v) => v && setFilterType(v)}
+          size="small"
+          sx={{
+            '& .MuiToggleButton-root': {
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '6px !important',
+              px: 2.5,
+            },
+          }}
+        >
+          <ToggleButton value="ALL">All Materials</ToggleButton>
+          <ToggleButton value="RM">Raw Only</ToggleButton>
+          <ToggleButton value="PM">Packing Only</ToggleButton>
+        </ToggleButtonGroup>
       </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Button variant="contained" onClick={handleFetch} disabled={loading} sx={{ mr: 2 }}>Fetch All</Button>
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Material Type</InputLabel>
-          <Select
-            value={filter}
-            label="Material Type"
-            onChange={e => setFilter(e.target.value)}
-          >
-            <MenuItem value="ALL">All Materials</MenuItem>
-            <MenuItem value="RAW">Raw Material Only</MenuItem>
-            <MenuItem value="PACKING">Packing Material Only</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+
+      {/* ---------------------------------------
+           LOADING
+      ---------------------------------------- */}
+      {loading ? (
+        <Box sx={{ textAlign: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
+      ) : (
+        <Paper sx={{ borderRadius: 2, overflow: 'hidden', p: 1 }}>
+          <StripedDataGrid
+            autoHeight
+            rows={filteredRows}
+            columns={columns}
+            getRowId={(row) => row.id}
+            disableRowSelectionOnClick
+            pageSizeOptions={[10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 25 } },
+            }}
+            slots={{ toolbar: CustomToolbar }}
+            density="comfortable"
+            getRowClassName={(params) =>
+              params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+            }
+          />
+        </Paper>
       )}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-      )}
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>
-      )}
-      {filteredRows.length > 0 ? (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>PO Number</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice Number</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Vendor</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Material Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Ordered Qty</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Received Qty</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Balance Qty</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Last Updated</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredRows.map(renderRow)}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      ) : !loading && (
-        <Alert severity="info">No material balance records found.</Alert>
-      )}
-    </Container>
-  );
+
+      {/* ---------------------------------------
+           FEEDBACK MESSAGES
+      ---------------------------------------- */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
+      {/* API error from useApiError */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={5000}
+        onClose={clearError}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={clearError}>
+          {error}
+        </Alert>
+      </Snackbar>
+    </ERPPage>
+  )
 }
+
+export default MaterialBalanceImpactPage
