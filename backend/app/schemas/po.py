@@ -52,6 +52,41 @@ class PackingMaterialBasic(BaseModel):
         from_attributes = True
 
 
+class POItemCreate(BaseModel):
+    """Schema for creating a new PO item"""
+    medicine_id: Optional[int] = None
+    raw_material_id: Optional[int] = None
+    packing_material_id: Optional[int] = None
+    ordered_quantity: float
+    unit: Optional[str] = None
+    
+    # Commercial fields
+    rate_per_unit: Optional[Decimal] = None
+    value_amount: Optional[Decimal] = None
+    gst_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+    delivery_schedule: Optional[str] = None
+    delivery_location: Optional[str] = None
+    
+    # Tax fields
+    hsn_code: Optional[str] = None
+    gst_rate: Optional[Decimal] = None
+    pack_size: Optional[str] = None
+    
+    # PM fields
+    language: Optional[str] = None
+    artwork_version: Optional[str] = None
+    gsm: Optional[Decimal] = None
+    ply: Optional[int] = None
+    box_dimensions: Optional[str] = None
+    
+    # RM fields
+    specification_reference: Optional[str] = None
+    
+    # Delivery fields
+    delivery_date: Optional[date] = None
+
+
 class EOPABasic(BaseModel):
     """Basic EOPA info"""
     id: int
@@ -70,6 +105,14 @@ class POItemResponse(BaseModel):
     ordered_quantity: float
     fulfilled_quantity: float
     unit: Optional[str] = None  # kg, liters, boxes, labels, etc.
+    
+    # Commercial fields
+    rate_per_unit: Optional[Decimal] = None
+    value_amount: Optional[Decimal] = None
+    gst_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+    delivery_schedule: Optional[str] = None
+    delivery_location: Optional[str] = None
     
     # Tax compliance
     hsn_code: Optional[str] = None
@@ -127,6 +170,19 @@ class POBase(BaseModel):
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
     
+    # Commercial totals
+    total_value_amount: Optional[Decimal] = None
+    total_gst_amount: Optional[Decimal] = None
+    total_invoice_amount: Optional[Decimal] = None
+    
+    # Shipping details
+    ship_to_manufacturer_id: Optional[int] = None
+    ship_to_address: Optional[str] = None
+    
+    # Amendment tracking
+    amendment_reason: Optional[str] = None
+    currency_exchange_rate: Optional[Decimal] = Decimal('1.0000')
+    
     # Quality requirements
     require_coa: bool = False
     require_bmr: bool = False
@@ -162,6 +218,20 @@ class POCreate(BaseModel):
     po_date: Optional[date] = datetime.now().date()  # Added to match backend expectations
     delivery_date: Optional[date] = None
     remarks: Optional[str] = None
+    
+    # Commercial totals
+    total_value_amount: Optional[Decimal] = None
+    total_gst_amount: Optional[Decimal] = None
+    total_invoice_amount: Optional[Decimal] = None
+    
+    # Shipping details
+    ship_to_manufacturer_id: Optional[int] = None
+    ship_to_address: Optional[str] = None
+    
+    # Amendment tracking
+    amendment_reason: Optional[str] = None
+    currency_exchange_rate: Optional[Decimal] = Decimal('1.0000')
+    
     # Quality requirements
     require_coa: bool = False
     require_bmr: bool = False
@@ -219,8 +289,24 @@ class POUpdate(BaseModel):
 class POItemUpdate(BaseModel):
     id: Optional[int] = None
     medicine_id: Optional[int] = None
+    raw_material_id: Optional[int] = None
+    packing_material_id: Optional[int] = None
     ordered_quantity: float
     unit: Optional[str] = None
+    
+    # Commercial fields
+    rate_per_unit: Optional[Decimal] = None
+    value_amount: Optional[Decimal] = None
+    gst_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+    delivery_schedule: Optional[str] = None
+    delivery_location: Optional[str] = None
+    
+    # Tax fields
+    hsn_code: Optional[str] = None
+    gst_rate: Optional[Decimal] = None
+    
+    # PM fields
     language: Optional[str] = None
     artwork_version: Optional[str] = None
 
@@ -241,6 +327,21 @@ class POResponse(POBase):
     status: POStatus
     total_ordered_qty: float
     total_fulfilled_qty: float
+    
+    # Commercial totals
+    total_value_amount: Optional[Decimal] = None
+    total_gst_amount: Optional[Decimal] = None
+    total_invoice_amount: Optional[Decimal] = None
+    
+    # Shipping details
+    ship_to_manufacturer_id: Optional[int] = None
+    ship_to_address: Optional[str] = None
+    ship_to_manufacturer: Optional[VendorBasic] = None
+    
+    # Amendment tracking
+    amendment_reason: Optional[str] = None
+    currency_exchange_rate: Optional[Decimal] = None
+    
     created_by: int
     created_at: datetime
     items: List[POItemResponse] = []

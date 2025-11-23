@@ -5,7 +5,7 @@ Write-Host "Starting Backend Server..." -ForegroundColor Green
 Write-Host "================================" -ForegroundColor Green
 
 # Navigate to backend directory
-Set-Location -Path "$PSScriptRoot\..\backend"
+Set-Location -Path "c:\Ratish\Pawan\backend"
 
 # Activate virtual environment
 Write-Host "Activating virtual environment..." -ForegroundColor Yellow

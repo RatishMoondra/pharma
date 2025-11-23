@@ -51,6 +51,19 @@ class PurchaseOrder(Base):
     total_ordered_qty: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
     total_fulfilled_qty: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
     
+    # Commercial totals (for invoicing and payment tracking)
+    total_value_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), default=0, nullable=True)
+    total_gst_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), default=0, nullable=True)
+    total_invoice_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), default=0, nullable=True)
+    
+    # Shipping details (especially for RM/PM sent to manufacturer)
+    ship_to_manufacturer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("vendors.id"), nullable=True)
+    ship_to_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Amendment tracking
+    amendment_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    currency_exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), default=Decimal('1.0000'), nullable=True)
+    
     # Quality requirements (especially for RM)
     require_coa: Mapped[bool] = mapped_column(Boolean, default=False)  # Certificate of Analysis
     require_bmr: Mapped[bool] = mapped_column(Boolean, default=False)  # Batch Manufacturing Record
@@ -94,6 +107,7 @@ class PurchaseOrder(Base):
     # Relationships
     eopa: Mapped["EOPA"] = relationship("EOPA", back_populates="purchase_orders")
     vendor: Mapped["Vendor"] = relationship("Vendor", back_populates="purchase_orders", foreign_keys="[PurchaseOrder.vendor_id]")
+    ship_to_manufacturer: Mapped[Optional["Vendor"]] = relationship("Vendor", foreign_keys="[PurchaseOrder.ship_to_manufacturer_id]")
     creator: Mapped["User"] = relationship("User", foreign_keys="[PurchaseOrder.created_by]")
     preparer: Mapped[Optional["User"]] = relationship("User", foreign_keys="[PurchaseOrder.prepared_by]")
     checker: Mapped[Optional["User"]] = relationship("User", foreign_keys="[PurchaseOrder.checked_by]")
@@ -127,6 +141,14 @@ class POItem(Base):
     ordered_quantity: Mapped[float] = mapped_column(Numeric(15, 3))
     fulfilled_quantity: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
     unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # kg, liters, boxes, labels, pcs, etc.
+    
+    # Commercial fields (rate and calculated amounts)
+    rate_per_unit: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    value_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)  # rate × quantity
+    gst_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)  # value × gst_rate
+    total_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)  # value + gst
+    delivery_schedule: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # "Immediate", "Within 15 days"
+    delivery_location: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Specific delivery location
     
     # Tax compliance (auto-populated from medicine_master, user-editable)
     hsn_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)

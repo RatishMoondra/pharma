@@ -52,7 +52,7 @@ import { Business, Inventory2, LocalShipping } from '@mui/icons-material'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 import { useStableRowEditing } from '../hooks/useStableRowEditing'
-import POManagementDialog from '../components/POManagementDialog'
+import SimplePODialog from '../components/SimplePODialog'
 
 // --- DataGrid Helper Styles and Components ---
 const ODD_OPACITY = 0.05; 
@@ -485,8 +485,8 @@ const EOPAPage = () => {
     setApproveDialogOpen(true)
   }
 
-  const handleGeneratePO = (eopa) => {
-    setSelectedEopa(eopa)
+  const handleGeneratePO = (eopa, poType) => {
+    setSelectedEopa({ ...eopa, selectedPOType: poType })
     setPoDialogMode('generate')
     setPoDialogOpen(true)
   }
@@ -875,15 +875,33 @@ const EOPAPage = () => {
                     </Box>
                   )}
                   {eopa.status === 'APPROVED' && (
-                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       <Button
                         variant="contained"
                         color="primary"
-                        startIcon={<ShoppingCartIcon />}
-                        onClick={() => handleGeneratePO(eopa)}
+                        startIcon={<Inventory2 />}
+                        onClick={() => handleGeneratePO(eopa, 'RM')}
                         size="small"
                       >
-                        Generate Purchase Orders
+                        Generate RM PO
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<LocalShipping />}
+                        onClick={() => handleGeneratePO(eopa, 'PM')}
+                        size="small"
+                      >
+                        Generate PM PO
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<Business />}
+                        onClick={() => handleGeneratePO(eopa, 'FG')}
+                        size="small"
+                      >
+                        Generate FG PO
                       </Button>
                       <Button
                         variant="outlined"
@@ -930,12 +948,11 @@ const EOPAPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* PO Management Dialog - Tabbed UI for RM/PM/FG */}
-      <POManagementDialog
+      {/* PO Generation Dialog - Simplified single PO type */}
+      <SimplePODialog
         open={poDialogOpen}
         onClose={handlePODialogClose}
         eopa={selectedEopa}
-        mode={poDialogMode}
         onSuccess={handlePODialogSuccess}
       />
 

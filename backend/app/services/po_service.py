@@ -24,6 +24,108 @@ from app.exceptions.base import AppException
 logger = logging.getLogger("pharma")
 
 
+def calculate_po_item_amounts(item: POItem) -> POItem:
+    """
+    Auto-calculate commercial amounts for a PO item.
+    
+    Calculations:
+    - value_amount = rate_per_unit × ordered_quantity
+    - gst_amount = value_amount × (gst_rate / 100)
+    - total_amount = value_amount + gst_amount
+    
+    Args:
+        item: POItem instance with rate_per_unit, ordered_quantity, and gst_rate set
+        
+    Returns:
+        Updated POItem with calculated amounts
+    """
+    if item.rate_per_unit and item.ordered_quantity:
+        # Calculate value amount
+        item.value_amount = Decimal(str(item.rate_per_unit)) * Decimal(str(item.ordered_quantity))
+        
+        # Calculate GST amount
+        if item.gst_rate:
+            item.gst_amount = item.value_amount * (Decimal(str(item.gst_rate)) / Decimal('100'))
+        else:
+            item.gst_amount = Decimal('0')
+        
+        # Calculate total amount
+        item.total_amount = item.value_amount + item.gst_amount
+    else:
+        # Reset to zero if rate or quantity is missing
+        item.value_amount = Decimal('0')
+        item.gst_amount = Decimal('0')
+        item.total_amount = Decimal('0')
+    
+    return item
+
+
+def calculate_po_totals(po: PurchaseOrder) -> PurchaseOrder:
+    """
+    Auto-calculate commercial totals for a PO based on its items.
+    
+    Calculations:
+    - total_value_amount = sum of all items.value_amount
+    - total_gst_amount = sum of all items.gst_amount
+    - total_invoice_amount = sum of all items.total_amount
+    
+    Args:
+        po: PurchaseOrder instance with items loaded
+        
+    Returns:
+        Updated PurchaseOrder with calculated totals
+    """
+    total_value = Decimal('0')
+    total_gst = Decimal('0')
+    total_invoice = Decimal('0')
+    
+    for item in po.items:
+        if item.value_amount:
+            total_value += Decimal(str(item.value_amount))
+        if item.gst_amount:
+            total_gst += Decimal(str(item.gst_amount))
+        if item.total_amount:
+            total_invoice += Decimal(str(item.total_amount))
+    
+    po.total_value_amount = total_value
+    po.total_gst_amount = total_gst
+    po.total_invoice_amount = total_invoice
+    
+    return po
+
+
+def validate_po_item_material_type(item_data: dict) -> None:
+    """
+    Validate that exactly ONE material type is specified for a PO item.
+    
+    Business Rule: Each PO item must have exactly ONE of:
+    - medicine_id (FG)
+    - raw_material_id (RM)
+    - packing_material_id (PM)
+    
+    Args:
+        item_data: Dict containing PO item data
+        
+    Raises:
+        AppException if validation fails
+    """
+    material_fields = ['medicine_id', 'raw_material_id', 'packing_material_id']
+    non_null_count = sum(1 for field in material_fields if item_data.get(field) is not None)
+    
+    if non_null_count == 0:
+        raise AppException(
+            "PO item must have at least one material type (medicine, raw material, or packing material)",
+            "ERR_VALIDATION",
+            400
+        )
+    
+    if non_null_count > 1:
+        raise AppException(
+            "PO item can only have ONE material type (medicine, raw material, or packing material)",
+            "ERR_VALIDATION",
+            400
+        )
+
 
 class POGenerationService:
     """Service for generating Purchase Orders from EOPA"""
@@ -275,6 +377,10 @@ class POGenerationService:
         """
         Create a single FG Purchase Order with items (QUANTITY ONLY, NO PRICING).
         
+        CRITICAL BUSINESS RULE:
+        - FG PO → Only medicine_id is populated
+        - RM/PM POs should use explosion services, not this method
+        
         Business Rules:
         1. PO contains ONLY quantities
         2. NO pricing information
@@ -359,32 +465,30 @@ class POGenerationService:
             hsn_code = pi_item.hsn_code if pi_item.hsn_code else medicine.hsn_code
             pack_size = pi_item.pack_size if pi_item.pack_size else None
             
-            # Set conditional fields (FG minimal; PM/RM handled via explosion flows)
-            artwork_file_url = None
-            artwork_approval_ref = None
-            specification_reference = None
-            test_method = None
-            language = None
-            artwork_version = None
-            
-            # Create PO item (QUANTITY ONLY + UNIT + HSN + conditional fields)
-            po_item = POItem(
-                po_id=po.id,
-                medicine_id=medicine.id,
-                ordered_quantity=effective_qty,
-                fulfilled_quantity=Decimal("0.00"),
-                unit=unit,  # Save unit (kg, liters, boxes, pcs, etc.)
-                hsn_code=hsn_code,
-                pack_size=pack_size,
-                # PM-specific fields
-                language=language,
-                artwork_version=artwork_version,
-                artwork_file_url=artwork_file_url,
-                artwork_approval_ref=artwork_approval_ref,
-                # RM-specific fields
-                specification_reference=specification_reference,
-                test_method=test_method
-            )
+            # CRITICAL: Material-type-aware field population
+            # FG PO → Only medicine_id
+            # RM/PM handled via explosion services
+            if po_type == POType.FG:
+                # FG PO: Only populate medicine_id
+                po_item = POItem(
+                    po_id=po.id,
+                    medicine_id=medicine.id,
+                    raw_material_id=None,
+                    packing_material_id=None,
+                    ordered_quantity=effective_qty,
+                    fulfilled_quantity=Decimal("0.00"),
+                    unit=unit or 'pcs',
+                    hsn_code=hsn_code,
+                    pack_size=pack_size
+                )
+            else:
+                # RM/PM POs should not use this method
+                logger.warning({
+                    "event": "WRONG_METHOD_FOR_RM_PM_PO",
+                    "po_type": po_type.value,
+                    "message": "RM/PM POs should use explosion services"
+                })
+                continue
             
             self.db.add(po_item)
             total_ordered_qty += effective_qty
@@ -547,11 +651,13 @@ class POGenerationService:
                     uom = rm.get("uom")
                     hsn_code = rm.get("hsn_code")
                     gst_rate = Decimal(str(rm.get("gst_rate", 0))) if rm.get("gst_rate") else None
-                    # Create PO item with raw_material_id (not medicine_id for RM POs)
+                    
+                    # CRITICAL: RM PO Item - populate raw_material_id, NULL for medicine_id and packing_material_id
                     po_item = POItem(
                         po_id=po.id,
                         raw_material_id=raw_material_id,
-                        medicine_id=None,  # RM POs use raw_material_id
+                        medicine_id=None,
+                        packing_material_id=None,
                         ordered_quantity=float(qty_required),
                         fulfilled_quantity=0.0,
                         unit=uom,
@@ -727,6 +833,16 @@ class POGenerationService:
                 
                 for pm in packing_materials:
                     packing_material_id = pm.get("packing_material_id")
+                    if not packing_material_id:
+                        logger.warning({
+                            "event": "PM_PO_ITEM_SKIPPED_NO_PACKING_MATERIAL_ID",
+                            "po_id": po.id,
+                            "vendor_id": vendor_id,
+                            "eopa_id": eopa_id,
+                            "pm": pm,
+                            "message": "Skipping PO item creation: packing_material_id is missing or None."
+                        })
+                        continue
                     qty_required = Decimal(str(pm.get("qty_required") or pm.get("quantity", 0)))
                     uom = pm.get("uom")
                     language = pm.get("language")
@@ -737,11 +853,12 @@ class POGenerationService:
                     hsn_code = pm.get("hsn_code")
                     gst_rate = Decimal(str(pm.get("gst_rate", 0))) if pm.get("gst_rate") else None
                     
-                    # Create PO item with packing_material_id (not medicine_id for PM POs)
+                    # CRITICAL: PM PO Item - populate packing_material_id, NULL for medicine_id and raw_material_id
                     po_item = POItem(
                         po_id=po.id,
                         packing_material_id=packing_material_id,
-                        medicine_id=None,  # PM POs use packing_material_id
+                        medicine_id=None,
+                        raw_material_id=None,
                         ordered_quantity=float(qty_required),
                         fulfilled_quantity=0.0,
                         unit=uom,

@@ -338,7 +338,7 @@ async def delete_medicine_packing_material(
 
 # ==================== PM Explosion & PO Preview ====================
 
-@router.get("/eopa/{eopa_id}/pm-explosion", response_model=dict)
+@router.get("/pm-explosion/{eopa_id}", response_model=dict)
 async def get_pm_explosion(
     eopa_id: int,
     db: Session = Depends(get_db),

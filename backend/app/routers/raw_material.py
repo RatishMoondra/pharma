@@ -334,7 +334,7 @@ async def delete_medicine_raw_material(
 
 # ==================== RM Explosion & PO Preview ====================
 
-@router.get("/eopa/{eopa_id}/rm-explosion", response_model=dict)
+@router.get("/rm-explosion/{eopa_id}", response_model=dict)
 async def get_rm_explosion(
     eopa_id: int,
     db: Session = Depends(get_db),
@@ -372,7 +372,7 @@ async def get_rm_explosion(
         )
 
 
-@router.get("/eopa/{eopa_id}/rm-po-preview", response_model=dict)
+@router.get("/eopa/rm-po-preview/{eopa_id}", response_model=dict)
 async def get_rm_po_preview(
     eopa_id: int,
     db: Session = Depends(get_db),

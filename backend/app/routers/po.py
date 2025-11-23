@@ -539,6 +539,75 @@ async def update_po(
     }
 
 
+@router.post("/{po_id}/recalculate", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def recalculate_po(
+    po_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Recalculate all commercial amounts for a PO and its items.
+    
+    This endpoint:
+    1. Recalculates value, GST, and total for each PO item
+    2. Recalculates PO totals based on updated item totals
+    3. Returns updated PO with all calculations
+    
+    Used when:
+    - User updates rates or quantities
+    - GST rates change
+    - Manual recalculation is needed
+    """
+    from app.services.po_service import calculate_po_item_amounts, calculate_po_totals
+    
+    # Get PO with all items
+    po = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.items)
+    ).filter(PurchaseOrder.id == po_id).first()
+    
+    if not po:
+        raise AppException("Purchase Order not found", "ERR_NOT_FOUND", 404)
+    
+    if po.status == POStatus.CLOSED:
+        raise AppException("Cannot recalculate a closed PO", "ERR_VALIDATION", 400)
+    
+    # Recalculate each item
+    for item in po.items:
+        calculate_po_item_amounts(item)
+    
+    # Recalculate PO totals
+    calculate_po_totals(po)
+    
+    po.updated_at = datetime.utcnow()
+    db.commit()
+    
+    logger.info({
+        "event": "PO_RECALCULATED",
+        "po_id": po.id,
+        "po_number": po.po_number,
+        "total_value": float(po.total_value_amount) if po.total_value_amount else 0,
+        "total_gst": float(po.total_gst_amount) if po.total_gst_amount else 0,
+        "total_invoice": float(po.total_invoice_amount) if po.total_invoice_amount else 0,
+        "user": current_user.username
+    })
+    
+    # Reload with all relationships
+    po = db.query(PurchaseOrder).options(
+        joinedload(PurchaseOrder.vendor),
+        joinedload(PurchaseOrder.eopa),
+        joinedload(PurchaseOrder.items).joinedload(POItem.medicine),
+        joinedload(PurchaseOrder.items).joinedload(POItem.raw_material),
+        joinedload(PurchaseOrder.items).joinedload(POItem.packing_material)
+    ).filter(PurchaseOrder.id == po_id).first()
+    
+    return {
+        "success": True,
+        "message": "Purchase Order recalculated successfully",
+        "data": POResponse.model_validate(po).model_dump(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 @router.get("/{po_id}/download-pdf", dependencies=[Depends(get_current_user)])
 async def download_po_pdf(
     po_id: int,
