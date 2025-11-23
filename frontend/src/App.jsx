@@ -20,6 +20,7 @@ import TermsConditionsPage from './pages/TermsConditionsPage'
 import PrivateRoute from './guards/PrivateRoute'
 // import Layout from './components/Layout'
 import ERPLayout from './components/ERPLayout'
+import MedicinePage from './pages/MedicinePage'
 
 import MaterialBalanceImpactPage from './pages/MaterialBalanceImpactPage'
 
@@ -50,6 +51,7 @@ function App() {
           />
           <Route path="vendors" element={<VendorsPage />} />
           <Route path="products" element={<ProductsPage />} />
+          <Route path="medicines" element={<MedicinePage />} />
           <Route path="raw-materials" element={<RawMaterialPage />} />
           <Route path="packing-materials" element={<PackingMaterialPage />} />
           <Route

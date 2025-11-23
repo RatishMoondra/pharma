@@ -23,6 +23,7 @@ import {
   CircularProgress,
 } from '@mui/material'
 import { DataGrid, GridToolbar, GridToolbarContainer, gridClasses } from '@mui/x-data-grid'
+import ERPPage from '../components/ERPPage'
 import { alpha, styled } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -414,12 +415,10 @@ const PackingMaterialPage = () => {
   ]
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Inventory2Icon sx={{ fontSize: 40, color: 'primary.main' }} />
-          <Typography variant="h4">Packing Material Master</Typography>
-        </Box>
+    <ERPPage
+      title="Packing Material Master"
+      icon={<Inventory2Icon sx={{ fontSize: 36, color: 'primary.main' }} />}
+      actions={
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -427,8 +426,9 @@ const PackingMaterialPage = () => {
         >
           Add Packing Material
         </Button>
-      </Box>
-
+      }
+    >
+      {/* Search Bar */}
       <TextField
         fullWidth
         placeholder="Global Search (PM code, name, type, etc.)..."
@@ -444,28 +444,28 @@ const PackingMaterialPage = () => {
         }}
       />
 
-      <Box sx={{ minHeight: 'calc(100vh - 200px)', width: '100%' }}>
-        <StripedDataGrid
-          loading={loading}
-          rows={filteredPackingMaterials}
-          columns={COLUMNS}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 25 },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50]}
-          disableRowSelectionOnClick
-          slots={{
-            toolbar: CustomToolbar,
-            noRowsOverlay: CustomNoRowsOverlay,
-          }}
-          density="comfortable"
-          getRowClassName={(params) =>
-            params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
-          }
-        />
-      </Box>
+      {/* DataGrid */}
+      <StripedDataGrid
+        autoHeight
+        loading={loading}
+        rows={filteredPackingMaterials}
+        columns={COLUMNS}
+        initialState={{
+          pagination: {
+            paginationModel: { pageSize: 25 },
+          },
+        }}
+        pageSizeOptions={[10, 25, 50]}
+        disableRowSelectionOnClick
+        slots={{
+          toolbar: CustomToolbar,
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        density="comfortable"
+        getRowClassName={(params) =>
+          params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+        }
+      />
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="md" fullWidth>
@@ -772,6 +772,7 @@ const PackingMaterialPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Success Snackbar */}
       <Snackbar
         open={!!successMessage}
         autoHideDuration={3000}
@@ -783,6 +784,7 @@ const PackingMaterialPage = () => {
         </Alert>
       </Snackbar>
 
+      {/* Error Snackbar */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
@@ -793,7 +795,7 @@ const PackingMaterialPage = () => {
           {error}
         </Alert>
       </Snackbar>
-    </Box>
+    </ERPPage>
   )
 }
 

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Card,
@@ -31,7 +30,26 @@ import {
   KeyboardArrowUp,
   Assessment,
 } from '@mui/icons-material';
+import { DataGrid, gridClasses } from '@mui/x-data-grid';
+import { styled, alpha } from '@mui/material/styles';
+import ERPPage from '../components/ERPPage';
 import api from '../services/api';
+
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  border: 'none',
+  '& .MuiDataGrid-columnHeaders': {
+    backgroundColor: theme.palette.background.default,
+    color: theme.palette.text.primary,
+    fontWeight: 700,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[50],
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, 0.06),
+    },
+  },
+}));
 
 const AnalyticsPage = () => {
   const [tabValue, setTabValue] = useState(0);
@@ -91,35 +109,36 @@ const AnalyticsPage = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Container>
+      <ERPPage
+        title="Analytics & Insights"
+        icon={<Assessment sx={{ fontSize: 36, color: 'primary.main' }} />}
+        actions={null}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      </ERPPage>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <ERPPage
+        title="Analytics & Insights"
+        icon={<Assessment sx={{ fontSize: 36, color: 'primary.main' }} />}
+        actions={null}
+      >
         <Alert severity="error">{error}</Alert>
-      </Container>
+      </ERPPage>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Assessment sx={{ fontSize: 40, color: 'primary.main' }} />
-          <Typography variant="h4" fontWeight="bold" color="primary">
-            Analytics & Insights
-          </Typography>
-        </Box>
-        <Typography variant="body1" color="text.secondary">
-          Monitor invoice matching, track discrepancies, and evaluate vendor performance
-        </Typography>
-      </Box>
-
+    <ERPPage
+      title="Analytics & Insights"
+      icon={<Assessment sx={{ fontSize: 36, color: 'primary.main' }} />}
+      actions={null}
+    >
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
@@ -137,7 +156,7 @@ const AnalyticsPage = () => {
 
       {/* Tab 2: Vendor Performance */}
       {tabValue === 2 && <VendorPerformanceTab data={vendorPerformance} />}
-    </Container>
+    </ERPPage>
   );
 };
 

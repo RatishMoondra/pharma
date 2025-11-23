@@ -1,6 +1,6 @@
 // src/components/Sidebar.jsx
 import React from 'react'
-import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Tooltip, Typography, IconButton } from '@mui/material'
+import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Tooltip, Typography, IconButton } from '@mui/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
@@ -15,7 +15,6 @@ import Inventory2Icon from '@mui/icons-material/Inventory2'
 import DescriptionIcon from '@mui/icons-material/Description'
 import ApprovalIcon from '@mui/icons-material/Approval'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
-import LocalShippingIcon from '@mui/icons-material/LocalShipping'
 import ReceiptIcon from '@mui/icons-material/Receipt'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import SettingsIcon from '@mui/icons-material/Settings'
@@ -35,6 +34,7 @@ const Sidebar = ({ collapsed = false, onToggle = () => {} }) => {
     { text: 'Countries', icon: <PublicIcon />, path: '/countries', roles: ['ADMIN'], section: 'main' },
     { text: 'Vendors', icon: <PeopleIcon />, path: '/vendors', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'main' },
     { text: 'Products', icon: <InventoryIcon />, path: '/products', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'main' },
+    { text: 'Medicine', icon: <InventoryIcon />, path: '/medicines', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'main' },
     { text: 'Raw Materials', icon: <ScienceIcon />, path: '/raw-materials', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'master' },
     { text: 'Packing Materials', icon: <Inventory2Icon />, path: '/packing-materials', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'master' },
     { text: 'Proforma Invoice (PI)', icon: <DescriptionIcon />, path: '/pi', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },

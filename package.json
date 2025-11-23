@@ -6,7 +6,11 @@
   "directories": {
     "doc": "docs"
   },
-  "scripts": {},
+  "scripts": {
+  "find-unused": "ts-prune",
+  "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+  "fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RatishMoondra/pharma.git"

@@ -269,16 +269,14 @@ const RawMaterialPage = () => {
   return (
     <ERPPage
       title="Raw Material Master"
-      icon={<ScienceIcon sx={{ fontSize: 36, color: "primary.main" }} />}
+      icon={<ScienceIcon sx={{ fontSize: 36, color: 'primary.main' }} />}
       actions={
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenForm(true)}>
           Add Raw Material
         </Button>
       }
     >
-    <Box sx={{ width: '100%', p: 3 }}>
-      
-
+      {/* Search Bar */}
       <TextField
         fullWidth
         placeholder="Global Search (RM code, name, category, or vendor)..."
@@ -294,152 +292,152 @@ const RawMaterialPage = () => {
         }}
       />
 
-      <Box sx={{ minHeight: 'calc(100vh - 200px)', width: '100%' }}>
-        <StripedDataGrid
-          loading={loading}
-          rows={filteredRawMaterials}
-          columns={[
-            {
-              field: 'actions',
-              headerName: 'Actions',
-              minWidth: 100,
-              sortable: false,
-              filterable: false,
-              align: 'center',
-              headerAlign: 'center',
-              flex: 0.8,
-              renderCell: (params) => (
-                <Box>
-                  <IconButton size="small" onClick={() => handleOpenForm(params.row)} color="primary">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
-                    <DeleteIcon />
-                  </IconButton>
-                </Box>
-              ),
-            },
-            {
-              field: 'rm_code',
-              headerName: 'RM Code',
-              minWidth: 120,
-              flex: 1,
-              renderCell: (params) => (
-                <Typography variant="body2" fontWeight="bold">{params.value}</Typography>
-              ),
-            },
-            {
-              field: 'rm_name',
-              headerName: 'RM Name',
-              minWidth: 180,
-              flex: 1.5,
-              renderCell: (params) => (
-                <Box>
-                  <Typography variant="body2">{params.value}</Typography>
-                  {params.row.description && (
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      {params.row.description}
-                    </Typography>
-                  )}
-                </Box>
-              ),
-            },
-            {
-              field: 'category',
-              headerName: 'Category',
-              minWidth: 120,
-              flex: 1,
-              renderCell: (params) => (
-                params.value ? <Chip label={params.value} size="small" color="info" /> : '-'
-              ),
-            },
-            {
-              field: 'unit_of_measure',
-              headerName: 'UOM',
-              minWidth: 80,
-              flex: 0.8,
-            },
-            {
-              field: 'standard_purity',
-              headerName: 'Purity %',
-              minWidth: 100,
-              flex: 1,
-              renderCell: (params) => (
-                params.value ? (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: params.value < 95 ? 'bold' : 'normal',
-                      color: params.value < 95 ? 'warning.dark' : 'text.primary',
-                    }}
-                  >
-                    {params.value}%
+      {/* DataGrid */}
+      <StripedDataGrid
+        autoHeight
+        loading={loading}
+        rows={filteredRawMaterials}
+        columns={[
+          {
+            field: 'actions',
+            headerName: 'Actions',
+            minWidth: 100,
+            sortable: false,
+            filterable: false,
+            align: 'center',
+            headerAlign: 'center',
+            flex: 0.8,
+            renderCell: (params) => (
+              <Box>
+                <IconButton size="small" onClick={() => handleOpenForm(params.row)} color="primary">
+                  <EditIcon />
+                </IconButton>
+                <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ),
+          },
+          {
+            field: 'rm_code',
+            headerName: 'RM Code',
+            minWidth: 120,
+            flex: 1,
+            renderCell: (params) => (
+              <Typography variant="body2" fontWeight="bold">{params.value}</Typography>
+            ),
+          },
+          {
+            field: 'rm_name',
+            headerName: 'RM Name',
+            minWidth: 180,
+            flex: 1.5,
+            renderCell: (params) => (
+              <Box>
+                <Typography variant="body2">{params.value}</Typography>
+                {params.row.description && (
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {params.row.description}
                   </Typography>
-                ) : '-'
-              ),
-            },
-            {
-              field: 'default_vendor',
-              headerName: 'Default Vendor',
-              minWidth: 180,
-              flex: 1.5,
-              renderCell: (params) => (
-                params.value ? (
-                  <Box>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                      {params.value.vendor_name + '\n' + params.value.vendor_code}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Typography variant="caption" color="text.secondary">Not assigned</Typography>
-                )
-              ),
-            },
-            {
-              field: 'hsn_code',
-              headerName: 'HSN Code',
-              minWidth: 100,
-              flex: 1,
-              renderCell: (params) => params.value || '-',
-            },
-            {
-              field: 'gst_rate',
-              headerName: 'GST %',
-              minWidth: 80,
-              flex: 0.8,
-              renderCell: (params) => params.value ? `${params.value}%` : '-',
-            },
-            {
-              field: 'is_active',
-              headerName: 'Status',
-              minWidth: 100,
-              flex: 1,
-              renderCell: (params) => (
-                <Chip
-                  label={params.value ? 'Active' : 'Inactive'}
-                  size="small"
-                  color={params.value ? 'success' : 'default'}
-                />
-              ),
-            },
-          ]}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 25 },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50]}
-          disableRowSelectionOnClick
-          slots={{
-            toolbar: CustomToolbar,
-            noRowsOverlay: CustomNoRowsOverlay,
-          }}
-          density="comfortable"
-          getRowClassName={(params) =>
-            params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
-          }
-        />
-      </Box>
+                )}
+              </Box>
+            ),
+          },
+          {
+            field: 'category',
+            headerName: 'Category',
+            minWidth: 120,
+            flex: 1,
+            renderCell: (params) => (
+              params.value ? <Chip label={params.value} size="small" color="info" /> : '-'
+            ),
+          },
+          {
+            field: 'unit_of_measure',
+            headerName: 'UOM',
+            minWidth: 80,
+            flex: 0.8,
+          },
+          {
+            field: 'standard_purity',
+            headerName: 'Purity %',
+            minWidth: 100,
+            flex: 1,
+            renderCell: (params) => (
+              params.value ? (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: params.value < 95 ? 'bold' : 'normal',
+                    color: params.value < 95 ? 'warning.dark' : 'text.primary',
+                  }}
+                >
+                  {params.value}%
+                </Typography>
+              ) : '-'
+            ),
+          },
+          {
+            field: 'default_vendor',
+            headerName: 'Default Vendor',
+            minWidth: 180,
+            flex: 1.5,
+            renderCell: (params) => (
+              params.value ? (
+                <Box>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                    {params.value.vendor_name + '\n' + params.value.vendor_code}
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography variant="caption" color="text.secondary">Not assigned</Typography>
+              )
+            ),
+          },
+          {
+            field: 'hsn_code',
+            headerName: 'HSN Code',
+            minWidth: 100,
+            flex: 1,
+            renderCell: (params) => params.value || '-',
+          },
+          {
+            field: 'gst_rate',
+            headerName: 'GST %',
+            minWidth: 80,
+            flex: 0.8,
+            renderCell: (params) => params.value ? `${params.value}%` : '-',
+          },
+          {
+            field: 'is_active',
+            headerName: 'Status',
+            minWidth: 100,
+            flex: 1,
+            renderCell: (params) => (
+              <Chip
+                label={params.value ? 'Active' : 'Inactive'}
+                size="small"
+                color={params.value ? 'success' : 'default'}
+              />
+            ),
+          },
+        ]}
+        initialState={{
+          pagination: {
+            paginationModel: { pageSize: 25 },
+          },
+        }}
+        pageSizeOptions={[10, 25, 50]}
+        disableRowSelectionOnClick
+        slots={{
+          toolbar: CustomToolbar,
+          noRowsOverlay: CustomNoRowsOverlay,
+        }}
+        density="comfortable"
+        getRowClassName={(params) =>
+          params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+        }
+      />
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="md" fullWidth>
@@ -624,6 +622,7 @@ const RawMaterialPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Success Snackbar */}
       <Snackbar
         open={!!successMessage}
         autoHideDuration={3000}
@@ -635,6 +634,7 @@ const RawMaterialPage = () => {
         </Alert>
       </Snackbar>
 
+      {/* Error Snackbar */}
       <Snackbar
         open={!!error}
         autoHideDuration={6000}
@@ -645,7 +645,6 @@ const RawMaterialPage = () => {
           {error}
         </Alert>
       </Snackbar>
-    </Box>
     </ERPPage>
   )
 }

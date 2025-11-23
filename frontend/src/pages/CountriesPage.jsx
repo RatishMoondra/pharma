@@ -1,16 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
-  Container,
-  Typography,
   Button,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -24,14 +15,77 @@ import {
   InputAdornment,
   FormControlLabel,
   Switch,
+  Typography,
 } from '@mui/material'
+import { alpha, styled } from '@mui/material/styles'
+import {
+  DataGrid,
+  GridToolbar,
+  GridToolbarContainer,
+  gridClasses
+} from '@mui/x-data-grid'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
+import PublicIcon from '@mui/icons-material/Public'
+import ERPPage from '../components/ERPPage'
 import api from '../services/api'
 import { useApiError } from '../hooks/useApiError'
 import { useStableRowEditing } from '../hooks/useStableRowEditing'
+
+const ODD_OPACITY = 0.06
+const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
+  border: 'none',
+  '& .MuiDataGrid-cell': {
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: '0.875rem',
+  },
+  '& .MuiDataGrid-columnHeaders': {
+    backgroundColor: theme.palette.background.default,
+    color: theme.palette.text.primary,
+    fontWeight: 700,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  [`& .${gridClasses.row}.even`]: {
+    backgroundColor: theme.palette.grey[50],
+    '&:hover': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
+      '@media (hover: none)': { backgroundColor: 'transparent' },
+    },
+    '&.Mui-selected': {
+      backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+      '&:hover': {
+        backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity + theme.palette.action.hoverOpacity),
+        '@media (hover: none)': {
+          backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY + theme.palette.action.selectedOpacity),
+        },
+      },
+    },
+  },
+  // edited-row visual (we'll add a class 'edited-row' in getRowClassName when necessary)
+  '& .edited-row': {
+    boxShadow: `inset 0 0 0 1px ${alpha('#000', 0.04)}`,
+  },
+}))
+
+function CustomToolbar() {
+  return (
+    <GridToolbarContainer sx={{ p: 1, display: 'flex', justifyContent: 'flex-start', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+      <GridToolbar />
+    </GridToolbarContainer>
+  );
+}
+
+function CustomNoRowsOverlay() {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6 }}>
+      <Typography variant="h6" color="text.secondary">No Countries Found</Typography>
+      <Typography variant="body2" color="text.secondary">Use the search or add a new country.</Typography>
+    </Box>
+  );
+}
 
 const CountriesPage = () => {
   const [countries, setCountries] = useState([])
@@ -178,10 +232,79 @@ const CountriesPage = () => {
     )
   })
 
+  // DataGrid columns - keep business logic intact (only UI renderers here)
+  const columns = [
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      minWidth: 100,
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      headerAlign: 'center',
+      flex: 0.8,
+      renderCell: (params) => (
+        <Box>
+          <IconButton size="small" onClick={() => handleOpenForm(params.row)} color="primary">
+            <EditIcon />
+          </IconButton>
+          <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
+            <DeleteIcon />
+          </IconButton>
+        </Box>
+      ),
+    },
+    {
+      field: 'country_code',
+      headerName: 'Country Code',
+      minWidth: 120,
+      flex: 1,
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight="bold">{params.value}</Typography>
+      ),
+    },
+    {
+      field: 'country_name',
+      headerName: 'Country Name',
+      minWidth: 180,
+      flex: 1.5,
+      renderCell: (params) => (
+        <Typography variant="body2">{params.value}</Typography>
+      ),
+    },
+    {
+      field: 'language',
+      headerName: 'Language',
+      minWidth: 140,
+      flex: 1,
+    },
+    {
+      field: 'currency',
+      headerName: 'Currency',
+      minWidth: 120,
+      flex: 1,
+      renderCell: (params) => params.value || '-',
+    },
+    {
+      field: 'is_active',
+      headerName: 'Status',
+      minWidth: 120,
+      flex: 0.9,
+      renderCell: (params) => (
+        <Chip
+          label={params.value ? 'Active' : 'Inactive'}
+          size="small"
+          color={params.value ? 'success' : 'default'}
+        />
+      ),
+    },
+  ]
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Country Master</Typography>
+    <ERPPage
+      title="Country Master"
+      icon={<PublicIcon sx={{ fontSize: 36, color: 'primary.main' }} />}
+      actions={
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -189,24 +312,25 @@ const CountriesPage = () => {
         >
           Add Country
         </Button>
-      </Box>
+      }
+    >
+      {/* Search bar (kept, placed directly under ERPPage) */}
+      <TextField
+        fullWidth
+        placeholder="Search by Country Name, Code, Language, or Currency..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+        }}
+        sx={{ mb: 2 }}
+      />
 
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          placeholder="Search by Country Name, Code, Language, or Currency..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
-
+      {/* Main DataGrid area */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
@@ -218,58 +342,45 @@ const CountriesPage = () => {
             : 'No countries match your search criteria.'}
         </Alert>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Country Code</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Country Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Language</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Currency</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredCountries.map((country) => (
-                <TableRow 
-                  key={country.id}
-                  sx={getRowStyle(country.id)}
-                >
-                  <TableCell>{country.country_code}</TableCell>
-                  <TableCell>{country.country_name}</TableCell>
-                  <TableCell>{country.language}</TableCell>
-                  <TableCell>{country.currency || '-'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={country.is_active ? 'Active' : 'Inactive'}
-                      color={country.is_active ? 'success' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenForm(country)}
-                      color="primary"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(country.id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Box sx={{ width: '100%' }}>
+          <StripedDataGrid
+            autoHeight
+            loading={loading}
+            rows={filteredCountries}
+            columns={columns}
+            getRowId={(row) => row.id}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25 },
+              },
+            }}
+            pageSizeOptions={[10, 25, 50]}
+            disableRowSelectionOnClick
+            slots={{
+              toolbar: CustomToolbar,
+              noRowsOverlay: CustomNoRowsOverlay,
+            }}
+            density="comfortable"
+            // Add striped rows + "edited-row" class if getRowStyle returns a truthy style object for that id
+            getRowClassName={(params) => {
+              const base = params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+              let edited = ''
+              try {
+                const styleObj = getRowStyle && typeof getRowStyle === 'function' ? getRowStyle(params.id) : null
+                // If the hook returns an object with any keys, treat the row as edited / special
+                if (styleObj && Object.keys(styleObj).length > 0) {
+                  edited = ' edited-row'
+                }
+              } catch (e) {
+                // If getRowStyle throws, ignore and proceed
+              }
+              return `${base}${edited}`
+            }}
+          />
+        </Box>
       )}
 
+      {/* ALL dialogs and snackbars remain unchanged and positioned under ERPPage */}
       <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="sm" fullWidth>
         <DialogTitle>
           {editingCountry ? 'Edit Country' : 'Add New Country'}
@@ -355,7 +466,7 @@ const CountriesPage = () => {
           {error}
         </Alert>
       </Snackbar>
-    </Container>
+    </ERPPage>
   )
 }
 
