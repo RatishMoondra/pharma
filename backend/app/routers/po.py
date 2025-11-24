@@ -483,32 +483,70 @@ async def update_po(
         po.updated_at = datetime.utcnow()
 
     # Update PO items if provided
+    # FIX B: Support both UPDATE existing items and INSERT new items
     if po_data.items:
         for item_data in po_data.items:
-            # Match POItem by correct field based on PO type
-            if po.po_type == POType.FG:
-                po_item = db.query(POItem).filter(POItem.medicine_id == item_data.medicine_id, POItem.po_id == po_id).first()
-            elif po.po_type == POType.RM:
-                po_item = db.query(POItem).filter(POItem.raw_material_id == getattr(item_data, 'raw_material_id', None), POItem.po_id == po_id).first()
-            elif po.po_type == POType.PM:
-                po_item = db.query(POItem).filter(POItem.packing_material_id == getattr(item_data, 'packing_material_id', None), POItem.po_id == po_id).first()
+            # Check if this is a new item (no ID) or existing item
+            item_id = getattr(item_data, 'id', None)
+            
+            if item_id and item_id > 0:
+                # UPDATE existing item
+                po_item = db.query(POItem).filter(POItem.id == item_id, POItem.po_id == po_id).first()
             else:
-                po_item = None
+                # Try to match by material ID
+                if po.po_type == POType.FG:
+                    po_item = db.query(POItem).filter(POItem.medicine_id == item_data.medicine_id, POItem.po_id == po_id).first()
+                elif po.po_type == POType.RM:
+                    po_item = db.query(POItem).filter(POItem.raw_material_id == getattr(item_data, 'raw_material_id', None), POItem.po_id == po_id).first()
+                elif po.po_type == POType.PM:
+                    po_item = db.query(POItem).filter(POItem.packing_material_id == getattr(item_data, 'packing_material_id', None), POItem.po_id == po_id).first()
+                else:
+                    po_item = None
+            
             logger.info({
                 "event": "PO_ITEM_UPDATE_ATTEMPT",
                 "item_data": item_data,
-                "po_item": po_item,
+                "po_item_found": po_item is not None,
                 "po_item_id": po_item.id if po_item else None,
                 "po_id": po_id
             })
+            
             if po_item:
-                # Only update if PO is not closed
+                # UPDATE existing item - only update if PO is not closed
                 if po.status != POStatus.CLOSED:
                     if item_data.ordered_quantity is not None:
                         from decimal import Decimal
                         po_item.ordered_quantity = Decimal(str(item_data.ordered_quantity))
                     if item_data.unit is not None:
                         po_item.unit = item_data.unit
+                    # FIX D: Update raw_material_id if changed
+                    if hasattr(item_data, 'raw_material_id') and item_data.raw_material_id is not None:
+                        po_item.raw_material_id = item_data.raw_material_id
+                    if hasattr(item_data, 'packing_material_id') and item_data.packing_material_id is not None:
+                        po_item.packing_material_id = item_data.packing_material_id
+                    if hasattr(item_data, 'medicine_id') and item_data.medicine_id is not None:
+                        po_item.medicine_id = item_data.medicine_id
+            else:
+                # INSERT new item - FIX B
+                if po.status != POStatus.CLOSED:
+                    from decimal import Decimal
+                    new_po_item = POItem(
+                        po_id=po_id,
+                        medicine_id=getattr(item_data, 'medicine_id', None),
+                        raw_material_id=getattr(item_data, 'raw_material_id', None),
+                        packing_material_id=getattr(item_data, 'packing_material_id', None),
+                        ordered_quantity=Decimal(str(item_data.ordered_quantity)) if item_data.ordered_quantity else Decimal('0'),
+                        fulfilled_quantity=Decimal(str(getattr(item_data, 'fulfilled_quantity', 0))),
+                        unit=getattr(item_data, 'unit', 'pcs')
+                    )
+                    db.add(new_po_item)
+                    logger.info({
+                        "event": "PO_ITEM_INSERTED",
+                        "po_id": po_id,
+                        "medicine_id": new_po_item.medicine_id,
+                        "raw_material_id": new_po_item.raw_material_id,
+                        "packing_material_id": new_po_item.packing_material_id
+                    })
         po.updated_at = datetime.utcnow()
     
     db.commit()
@@ -1083,6 +1121,9 @@ async def generate_po_by_vendor(
     """
     Generate a single PO for a specific vendor and PO type from EOPA.
     
+    PART A: Draft PO Reuse Logic - Check if DRAFT PO exists before creating new one
+    PART B: fulfilled_quantity = EOPA qty (set ONCE, never modified), ordered_quantity = user editable
+    
     Payload:
     {
         "eopa_id": int,
@@ -1091,18 +1132,24 @@ async def generate_po_by_vendor(
         "items": [
             {
                 "medicine_id": int,
+                "raw_material_id": int,  // for RM PO
+                "packing_material_id": int,  // for PM PO
                 "ordered_quantity": float,
                 "unit": "kg" | "pcs" | "boxes" | etc.
             }
         ]
     }
+    
+    Returns mode="update" if DRAFT exists, mode="create" if new PO created
     """
     # Local imports to avoid circular references and fix incorrect modules
     from datetime import date, timedelta
     from decimal import Decimal
-    from app.models.eopa import EOPA
+    from app.models.eopa import EOPA, EOPAItem
     from app.models.vendor import Vendor
     from app.models.product import MedicineMaster
+    from app.models.raw_material import RawMaterialMaster
+    from app.models.packing_material import PackingMaterialMaster
     from app.utils.number_generator import generate_po_number
     
     eopa_id = payload.get('eopa_id')
@@ -1110,11 +1157,13 @@ async def generate_po_by_vendor(
     po_type = payload.get('po_type')
     items = payload.get('items', [])
     
-    if not all([eopa_id, vendor_id, po_type, items]):
-        raise AppException("Missing required fields: eopa_id, vendor_id, po_type, items", "ERR_VALIDATION", 400)
+    if not all([eopa_id, vendor_id, po_type]):
+        raise AppException("Missing required fields: eopa_id, vendor_id, po_type", "ERR_VALIDATION", 400)
     
     # Validate EOPA
-    eopa = db.query(EOPA).filter(EOPA.id == eopa_id).first()
+    eopa = db.query(EOPA).options(
+        joinedload(EOPA.items)
+    ).filter(EOPA.id == eopa_id).first()
     if not eopa:
         raise AppException("EOPA not found", "ERR_NOT_FOUND", 404)
     
@@ -1126,10 +1175,83 @@ async def generate_po_by_vendor(
     if not vendor:
         raise AppException("Vendor not found", "ERR_NOT_FOUND", 404)
     
-    # Generate PO number
+    # BUG FIX: Check for existing PO in priority order: DRAFT → PENDING → APPROVED → READY → SENT
+    # Search in order of status priority
+    status_priority = [
+        POStatus.DRAFT,
+        POStatus.PENDING_APPROVAL,
+        POStatus.APPROVED,
+        POStatus.READY,
+        POStatus.SENT
+    ]
+    
+    existing_po = None
+    for status in status_priority:
+        existing_po = db.query(PurchaseOrder).filter(
+            PurchaseOrder.eopa_id == eopa_id,
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrder.po_type == po_type,
+            PurchaseOrder.status == status
+        ).order_by(PurchaseOrder.created_at.desc()).first()
+        
+        if existing_po:
+            break
+    
+    if existing_po:
+        # UPDATE MODE - Return existing PO with items (regardless of status)
+        logger.info({
+            "event": "PO_FOUND",
+            "po_id": existing_po.id,
+            "po_number": existing_po.po_number,
+            "po_status": existing_po.status.value if hasattr(existing_po.status, 'value') else str(existing_po.status),
+            "vendor_id": vendor_id,
+            "eopa_id": eopa_id,
+            "user": current_user.username
+        })
+        
+        # Load existing items
+        existing_items = db.query(POItem).options(
+            joinedload(POItem.medicine),
+            joinedload(POItem.raw_material),
+            joinedload(POItem.packing_material)
+        ).filter(POItem.po_id == existing_po.id).all()
+        
+        items_data = []
+        for po_item in existing_items:
+            item_dict = {
+                "id": po_item.id,
+                "medicine_id": po_item.medicine_id,
+                "raw_material_id": po_item.raw_material_id,
+                "packing_material_id": po_item.packing_material_id,
+                "medicine_name": po_item.medicine.medicine_name if po_item.medicine else None,
+                "raw_material_name": po_item.raw_material.rm_name if po_item.raw_material else None,
+                "packing_material_name": po_item.packing_material.pm_name if po_item.packing_material else None,
+                "ordered_quantity": float(po_item.ordered_quantity) if po_item.ordered_quantity else 0,
+                "fulfilled_quantity": float(po_item.fulfilled_quantity) if po_item.fulfilled_quantity else 0,
+                "unit": po_item.unit
+            }
+            items_data.append(item_dict)
+        
+        po_status_str = existing_po.status.value if hasattr(existing_po.status, 'value') else str(existing_po.status)
+        
+        return {
+            "success": True,
+            "message": f"Found existing {po_status_str} PO {existing_po.po_number}",
+            "data": {
+                "mode": "update",
+                "po_id": existing_po.id,
+                "po_number": existing_po.po_number,
+                "po_status": po_status_str,
+                "po_type": po_type,
+                "vendor_name": vendor.vendor_name,
+                "items": items_data
+            },
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    # CREATE MODE - No existing DRAFT, create new PO
     po_number = generate_po_number(db, po_type)
     
-    # Create PO
     po = PurchaseOrder(
         po_number=po_number,
         po_date=date.today(),
@@ -1144,27 +1266,125 @@ async def generate_po_by_vendor(
     db.add(po)
     db.flush()
     
-    # Create PO items
+    # FIX A: If no items provided, auto-generate from EOPA based on PO type
+    if not items or len(items) == 0:
+        # Auto-generate items from EOPA based on po_type
+        eopa_with_items = db.query(EOPA).options(
+            joinedload(EOPA.items).joinedload(EOPAItem.pi_item)
+        ).filter(EOPA.id == eopa_id).first()
+        
+        items = []
+        for eopa_item in (eopa_with_items.items if eopa_with_items else []):
+            if not eopa_item.pi_item or not eopa_item.pi_item.medicine_id:
+                continue
+            
+            medicine = db.query(MedicineMaster).filter(MedicineMaster.id == eopa_item.pi_item.medicine_id).first()
+            if not medicine:
+                continue
+            
+            eopa_qty = float(eopa_item.quantity or 0)
+            
+            if po_type == 'FG':
+                # BUG FIX #2: Filter by vendor - only include if medicine manufacturer matches target vendor
+                if medicine.manufacturer_vendor_id == vendor_id:
+                    items.append({
+                        'medicine_id': medicine.id,
+                        'ordered_quantity': eopa_qty,
+                        'eopa_quantity': eopa_qty,
+                        'unit': 'PCS'
+                    })
+            elif po_type == 'RM':
+                # Fetch RM BOM for this medicine
+                rm_bom_items = db.query(MedicineMaster).filter(MedicineMaster.id == medicine.id).first()
+                if hasattr(rm_bom_items, 'raw_materials'):
+                    for bom_item in rm_bom_items.raw_materials:
+                        # BUG FIX #2: Filter by vendor - only include if BOM item vendor matches target vendor
+                        item_vendor_id = getattr(bom_item, 'vendor_id', None) or medicine.rm_vendor_id
+                        if item_vendor_id == vendor_id:
+                            qty_required = float(getattr(bom_item, 'qty_required_per_unit', 0))
+                            exploded_qty = eopa_qty * qty_required
+                            if bom_item.raw_material_id and exploded_qty > 0:
+                                items.append({
+                                    'raw_material_id': bom_item.raw_material_id,
+                                    'ordered_quantity': exploded_qty,
+                                    'eopa_quantity': exploded_qty,
+                                    'unit': getattr(bom_item, 'uom', 'KG')
+                                })
+            elif po_type == 'PM':
+                # Fetch PM BOM for this medicine
+                pm_bom_items = db.query(MedicineMaster).filter(MedicineMaster.id == medicine.id).first()
+                if hasattr(pm_bom_items, 'packing_materials'):
+                    for bom_item in pm_bom_items.packing_materials:
+                        # BUG FIX #2: Filter by vendor - only include if BOM item vendor matches target vendor
+                        item_vendor_id = getattr(bom_item, 'vendor_id', None) or medicine.pm_vendor_id
+                        if item_vendor_id == vendor_id:
+                            qty_required = float(getattr(bom_item, 'qty_required_per_unit', 0))
+                            exploded_qty = eopa_qty * qty_required
+                            if bom_item.packing_material_id and exploded_qty > 0:
+                                items.append({
+                                    'packing_material_id': bom_item.packing_material_id,
+                                    'ordered_quantity': exploded_qty,
+                                    'eopa_quantity': exploded_qty,
+                                    'unit': getattr(bom_item, 'uom', 'PCS')
+                                })
+    
+    # Create PO items from payload
+    # PART B: fulfilled_quantity = EOPA qty (stored ONCE), ordered_quantity = user editable
+    items_data = []
     for item in items:
         medicine_id = item.get('medicine_id')
-        ordered_quantity = item.get('ordered_quantity')
+        raw_material_id = item.get('raw_material_id')
+        packing_material_id = item.get('packing_material_id')
+        ordered_quantity = item.get('ordered_quantity', 0)
+        eopa_quantity = item.get('eopa_quantity', ordered_quantity)  # Use eopa_quantity if provided, else ordered_quantity
         unit = item.get('unit', 'pcs')
         
-        if not medicine_id or not ordered_quantity:
+        # Skip invalid items
+        if not any([medicine_id, raw_material_id, packing_material_id]) or not ordered_quantity:
             continue
         
-        medicine = db.query(MedicineMaster).filter(MedicineMaster.id == medicine_id).first()
-        if not medicine:
-            continue
-        
+        # PART B: fulfilled_quantity stores EOPA original qty, ordered_quantity is editable
         po_item = POItem(
             po_id=po.id,
             medicine_id=medicine_id,
+            raw_material_id=raw_material_id,
+            packing_material_id=packing_material_id,
             ordered_quantity=Decimal(str(ordered_quantity)),
-            fulfilled_quantity=Decimal('0'),
+            fulfilled_quantity=Decimal(str(eopa_quantity)),  # EOPA original qty - NEVER modified
             unit=unit
         )
         db.add(po_item)
+        db.flush()
+        
+        # Fetch names for response
+        medicine_name = None
+        raw_material_name = None
+        packing_material_name = None
+        
+        if medicine_id:
+            medicine = db.query(MedicineMaster).filter(MedicineMaster.id == medicine_id).first()
+            medicine_name = medicine.medicine_name if medicine else None
+        
+        if raw_material_id:
+            rm = db.query(RawMaterialMaster).filter(RawMaterialMaster.id == raw_material_id).first()
+            raw_material_name = rm.rm_name if rm else None
+        
+        if packing_material_id:
+            pm = db.query(PackingMaterialMaster).filter(PackingMaterialMaster.id == packing_material_id).first()
+            packing_material_name = pm.pm_name if pm else None
+        
+        items_data.append({
+            "id": po_item.id,
+            "medicine_id": medicine_id,
+            "raw_material_id": raw_material_id,
+            "packing_material_id": packing_material_id,
+            "medicine_name": medicine_name,
+            "raw_material_name": raw_material_name,
+            "packing_material_name": packing_material_name,
+            "ordered_quantity": float(ordered_quantity),
+            "fulfilled_quantity": float(eopa_quantity),
+            "unit": unit
+        })
     
     db.commit()
     db.refresh(po)
@@ -1176,7 +1396,7 @@ async def generate_po_by_vendor(
         "po_type": po_type,
         "vendor_id": vendor_id,
         "eopa_id": eopa_id,
-        "items_count": len(items),
+        "items_count": len(items_data),
         "user": current_user.username
     })
     
@@ -1184,10 +1404,12 @@ async def generate_po_by_vendor(
         "success": True,
         "message": f"Successfully generated {po_type} PO {po_number} for vendor {vendor.vendor_name}",
         "data": {
+            "mode": "create",
             "po_id": po.id,
             "po_number": po_number,
             "po_type": po_type,
-            "vendor_name": vendor.vendor_name
+            "vendor_name": vendor.vendor_name,
+            "items": items_data
         },
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
@@ -1236,6 +1458,54 @@ async def delete_po(
     return {
         "success": True,
         "message": f"Purchase Order {po_number} deleted successfully",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@router.delete("/{po_id}/items/{item_id}", response_model=dict, dependencies=[Depends(require_role([UserRole.ADMIN, UserRole.PROCUREMENT_OFFICER]))])
+async def delete_po_item(
+    po_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a single PO line item"""
+    # Fetch PO item
+    po_item = db.query(POItem).filter(
+        POItem.id == item_id,
+        POItem.po_id == po_id
+    ).first()
+    
+    if not po_item:
+        raise AppException("PO item not found", "ERR_NOT_FOUND", 404)
+    
+    # Check if PO is closed
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if po and po.status == POStatus.CLOSED:
+        raise AppException("Cannot delete items from a closed PO", "ERR_VALIDATION", 400)
+    
+    item_description = (
+        po_item.medicine.medicine_name if po_item.medicine else
+        po_item.raw_material.rm_name if po_item.raw_material else
+        po_item.packing_material.pm_name if po_item.packing_material else
+        "Unknown Item"
+    )
+    
+    # Delete the item
+    db.delete(po_item)
+    db.commit()
+    
+    logger.info({
+        "event": "PO_ITEM_DELETED",
+        "po_id": po_id,
+        "item_id": item_id,
+        "item_description": item_description,
+        "user": current_user.username
+    })
+    
+    return {
+        "success": True,
+        "message": f"PO item '{item_description}' deleted successfully",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 

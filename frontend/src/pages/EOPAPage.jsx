@@ -493,12 +493,7 @@ const EOPAPage = () => {
     setPoDialogOpen(true)
   }
 
-  const handleDeletePOsClick = (eopa) => {
-    setSelectedEopa(eopa)
-    setPoDialogMode('delete')
-    setPoDialogOpen(true)
-  }
-
+  
   const handlePODialogClose = () => {
     setPoDialogOpen(false)
     setSelectedEopa(null)
@@ -941,15 +936,7 @@ const EOPAPage = () => {
                                 Generate FG PO
                               </Button>
 
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<DeleteIcon />}
-                                onClick={() => handleDeletePOsClick(eopa)}
-                                size="small"
-                              >
-                                Delete All POs
-                              </Button>
+                              
                             </Box>
                           )}
                         </Box>

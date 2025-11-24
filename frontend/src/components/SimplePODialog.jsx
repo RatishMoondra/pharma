@@ -23,25 +23,22 @@ import {
   Paper,
   IconButton,
   Grid,
-  Divider,
   Tabs,
   Tab,
   Chip,
-  Tooltip,
   Checkbox,
 } from '@mui/material'
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckCircleIcon,
   Business as BusinessIcon,
   Inventory2 as Inventory2Icon,
   LocalShipping as LocalShippingIcon,
-  Info as InfoIcon,
 } from '@mui/icons-material'
 import api from '../services/api'
+import Tooltip from '@mui/material/Tooltip';
+import EditIcon from '@mui/icons-material/Edit';
 
 /**
  * Advanced Multi-Vendor, Multi-PO Creation Dialog
@@ -58,6 +55,9 @@ import api from '../services/api'
  * ✅ Submits multiple POs in batch (one per vendor tab)
  * ✅ Per-tab totals (Total Value, Total GST, Grand Total)
  * ✅ UI/UX inspired by POManagementDialog.jsx
+ * ✅ PART A: Draft PO Reuse - Update mode if DRAFT exists
+ * ✅ PART B: fulfilled_quantity preserved, only ordered_quantity editable
+ * ✅ PART C: Delete PO button, RM Edit icon, Fixed Add Line Item
  * 
  * EOPA → RM/PM/FG Explosion Logic:
  * - FG: Use EOPA items directly (Medicine Master manufacturer vendor)
@@ -76,11 +76,14 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   const [manufacturers, setManufacturers] = useState([])
   const [vendors, setVendors] = useState([])
   
-  // Vendor-grouped POs (array of {vendor_id, vendor_name, draft_po_number, real_po_number, items: []})
+  // Vendor-grouped POs (array of {vendor_id, vendor_name, draft_po_number, real_po_number, items: [], mode: 'create'|'update', po_id})
   const [vendorPOs, setVendorPOs] = useState([])
   
   // Active tab (vendor index)
   const [activeTab, setActiveTab] = useState(0)
+  
+  // PART C: RM Edit mode - track which item is being edited
+  const [editingRMIndex, setEditingRMIndex] = useState({ vendorIndex: null, itemIndex: null })
   
   // PO Type from EOPA (FG, RM, PM)
   const poType = eopa?.selectedPOType || 'FG'
@@ -94,6 +97,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   
   /**
    * Load all master data + auto-generate vendor-grouped PO line items from EOPA
+   * PART A: Check if DRAFT PO exists for each vendor
    */
   const loadMasterDataAndGeneratePOs = async () => {
     setLoading(true)
@@ -163,6 +167,9 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                 vendor_name: vendorName,
                 draft_po_number: generateDraftPONumber(poType, vendorMap.size + 1),
                 real_po_number: null,
+                po_status: 'DRAFT',
+                mode: 'create',
+                po_id: null,
                 items: []
               })
             }
@@ -180,7 +187,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
               eopa_quantity: eopaQty,
               qty_per_unit: parseFloat(bomItem.qty_required_per_unit || 0),
               ordered_quantity: explodedQty,
-              fulfilled_quantity: 0, // Will be saved to DB
+              fulfilled_quantity: explodedQty, // PART B: fulfilled_quantity = EOPA qty
               rate_per_unit: 0,
               value_amount: 0,
               gst_rate: parseFloat(bomItem.raw_material.gst_rate || 18),
@@ -216,6 +223,9 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                 vendor_name: vendorName,
                 draft_po_number: generateDraftPONumber(poType, vendorMap.size + 1),
                 real_po_number: null,
+                po_status: 'DRAFT',
+                mode: 'create',
+                po_id: null,
                 items: []
               })
             }
@@ -233,7 +243,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
               eopa_quantity: eopaQty,
               qty_per_unit: parseFloat(bomItem.qty_required_per_unit || 0),
               ordered_quantity: explodedQty,
-              fulfilled_quantity: 0,
+              fulfilled_quantity: explodedQty, // PART B: fulfilled_quantity = EOPA qty
               rate_per_unit: 0,
               value_amount: 0,
               gst_rate: parseFloat(bomItem.packing_material.gst_rate || 18),
@@ -264,6 +274,9 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
               vendor_name: vendorName,
               draft_po_number: generateDraftPONumber(poType, vendorMap.size + 1),
               real_po_number: null,
+              po_status: 'DRAFT',
+              mode: 'create',
+              po_id: null,
               items: []
             })
           }
@@ -280,7 +293,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
             eopa_quantity: eopaQty,
             qty_per_unit: 1,
             ordered_quantity: eopaQty,
-            fulfilled_quantity: 0,
+            fulfilled_quantity: eopaQty, // PART B: fulfilled_quantity = EOPA qty
             rate_per_unit: 0,
             value_amount: 0,
             gst_rate: parseFloat(medicine.gst_rate || 12),
@@ -297,9 +310,69 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
       
       const vendorPOsArray = Array.from(vendorMap.values())
       
+      // PART A: Check if DRAFT PO exists for each vendor
+      for (let i = 0; i < vendorPOsArray.length; i++) {
+        const vendorPO = vendorPOsArray[i]
+        try {
+          const checkResponse = await api.post('/api/po/generate-po-by-vendor', {
+            eopa_id: eopa.id,
+            vendor_id: vendorPO.vendor_id,
+            po_type: poType,
+            items: [] // Empty items to just check mode
+          })
+          
+          if (checkResponse.data.data.mode === 'update') {
+            // UPDATE MODE - Load existing PO data
+            vendorPO.mode = 'update'
+            vendorPO.po_id = checkResponse.data.data.po_id
+            vendorPO.real_po_number = checkResponse.data.data.po_number
+            vendorPO.po_status = checkResponse.data.data.po_status || 'DRAFT'
+            
+            // Replace items with existing PO items
+            const existingItems = checkResponse.data.data.items || []
+            vendorPO.items = existingItems.map(item => ({
+              id: item.id || `existing-${Date.now()}`,
+              medicine_id: item.medicine_id,
+              raw_material_id: item.raw_material_id,
+              packing_material_id: item.packing_material_id,
+              medicine_name: item.medicine_name,
+              raw_material_name: item.raw_material_name,
+              packing_material_name: item.packing_material_name,
+              ordered_quantity: parseFloat(item.ordered_quantity || 0),
+              fulfilled_quantity: parseFloat(item.fulfilled_quantity || 0), // PART B: fulfilled_quantity preserved
+              unit: item.unit || 'pcs',
+              description: item.medicine_name || item.raw_material_name || item.packing_material_name || '',
+              hsn_code: '',
+              eopa_quantity: parseFloat(item.fulfilled_quantity || 0),
+              qty_per_unit: 0,
+              rate_per_unit: 0,
+              value_amount: 0,
+              gst_rate: 18,
+              gst_amount: 0,
+              total_amount: 0,
+              delivery_schedule: 'Immediately',
+              delivery_location: '',
+              selected: true
+            }))
+            
+            console.log(`  🔄 UPDATE MODE: Found existing DRAFT PO ${vendorPO.real_po_number} for vendor ${vendorPO.vendor_name}`)
+          } else {
+            // CREATE MODE - Use generated items
+            vendorPO.mode = 'create'
+            console.log(`  ✨ CREATE MODE: Will create new PO for vendor ${vendorPO.vendor_name}`)
+          }
+        } catch (err) {
+          console.error(`  ❌ Error checking DRAFT PO for vendor ${vendorPO.vendor_name}:`, err)
+          // If check fails, default to CREATE mode
+          vendorPO.mode = 'create'
+        }
+      }
+      
       console.log('\n📊 PO Generation Summary:')
       console.log(`  Total Vendors: ${vendorPOsArray.length}`)
       console.log(`  Total Items: ${vendorPOsArray.reduce((sum, v) => sum + v.items.length, 0)}`)
+      console.log(`  Update Mode: ${vendorPOsArray.filter(v => v.mode === 'update').length}`)
+      console.log(`  Create Mode: ${vendorPOsArray.filter(v => v.mode === 'create').length}`)
       
       setVendorPOs(vendorPOsArray)
       setActiveTab(0)
@@ -360,6 +433,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   
   /**
    * Add new line item to vendor PO
+   * PART C: Fixed - properly load RM dropdown
    */
   const handleAddLineItem = (vendorIndex) => {
     const updated = [...vendorPOs]
@@ -374,7 +448,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
       eopa_quantity: 0,
       qty_per_unit: 0,
       ordered_quantity: 0,
-      fulfilled_quantity: 0,
+      fulfilled_quantity: 0, // PART B: fulfilled_quantity initialized
       rate_per_unit: 0,
       value_amount: 0,
       gst_rate: 18,
@@ -392,11 +466,179 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   
   /**
    * Delete line item
+   * BUG FIX #1: Call DELETE endpoint for existing items, remove locally for new items
    */
-  const handleDeleteLineItem = (vendorIndex, itemIndex) => {
+  const handleDeleteLineItem = async (vendorIndex, itemIndex) => {
     const updated = [...vendorPOs]
+    const item = updated[vendorIndex].items[itemIndex]
+    const vendorPO = updated[vendorIndex]
+    
+    // If item has a valid ID and PO exists in database, delete via API
+    if (item.id && !item.isNew && vendorPO.po_id) {
+      try {
+        setSubmitting(true)
+        await api.delete(`/api/po/${vendorPO.po_id}/items/${item.id}`)
+        console.log(`✅ Deleted PO item ${item.id} from database`)
+      } catch (err) {
+        console.error('❌ Failed to delete PO item:', err)
+        setError(err.response?.data?.message || 'Failed to delete line item')
+        setSubmitting(false)
+        return // Don't remove from UI if API call failed
+      } finally {
+        setSubmitting(false)
+      }
+    }
+    
+    // Remove from local state
     updated[vendorIndex].items.splice(itemIndex, 1)
     setVendorPOs(updated)
+  }
+  
+  /**
+   * PART C: Handle RM Edit - Click Edit icon to show dropdown
+   */
+  const handleRMEditClick = (vendorIndex, itemIndex) => {
+    setEditingRMIndex({ vendorIndex, itemIndex })
+  }
+  
+  /**
+   * PART C: Handle RM selection change
+   * FIX D: Auto-populate dependent fields from master
+   */
+  const handleRMSelect = (vendorIndex, itemIndex, rawMaterialId) => {
+    const updated = [...vendorPOs]
+    const item = updated[vendorIndex].items[itemIndex]
+    
+    // Find selected RM
+    const selectedRM = rawMaterials.find(rm => rm.id === rawMaterialId)
+    
+    if (selectedRM) {
+      item.raw_material_id = rawMaterialId
+      item.raw_material_name = selectedRM.rm_name
+      item.description = selectedRM.rm_name
+      item.hsn_code = selectedRM.hsn_code || ''
+      item.gst_rate = parseFloat(selectedRM.gst_rate || 18)
+      // FIX D: Auto-populate UOM, pack size, material code, default rate
+      item.unit = selectedRM.uom || selectedRM.default_uom || 'KG'
+      item.rate_per_unit = parseFloat(selectedRM.default_rate || selectedRM.standard_rate || 0)
+      if (selectedRM.material_code) item.material_code = selectedRM.material_code
+      if (selectedRM.pack_size) item.pack_size = selectedRM.pack_size
+    }
+    
+    setVendorPOs(updated)
+    setEditingRMIndex({ vendorIndex: null, itemIndex: null }) // Close dropdown
+  }
+  
+  /**
+   * FIX C: Handle PM Edit - Click Edit icon to show dropdown
+   */
+  const handlePMEditClick = (vendorIndex, itemIndex) => {
+    setEditingRMIndex({ vendorIndex, itemIndex }) // Reuse same state
+  }
+  
+  /**
+   * FIX C & D: Handle PM selection change with auto-populate
+   */
+  const handlePMSelect = (vendorIndex, itemIndex, packingMaterialId) => {
+    const updated = [...vendorPOs]
+    const item = updated[vendorIndex].items[itemIndex]
+    
+    // Find selected PM
+    const selectedPM = packingMaterials.find(pm => pm.id === packingMaterialId)
+    
+    if (selectedPM) {
+      item.packing_material_id = packingMaterialId
+      item.packing_material_name = selectedPM.pm_name
+      item.description = selectedPM.pm_name
+      item.hsn_code = selectedPM.hsn_code || ''
+      item.gst_rate = parseFloat(selectedPM.gst_rate || 18)
+      // FIX D: Auto-populate UOM, pack type, material code, default rate
+      item.unit = selectedPM.uom || selectedPM.default_uom || 'PCS'
+      item.rate_per_unit = parseFloat(selectedPM.default_rate || selectedPM.standard_rate || 0)
+      if (selectedPM.material_code) item.material_code = selectedPM.material_code
+      if (selectedPM.pack_type) item.pack_type = selectedPM.pack_type
+      if (selectedPM.language) item.language = selectedPM.language
+      if (selectedPM.artwork_version) item.artwork_version = selectedPM.artwork_version
+    }
+    
+    setVendorPOs(updated)
+    setEditingRMIndex({ vendorIndex: null, itemIndex: null }) // Close dropdown
+  }
+  
+  /**
+   * FIX C: Handle FG/Medicine Edit - Click Edit icon to show dropdown
+   */
+  const handleFGEditClick = (vendorIndex, itemIndex) => {
+    setEditingRMIndex({ vendorIndex, itemIndex }) // Reuse same state
+  }
+  
+  /**
+   * FIX C & D: Handle FG/Medicine selection change with auto-populate
+   */
+  const handleFGSelect = (vendorIndex, itemIndex, medicineId) => {
+    const updated = [...vendorPOs]
+    const item = updated[vendorIndex].items[itemIndex]
+    
+    // Find selected Medicine
+    const selectedMedicine = medicines.find(m => m.id === medicineId)
+    
+    if (selectedMedicine) {
+      item.medicine_id = medicineId
+      item.medicine_name = selectedMedicine.medicine_name
+      item.description = selectedMedicine.medicine_name
+      item.hsn_code = selectedMedicine.hsn_code || ''
+      item.gst_rate = parseFloat(selectedMedicine.gst_rate || 12)
+      // FIX D: Auto-populate drug name, strength, dosage form, pack size, uom, mrp/rate
+      item.unit = selectedMedicine.uom || 'PCS'
+      item.rate_per_unit = parseFloat(selectedMedicine.mrp || selectedMedicine.rate || 0)
+      if (selectedMedicine.drug_name) item.drug_name = selectedMedicine.drug_name
+      if (selectedMedicine.strength) item.strength = selectedMedicine.strength
+      if (selectedMedicine.dosage_form) item.dosage_form = selectedMedicine.dosage_form
+      if (selectedMedicine.pack_size) item.pack_size = selectedMedicine.pack_size
+    }
+    
+    setVendorPOs(updated)
+    setEditingRMIndex({ vendorIndex: null, itemIndex: null }) // Close dropdown
+  }
+  
+  /**
+   * PART C: Delete entire PO (UPDATE mode only)
+   * BUG FIX #4: Close dialog and reset state after successful deletion
+   */
+  const handleDeletePO = async (vendorIndex) => {
+    const vendorPO = vendorPOs[vendorIndex]
+    
+    if (vendorPO.mode !== 'update' || !vendorPO.po_id) {
+      setError('Can only delete existing DRAFT POs')
+      return
+    }
+    
+    if (!window.confirm(`Are you sure you want to delete PO ${vendorPO.real_po_number}?`)) {
+      return
+    }
+    
+    try {
+      setSubmitting(true)
+      await api.delete(`/api/po/${vendorPO.po_id}`)
+      
+      console.log(`✅ Deleted PO: ${vendorPO.real_po_number}`)
+      
+      // BUG FIX #4: Close dialog and reset state
+      onSuccess(`Successfully deleted PO ${vendorPO.real_po_number}`)
+      
+      // Reset state
+      setVendorPOs([])
+      setActiveTab(0)
+      
+      // Close dialog
+      onClose()
+      
+    } catch (err) {
+      console.error('❌ Failed to delete PO:', err)
+      setError(err.response?.data?.message || 'Failed to delete PO')
+    } finally {
+      setSubmitting(false)
+    }
   }
   
   /**
@@ -413,6 +655,7 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   
   /**
    * Submit all vendor POs in batch
+   * PART A & B: Support CREATE and UPDATE modes, preserve fulfilled_quantity
    */
   const handleSubmit = async () => {
     setSubmitting(true)
@@ -429,79 +672,131 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
           return null
         }
         
-        // Build PO payload
-        const payload = {
-          eopa_id: eopa.id,
-          vendor_id: vendorPO.vendor_id,
-          po_type: poType,
-          ship_to_manufacturer_id: vendorPO.ship_to_manufacturer_id || null,
-          ship_to_address: vendorPO.ship_to_address || '',
-          delivery_date: vendorPO.delivery_date || null,
-          payment_terms: vendorPO.payment_terms || 'NET 30',
-          freight_terms: vendorPO.freight_terms || 'FOB',
-          currency_code: vendorPO.currency_code || 'INR',
-          items: selectedItems.map(item => {
-            const itemPayload = {
+        // Build items payload
+        const itemsPayload = selectedItems.map(item => {
+          const itemData = {
+            medicine_id: item.medicine_id || null,
+            raw_material_id: item.raw_material_id || null,
+            packing_material_id: item.packing_material_id || null,
+            description: item.description,
+            unit: item.unit,
+            hsn_code: item.hsn_code,
+            ordered_quantity: parseFloat(item.ordered_quantity || 0), // PART B: Only ordered_quantity is user-editable
+            eopa_quantity: parseFloat(item.fulfilled_quantity || item.eopa_quantity || 0), // PART B: fulfilled_quantity from EOPA
+            rate_per_unit: parseFloat(item.rate_per_unit || 0),
+            value_amount: parseFloat(item.value_amount || 0),
+            gst_rate: parseFloat(item.gst_rate || 0),
+            gst_amount: parseFloat(item.gst_amount || 0),
+            total_amount: parseFloat(item.total_amount || 0),
+            delivery_schedule: item.delivery_schedule || 'Immediately',
+            delivery_location: item.delivery_location || ''
+          }
+          
+          // Add PM-specific fields
+          if (poType === 'PM') {
+            itemData.language = item.language || ''
+            itemData.artwork_version = item.artwork_version || ''
+          }
+          
+          return itemData
+        })
+        
+        if (vendorPO.mode === 'update') {
+          // UPDATE MODE - Update existing PO
+          console.log(`📝 Updating existing PO ${vendorPO.real_po_number} for vendor: ${vendorPO.vendor_name}`)
+          
+          const updatePayload = {
+            vendor_id: vendorPO.vendor_id,
+            items: selectedItems.map(item => ({
+              id: item.isNew ? null : (item.id || null), // FIX B: null ID = INSERT, valid ID = UPDATE
               medicine_id: item.medicine_id || null,
               raw_material_id: item.raw_material_id || null,
               packing_material_id: item.packing_material_id || null,
-              description: item.description,
-              unit: item.unit,
-              hsn_code: item.hsn_code,
-              ordered_quantity: parseFloat(item.ordered_quantity || 0),
-              fulfilled_quantity: parseFloat(item.eopa_quantity || 0), // Save EOPA Qty to fulfilled_quantity
-              rate_per_unit: parseFloat(item.rate_per_unit || 0),
-              value_amount: parseFloat(item.value_amount || 0),
-              gst_rate: parseFloat(item.gst_rate || 0),
-              gst_amount: parseFloat(item.gst_amount || 0),
-              total_amount: parseFloat(item.total_amount || 0),
-              delivery_schedule: item.delivery_schedule || 'Immediately',
-              delivery_location: item.delivery_location || ''
-            }
-            
-            // Add PM-specific fields
-            if (poType === 'PM') {
-              itemPayload.language = item.language || ''
-              itemPayload.artwork_version = item.artwork_version || ''
-            }
-            
-            return itemPayload
-          })
+              ordered_quantity: parseFloat(item.ordered_quantity || 0), // PART B: Only update ordered_quantity
+              fulfilled_quantity: parseFloat(item.fulfilled_quantity || 0), // FIX B: Send fulfilled_quantity for new items
+              unit: item.unit
+            }))
+          }
+          
+          const response = await api.put(`/api/po/${vendorPO.po_id}`, updatePayload)
+          const updatedPO = response.data.data
+          
+          console.log(`✅ PO Updated: ${updatedPO.po_number}`)
+          
+          return updatedPO
+        } else {
+          // CREATE MODE - Create new PO
+          const payload = {
+            eopa_id: eopa.id,
+            vendor_id: vendorPO.vendor_id,
+            po_type: poType,
+            ship_to_manufacturer_id: vendorPO.ship_to_manufacturer_id || null,
+            ship_to_address: vendorPO.ship_to_address || '',
+            delivery_date: vendorPO.delivery_date || null,
+            payment_terms: vendorPO.payment_terms || 'NET 30',
+            freight_terms: vendorPO.freight_terms || 'FOB',
+            currency_code: vendorPO.currency_code || 'INR',
+            items: itemsPayload
+          }
+          
+          console.log(`📤 Creating new PO for vendor: ${vendorPO.vendor_name}`, payload)
+          
+          const response = await api.post('/api/po/generate-po-by-vendor', payload)
+          const createdPO = response.data.data
+          
+          console.log(`✅ PO Created: ${createdPO.po_number}`)
+          
+          // Update draft PO number to real PO number
+          const updated = [...vendorPOs]
+          updated[vendorIndex].real_po_number = createdPO.po_number
+          updated[vendorIndex].po_id = createdPO.po_id
+          setVendorPOs(updated)
+          
+          return createdPO
         }
-        
-        console.log(`📤 Submitting PO for vendor: ${vendorPO.vendor_name}`, payload)
-        
-        const response = await api.post('/api/po/generate-po-by-vendor', payload)
-        const createdPO = response.data.data
-        
-        console.log(`✅ PO Created: ${createdPO.po_number}`)
-        
-        // Update draft PO number to real PO number
-        const updated = [...vendorPOs]
-        updated[vendorIndex].real_po_number = createdPO.po_number
-        setVendorPOs(updated)
-        
-        return createdPO
       })
       
       const results = await Promise.all(submitPromises)
-      const createdPOs = results.filter(r => r !== null)
+      const processedPOs = results.filter(r => r !== null)
       
-      console.log(`🎉 Successfully created ${createdPOs.length} POs`)
+      const createdCount = vendorPOs.filter(v => v.mode === 'create' && v.items.some(i => i.selected)).length
+      const updatedCount = vendorPOs.filter(v => v.mode === 'update' && v.items.some(i => i.selected)).length
       
-      if (createdPOs.length > 0) {
-        onSuccess(`Successfully created ${createdPOs.length} ${poType} PO(s)`)
+      console.log(`🎉 Successfully processed ${processedPOs.length} POs (Created: ${createdCount}, Updated: ${updatedCount})`)
+      
+      if (processedPOs.length > 0) {
+        onSuccess(`Successfully ${createdCount > 0 ? 'created ' + createdCount : ''}${createdCount > 0 && updatedCount > 0 ? ' and ' : ''}${updatedCount > 0 ? 'updated ' + updatedCount : ''} ${poType} PO(s)`)
         onClose()
       } else {
-        setError('No POs were created (all vendors had zero selected items)')
+        setError('No POs were processed (all vendors had zero selected items)')
       }
       
     } catch (err) {
       console.error('❌ Failed to submit POs:', err)
-      setError(err.response?.data?.message || 'Failed to create POs')
+      setError(err.response?.data?.message || 'Failed to process POs')
     } finally {
       setSubmitting(false)
     }
+  }
+  
+  /**
+   * Get PO status color for color-coding
+   * DRAFT → RED, PENDING → AMBER, APPROVED/READY/SENT → GREEN
+   */
+  const getPOStatusColor = (status) => {
+    if (!status || status === 'DRAFT') return '#d32f2f' // RED
+    if (status === 'PENDING_APPROVAL') return '#FFBF00' // AMBER
+    if (status === 'APPROVED' || status === 'READY' || status === 'SENT') return '#2e7d32' // GREEN
+    return '#757575' // GREY fallback
+  }
+  
+  /**
+   * Check if PO can be deleted based on status
+   * DRAFT/PENDING → allowed, APPROVED/READY/SENT → disabled
+   */
+  const canDeletePO = (status) => {
+    if (!status || status === 'DRAFT' || status === 'PENDING_APPROVAL') return true
+    return false // APPROVED, READY, SENT cannot be deleted
   }
   
   /**
@@ -531,9 +826,11 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
       <DialogTitle>
-        Create {poType} Purchase Orders
+        {vendorPOs.some(v => v.mode === 'update') ? 'Update' : 'Create'} {poType} Purchase Orders
         <Typography variant="caption" display="block" color="text.secondary">
           EOPA: {eopa?.eopa_number} | {vendorPOs.length} Vendor(s) | Auto-Generated Line Items
+          {vendorPOs.some(v => v.mode === 'update') && <Chip label="UPDATE MODE" size="small" color="info" sx={{ ml: 1 }} />}
+          {vendorPOs.some(v => v.mode === 'create') && <Chip label="CREATE MODE" size="small" color="success" sx={{ ml: 1 }} />}
         </Typography>
       </DialogTitle>
       
@@ -584,8 +881,8 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                             fontSize: '0.7rem',
                             height: 20,
                             borderStyle: isDraft ? 'dashed' : 'solid',
-                            borderColor: isDraft ? 'warning.main' : 'success.main',
-                            color: isDraft ? 'warning.main' : 'success.main',
+                            borderColor: getPOStatusColor(vendorPO.po_status),
+                            color: getPOStatusColor(vendorPO.po_status),
                             mt: 0.5
                           }}
                         />
@@ -608,8 +905,28 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                     <Grid item xs={12} md={6}>
                       <Typography variant="subtitle2" gutterBottom>Vendor Details</Typography>
                       <Typography variant="body2"><strong>Vendor:</strong> {vendorPO.vendor_name}</Typography>
-                      <Typography variant="body2"><strong>PO Number:</strong> {vendorPO.real_po_number || vendorPO.draft_po_number}</Typography>
-                      <Typography variant="body2"><strong>PO Type:</strong> {poType}</Typography>
+                      <Typography variant="body2">
+                        <strong>PO Number:</strong>{' '}
+                        <span style={{ color: getPOStatusColor(vendorPO.po_status), fontWeight: 'bold' }}>
+                          {vendorPO.real_po_number || vendorPO.draft_po_number}
+                        </span>
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>PO Type:</strong> {poType}
+                        {vendorPO.po_status && (
+                          <Chip 
+                            label={vendorPO.po_status} 
+                            size="small" 
+                            sx={{ 
+                              ml: 1, 
+                              height: 20,
+                              fontSize: '0.7rem',
+                              backgroundColor: getPOStatusColor(vendorPO.po_status),
+                              color: 'white'
+                            }} 
+                          />
+                        )}
+                      </Typography>
                     </Grid>
                     
                     <Grid item xs={12} md={6}>
@@ -690,9 +1007,25 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                 
                 {/* Line Items Table */}
                 <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    Line Items
-                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                      Line Items
+                    </Typography>
+                    {/* PART C: Delete PO Button (UPDATE mode only, disabled for APPROVED/READY/SENT) */}
+                    {vendorPO.mode === 'update' && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => handleDeletePO(vendorIndex)}
+                        disabled={submitting || !canDeletePO(vendorPO.po_status)}
+                        title={!canDeletePO(vendorPO.po_status) ? `Cannot delete ${vendorPO.po_status} PO` : 'Delete this PO'}
+                      >
+                        Delete PO
+                      </Button>
+                    )}
+                  </Box>
                   <Button
                     size="small"
                     startIcon={<AddIcon />}
@@ -738,9 +1071,62 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
                             />
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2">
-                              {item.raw_material_name || item.packing_material_name || item.medicine_name || '-'}
-                            </Typography>
+                            {/* PART C: RM/PM/FG Edit Icon - Show dropdown when editing */}
+                            {editingRMIndex.vendorIndex === vendorIndex && editingRMIndex.itemIndex === itemIndex ? (
+                              <FormControl size="small" sx={{ minWidth: 200 }}>
+                                <Select
+                                  value={
+                                    poType === 'RM' ? (item.raw_material_id || '') :
+                                    poType === 'PM' ? (item.packing_material_id || '') :
+                                    (item.medicine_id || '')
+                                  }
+                                  onChange={(e) => {
+                                    if (poType === 'RM') handleRMSelect(vendorIndex, itemIndex, e.target.value)
+                                    else if (poType === 'PM') handlePMSelect(vendorIndex, itemIndex, e.target.value)
+                                    else handleFGSelect(vendorIndex, itemIndex, e.target.value)
+                                  }}
+                                  onBlur={() => setEditingRMIndex({ vendorIndex: null, itemIndex: null })}
+                                  autoFocus
+                                >
+                                  <MenuItem value=""><em>Select {poType === 'RM' ? 'Raw Material' : poType === 'PM' ? 'Packing Material' : 'Medicine'}</em></MenuItem>
+                                  {poType === 'RM' && rawMaterials.map(rm => (
+                                    <MenuItem key={rm.id} value={rm.id}>
+                                      {(rm.material_code || rm.rm_code || rm.code) ? `${rm.material_code || rm.rm_code || rm.code} - ${rm.rm_name}` : rm.rm_name}
+                                    </MenuItem>
+                                  ))}
+                                  {poType === 'PM' && packingMaterials.map(pm => (
+                                    <MenuItem key={pm.id} value={pm.id}>
+                                      {(pm.material_code || pm.pm_code || pm.code) ? `${pm.material_code || pm.pm_code || pm.code} - ${pm.pm_name}` : pm.pm_name}
+                                    </MenuItem>
+                                  ))}
+                                  {poType === 'FG' && medicines.map(m => (
+                                    <MenuItem key={m.id} value={m.id}>
+                                      {(m.medicine_code || m.product_code || m.code) ? `${m.medicine_code || m.product_code || m.code} - ${m.medicine_name}` : m.medicine_name}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            ) : (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="body2">
+                                  {item.raw_material_name || item.packing_material_name || item.medicine_name || '-'}
+                                </Typography>
+                                {/* FIX C & E: Edit icon for all PO types (RM/PM/FG) */}
+                                <Tooltip title={`Change ${poType === 'RM' ? 'Raw Material' : poType === 'PM' ? 'Packing Material' : 'Medicine'}`}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      if (poType === 'RM') handleRMEditClick(vendorIndex, itemIndex)
+                                      else if (poType === 'PM') handlePMEditClick(vendorIndex, itemIndex)
+                                      else handleFGEditClick(vendorIndex, itemIndex)
+                                    }}
+                                    sx={{ ml: 0.5 }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Typography variant="caption" color="text.secondary">
@@ -847,9 +1233,22 @@ const SimplePODialog = ({ open, onClose, eopa, onSuccess }) => {
           onClick={handleSubmit}
           variant="contained"
           startIcon={submitting ? <CircularProgress size={16} /> : <SaveIcon />}
-          disabled={submitting || vendorPOs.length === 0}
+          disabled={submitting || vendorPOs.length === 0 || !canDeletePO(vendorPOs.po_status)}
         >
-          {submitting ? 'Creating POs...' : `Create ${vendorPOs.filter(v => v.items.some(i => i.selected)).length} PO(s)`}
+          {submitting 
+            ? 'Processing...' 
+            : (() => {
+                const createCount = vendorPOs.filter(v => v.mode === 'create' && v.items.some(i => i.selected)).length
+                const updateCount = vendorPOs.filter(v => v.mode === 'update' && v.items.some(i => i.selected)).length
+                if (createCount > 0 && updateCount > 0) {
+                  return `Create ${createCount} & Update ${updateCount} PO(s)`
+                } else if (updateCount > 0) {
+                  return `Update ${updateCount} PO(s)`
+                } else {
+                  return `Create ${createCount} PO(s)`
+                }
+              })()
+          }
         </Button>
       </DialogActions>
     </Dialog>
