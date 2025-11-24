@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'; 
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -41,7 +41,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SendIcon from '@mui/icons-material/Send';
 import api from '../services/api';
-
+import ERPPage from '../components/ERPPage'
+import InventoryIcon from '@mui/icons-material/Inventory2'
 
 // --- Constants ---
 const ODD_OPACITY = 0.05; 
@@ -380,11 +381,11 @@ export default function PurchaseOrdersPage() {
 
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4"
- sx={{ mb: 2 }}>
-        Purchase Orders
-      </Typography>
+    <ERPPage
+      title="Purchase Orders"
+      icon={<InventoryIcon sx={{ fontSize: 36, color: 'primary.main' }} />}
+      actions={null}
+    >
       
       {/* PO List (Master View) - Now using DataGrid */}
       <Paper elevation={3} sx={{ height: 600, width: '100%', mb: 3 }}>
@@ -449,7 +450,7 @@ export default function PurchaseOrdersPage() {
         )}
         {contextMenu?.row.status === 'APPROVED' && (
              <MenuItem onClick={() => { handleMarkReady(contextMenu.row.id); handleCloseContextMenu(); }}>
-                <SendIcon fontSize="small" sx={{ mr: 1 }} /> Mark Ready to Send
+                <SendIcon fontSize="small" sx={{ mr: 1 }} /> Mark as Ready to Send
             </MenuItem>
         )}
         {contextMenu?.row.status === 'READY' && (
@@ -636,6 +637,6 @@ export default function PurchaseOrdersPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </ERPPage>
   );
 }

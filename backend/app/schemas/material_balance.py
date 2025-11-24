@@ -54,6 +54,33 @@ class MaterialBalanceLedgerRow(BaseModel):
     raw_material: Optional[RawMaterialBasic] = None
     packing_material: Optional[PackingMaterialBasic] = None
 
+    # Computed fields for frontend display
+    @property
+    def material_code(self) -> str:
+        if self.raw_material_id and self.raw_material:
+            return f"RM-{self.raw_material_id}"
+        elif self.packing_material_id and self.packing_material:
+            return f"PM-{self.packing_material_id}"
+        return "N/A"
+    
+    @property
+    def material_name(self) -> str:
+        if self.raw_material and self.raw_material.rm_name:
+            return self.raw_material.rm_name
+        elif self.packing_material and self.packing_material.pm_name:
+            return self.packing_material.pm_name
+        return "Unknown Material"
+    
+    @property
+    def material_type(self) -> str:
+        return "RM" if self.raw_material_id else "PM"
+    
+    @property
+    def reference_document(self) -> str:
+        po_num = self.po.po_number if self.po else f"PO-{self.po_id}"
+        inv_num = self.invoice.invoice_number if self.invoice else f"INV-{self.invoice_id}"
+        return f"{po_num} / {inv_num}"
+
     class Config:
         from_attributes = True
 

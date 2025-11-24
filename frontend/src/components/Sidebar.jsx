@@ -39,7 +39,7 @@ const Sidebar = ({ collapsed = false, onToggle = () => {} }) => {
     { text: 'Packing Materials', icon: <Inventory2Icon />, path: '/packing-materials', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'master' },
     { text: 'Proforma Invoice (PI)', icon: <DescriptionIcon />, path: '/pi', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
     { text: 'EOPA', icon: <ApprovalIcon />, path: '/eopa', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
-    { text: 'Purchase Orders (Merged)', icon: <ShoppingCartIcon />, path: '/purchase-orders', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
+    { text: 'Purchase Orders', icon: <ShoppingCartIcon />, path: '/purchase-orders', roles: ['ADMIN', 'PROCUREMENT_OFFICER'], section: 'workflow' },
     { text: 'Invoices', icon: <ReceiptIcon />, path: '/invoices', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'], section: 'workflow' },
     { text: 'Analytics & Insights', icon: <AssessmentIcon />, path: '/analytics', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'ACCOUNTANT'], section: 'analytics' },
     { text: 'Material Balance Impact', icon: <BalanceIcon />, path: '/material-balance-impact', roles: ['ADMIN', 'PROCUREMENT_OFFICER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT'], section: 'analytics' },

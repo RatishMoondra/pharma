@@ -46,6 +46,19 @@ const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
       backgroundColor: alpha(theme.palette.primary.main, ODD_OPACITY),
     },
   },
+  // Color coding for negative/positive stock
+  [`& .${gridClasses.row}.negative-stock`]: {
+    backgroundColor: '#ffebee', // light red
+    '&:hover': {
+      backgroundColor: '#ffcdd2',
+    },
+  },
+  [`& .${gridClasses.row}.positive-stock`]: {
+    backgroundColor: '#e8f5e9', // light green
+    '&:hover': {
+      backgroundColor: '#c8e6c9',
+    },
+  },
 }))
 
 const CustomToolbar = () => (
@@ -74,9 +87,10 @@ const MaterialBalanceImpactPage = () => {
   const fetchMaterialBalanceImpact = async () => {
     try {
       setLoading(true)
-      const res = await api.get('/api/material-balance-impact/')
-      if (res.data.success) {
-        setImpacts(res.data.data)
+      const res = await api.get('/api/material-balance/all')
+      console.log(res.data)
+      if (res.data) {
+        setImpacts(res.data)
       }
     } catch (err) {
       handleApiError(err)
@@ -88,7 +102,7 @@ const MaterialBalanceImpactPage = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this entry?')) return
     try {
-      const res = await api.delete(`/api/material-balance-impact/${id}`)
+      const res = await api.delete(`/api/material-balance/${id}`)
       if (res.data.success) {
         setImpacts(prev => prev.filter(i => i.id !== id))
         setSnackbar({ open: true, message: 'Deleted successfully', severity: 'success' })
@@ -110,7 +124,7 @@ const MaterialBalanceImpactPage = () => {
   }, [impacts, filterType])
 
   /* -------------------------------------------
-      DATAGRID COLUMNS (NO BUSINESS LOGIC CHANGED)
+      DATAGRID COLUMNS WITH PROPER MATERIAL NAMES
   -------------------------------------------- */
   const columns = [
     { field: 'material_code', headerName: 'Material Code', flex: 1 },
@@ -124,9 +138,47 @@ const MaterialBalanceImpactPage = () => {
         params.row.material_type === 'RM' ? 'Raw Material' : 'Packing Material',
     },
 
-    { field: 'old_stock', headerName: 'Old Stock', flex: 0.8 },
-    { field: 'new_stock', headerName: 'New Stock', flex: 0.8 },
-    { field: 'change_qty', headerName: 'Change Qty', flex: 0.8 },
+    { 
+      field: 'ordered_qty', 
+      headerName: 'Ordered Qty', 
+      flex: 0.8,
+      type: 'number',
+      valueFormatter: (params) => params.value?.toFixed(2) || '0.00'
+    },
+    { 
+      field: 'received_qty', 
+      headerName: 'Received Qty', 
+      flex: 0.8,
+      type: 'number',
+      valueFormatter: (params) => params.value?.toFixed(2) || '0.00'
+    },
+    { 
+      field: 'balance_qty', 
+      headerName: 'Balance Qty', 
+      flex: 0.8,
+      type: 'number',
+      valueFormatter: (params) => params.value?.toFixed(2) || '0.00',
+      renderCell: (params) => {
+        const balance = params.value || 0
+        const isNegative = balance < 0
+        return (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              px: 1,
+              fontWeight: isNegative ? 'bold' : 'normal',
+              color: isNegative ? '#d32f2f' : '#2e7d32'
+            }}
+          >
+            {balance.toFixed(2)}
+          </Box>
+        )
+      }
+    },
 
     {
       field: 'reference_document',
@@ -207,9 +259,12 @@ const MaterialBalanceImpactPage = () => {
             }}
             slots={{ toolbar: CustomToolbar }}
             density="comfortable"
-            getRowClassName={(params) =>
-              params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
-            }
+            getRowClassName={(params) => {
+              const balance = params.row.balance_qty || 0
+              if (balance < 0) return 'negative-stock'
+              if (balance > 0) return 'positive-stock'
+              return params.indexRelativeToCurrentPage % 2 === 0 ? 'even' : 'odd'
+            }}
           />
         </Paper>
       )}
