@@ -41,6 +41,9 @@ import {
   MenuItem,
   Collapse,
   InputLabel,
+  Divider,
+  Card,
+  CardContent,
 } from '@mui/material';
 
 // MUI Icons
@@ -79,7 +82,9 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
     <>
       <TableRow sx={{ 
         ...getRowStyle(invoice.id),
-        ...(open ? { bgcolor: 'action.selected' } : {}) 
+        ...(open ? { bgcolor: 'action.selected' } : {}),
+        '&:hover': { bgcolor: 'grey.50' },
+        transition: 'background-color 0.2s ease',
       }}>
         <TableCell>
           <IconButton size="small" onClick={() => setOpen(!open)}>
@@ -157,13 +162,24 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
       <TableRow>
         <TableCell colSpan={9} sx={{ p: 0, borderBottom: 'none' }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ m: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+            <Box sx={{ m: 2 }}>
+              <Paper 
+                elevation={3} 
+                sx={{ 
+                  p: 3, 
+                  bgcolor: 'background.paper',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                  border: 1,
+                  borderColor: 'divider'
+                }}
+              >
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
                 Invoice Items ({invoice.items?.length || 0})
               </Typography>
+              <Divider sx={{ mb: 2 }} />
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.200' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell>Medicine</TableCell>
                     <TableCell align="right">Qty Ordered (PO)</TableCell>
                     <TableCell align="right">Shipped Qty (Invoice)</TableCell>
@@ -221,9 +237,15 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
 
               {/* FG-specific details */}
               {invoice.invoice_type === 'FG' && (invoice.dispatch_note_number || invoice.warehouse_location) && (
-                <Box sx={{ mt: 2, p: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
-                  <Typography variant="caption" fontWeight="bold" display="block" gutterBottom>
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: 'primary.main' }}>
                     Dispatch & Warehouse Details
+                  </Typography>
+                  <Card variant="outlined" sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider' }}>
+                    <CardContent>
+                  <Typography variant="caption" fontWeight="medium" display="block" gutterBottom color="text.secondary">
+                    Shipment Information
                   </Typography>
                   {invoice.dispatch_note_number && (
                     <Typography variant="caption" display="block">
@@ -243,11 +265,17 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
                       <strong>Received By:</strong> {invoice.warehouse_received_by}
                     </Typography>
                   )}
+                    </CardContent>
+                  </Card>
                 </Box>
               )}
 
               {/* Summary Card */}
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.50', borderRadius: 1 }}>
+              <Divider sx={{ my: 3 }} />
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: 'primary.main' }}>
+                Finance Summary
+              </Typography>
+              <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" color="text.secondary">Subtotal</Typography>
@@ -269,6 +297,7 @@ const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDele
                   </Grid>
                 </Grid>
               </Box>
+              </Paper>
             </Box>
           </Collapse>
         </TableCell>
@@ -1099,36 +1128,68 @@ const InvoicesPage = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          <ReceiptIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 36 }} />
-          Tax Invoices
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleCreateClick}
-          disabled={!canEdit(null)}
-        >
-          Create New Invoice
-        </Button>
-      </Box>
+    <>
+      <Box sx={{ bgcolor: 'background.default', minHeight: '100vh' }}>
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+        {/* Page Header with Light Background Bar */}
+        <Paper elevation={0} sx={{ p: 3, mb: 4, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <ReceiptIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+              <Box>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                  Tax Invoices
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Manage vendor invoices and track shipments
+                </Typography>
+              </Box>
+            </Box>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<AddIcon />}
+              onClick={handleCreateClick}
+              disabled={!canEdit(null)}
+              sx={{ px: 3 }}
+            >
+              Create New Invoice
+            </Button>
+          </Box>
+        </Paper>
 
-      <TextField
-        fullWidth
-        placeholder="Search by invoice number, PO number, or vendor name..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ mb: 3 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-      />
+        {/* Compact Search Bar with Label */}
+        <Paper elevation={0} sx={{ p: 2, mb: 3, bgcolor: 'background.paper' }}>
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'text.secondary' }}>
+            Search Invoices
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by invoice number, PO number, or vendor name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                bgcolor: 'background.default',
+                '&:hover': {
+                  bgcolor: 'background.paper',
+                },
+                '&.Mui-focused': {
+                  boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.12)',
+                },
+              },
+            }}
+          />
+        </Paper>
 
       {filteredInvoices.length === 0 && (
         <Alert severity="info">
@@ -1136,11 +1197,12 @@ const InvoicesPage = () => {
         </Alert>
       )}
 
-      {filteredInvoices.length > 0 && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.50' }}>
+        {filteredInvoices.length > 0 && (
+          <Paper elevation={1}>
+            <TableContainer>
+              <Table sx={{ '& .MuiTableCell-root': { borderColor: 'divider' } }}>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                 <TableCell width={50} />
                 <TableCell>Invoice Number</TableCell>
                 <TableCell>Date</TableCell>
@@ -1166,33 +1228,45 @@ const InvoicesPage = () => {
                   getRowStyle={getRowStyle}
                 />
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
 
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage('')}
-        message={successMessage}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      />
+        <Snackbar
+          open={!!successMessage}
+          autoHideDuration={6000}
+          onClose={() => setSuccessMessage('')}
+          message={successMessage}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        />
 
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={clearError}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
+          onClose={clearError}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert severity="error" onClose={clearError}>
+            {error}
+          </Alert>
+        </Snackbar>
+      </Container>
+    </Box>
+
+    {/* Unified Invoice Dialog for Create/Edit - Scrollable with Section Headers */}
+    <Dialog 
+        open={createDialogOpen || editDialogOpen} 
+        onClose={createDialogOpen ? handleCreateClose : handleEditClose} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+          },
+        }}
       >
-        <Alert severity="error" onClose={clearError}>
-          {error}
-        </Alert>
-      </Snackbar>
-
-
-      {/* Unified Invoice Dialog for Create/Edit */}
-      <Dialog open={createDialogOpen || editDialogOpen} onClose={createDialogOpen ? handleCreateClose : handleEditClose} maxWidth="lg" fullWidth>
         <DialogTitle>
           {editDialogOpen ? 'Edit Invoice' : 'Create New Invoice'}
         </DialogTitle>
@@ -1212,8 +1286,12 @@ const InvoicesPage = () => {
             </Tooltip>
           </Box>
         )}
-        <DialogContent>
+        <DialogContent sx={{ bgcolor: 'grey.50' }}>
           <Box sx={{ pt: 2 }}>
+            {/* Invoice Header Section */}
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+              Invoice Header
+            </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} md={4}>
                 <TextField
@@ -1322,23 +1400,12 @@ const InvoicesPage = () => {
               </Grid>
             </Grid>
 
-            {/* Auto-population alert when PO is selected (create only) */}
-            {!editDialogOpen && createFormData.po_id && createFormData.items?.length > 0 && (
-              <Alert severity="success" sx={{ mb: 2 }}>
-                <strong>Invoice pre-filled from PO!</strong> Vendor, type, and {createFormData.items.length} item(s) loaded. 
-                Please enter unit prices and verify quantities before saving.
-              </Alert>
-            )}
-
             {/* Dispatch and Warehouse Details */}
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+              Dispatch Details
+            </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12}>
-                <Alert severity="info">
-                  {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' 
-                    ? 'Finished Goods: Enter dispatch and warehouse details'
-                    : 'Optional: Enter dispatch and warehouse details if applicable'}
-                </Alert>
-              </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -1376,40 +1443,42 @@ const InvoicesPage = () => {
             </Grid>
 
             {/* Invoice Items */}
+            <Divider sx={{ my: 3 }} />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Invoice Items</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                Invoice Items
+              </Typography>
               <Button
                 startIcon={<AddIcon />}
                 variant="outlined"
                 size="small"
                 onClick={editDialogOpen ? handleAddItem : handleCreateAddItem}
+                sx={{ gap: 1 }}
               >
                 Add Item
               </Button>
             </Box>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              💡 <strong>Smart Auto-Fill:</strong> Select material to automatically populate HSN Code, GST Rate, and Tax Rate from master data. Click the edit icon (✏️) to change material.
-            </Alert>
-            <TableContainer component={Paper} variant="outlined" sx={{ mb: 3, maxHeight: 400, '& .MuiTableCell-root': { py: 0.5, px: 1 } }}>
-              <Table size="small" stickyHeader sx={{ '& .MuiTableCell-root': { fontSize: '0.813rem' } }}>
+            <Box sx={{ maxHeight: 300, overflowY: 'auto', mb: 3 }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ '& .MuiTableCell-root': { py: 0.5, px: 1 } }}>
+              <Table size="small" stickyHeader sx={{ '& .MuiTableCell-root': { fontSize: '0.813rem', whiteSpace: 'nowrap' } }}>
                 <TableHead>
-                  <TableRow>
-                    <TableCell>
+                  <TableRow sx={{ bgcolor: 'primary.50' }}>
+                    <TableCell sx={{ minWidth: 250 }}>
                       {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && 'Raw Material *'}
                       {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' && 'Packing Material *'}
                       {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' && 'Medicine *'}
                     </TableCell>
-                    <TableCell>HSN Code</TableCell>
-                    <TableCell align="right">Qty Ordered (PO)</TableCell>
-                    <TableCell align="right">Shipped Qty *</TableCell>
-                    <TableCell>Unit Price *</TableCell>
-                    <TableCell>Tax %</TableCell>
-                    <TableCell>GST %</TableCell>
-                    <TableCell>Batch #</TableCell>
-                    <TableCell>Mfg Date</TableCell>
-                    <TableCell>Expiry</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                    <TableCell>Action</TableCell>
+                    <TableCell sx={{ width: 100 }}>HSN Code</TableCell>
+                    <TableCell align="right" sx={{ width: 110 }}>Qty Ordered (PO)</TableCell>
+                    <TableCell align="right" sx={{ width: 100 }}>Shipped Qty *</TableCell>
+                    <TableCell sx={{ width: 100 }}>Unit Price *</TableCell>
+                    <TableCell sx={{ width: 80 }}>Tax %</TableCell>
+                    <TableCell sx={{ width: 80 }}>GST %</TableCell>
+                    <TableCell sx={{ width: 120 }}>Batch #</TableCell>
+                    <TableCell sx={{ width: 130 }}>Mfg Date</TableCell>
+                    <TableCell sx={{ width: 130 }}>Expiry</TableCell>
+                    <TableCell align="right" sx={{ width: 110 }}>Total</TableCell>
+                    <TableCell sx={{ width: 60 }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1437,7 +1506,12 @@ const InvoicesPage = () => {
                     return (
                     <TableRow key={index}>
                       <TableCell>
-                        {/* PHASE 3 FIX #7: Material Edit Icon Pattern */}
+                        <Tooltip 
+                          title="Selecting a material automatically loads HSN Code, GST Rate, and Tax Rate" 
+                          arrow
+                          placement="top"
+                        >
+                          <Box>
                         {editingMaterialRow === index ? (
                           <FormControl size="small" fullWidth required>
                             {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && (
@@ -1509,23 +1583,26 @@ const InvoicesPage = () => {
                             </Tooltip>
                           </Box>
                         )}
+                          </Box>
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={item.hsn_code ? 'Auto-filled from material master' : 'Select material to auto-fill'} arrow>
-                          <TextField
-                            size="small"
-                            placeholder="Auto"
-                            value={item.hsn_code || ''}
-                            InputProps={{
-                              readOnly: true,
-                              sx: { 
-                                bgcolor: item.hsn_code ? 'success.50' : 'action.hover',
-                                fontSize: '0.813rem'
-                              }
-                            }}
-                            sx={{ width: 90 }}
-                          />
-                        </Tooltip>
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: item.hsn_code ? 'text.primary' : 'text.disabled',
+                            fontWeight: item.hsn_code ? 'medium' : 'normal',
+                            fontSize: '0.813rem',
+                            px: 1,
+                            py: 0.5,
+                            bgcolor: item.hsn_code ? 'background.paper' : 'grey.50',
+                            borderRadius: 0.5,
+                            display: 'inline-block',
+                            minWidth: 80
+                          }}
+                        >
+                          {item.hsn_code || 'Auto'}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
@@ -1639,8 +1716,13 @@ const InvoicesPage = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+            </Box>
 
-            <Paper sx={{ p: 2, bgcolor: 'primary.50' }}>
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+              Summary
+            </Typography>
+            <Paper elevation={0} sx={{ p: 3, bgcolor: 'grey.50', border: 1, borderColor: 'divider' }}>
               <Grid container spacing={2}>
                 <Grid item xs={4}>
                   <Typography variant="caption">Subtotal</Typography>
@@ -1668,7 +1750,7 @@ const InvoicesPage = () => {
             />
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', position: 'sticky', bottom: 0, zIndex: 1 }}>
           <Button onClick={editDialogOpen ? handleEditClose : handleCreateClose} disabled={submitting}>
             Cancel
           </Button>
@@ -1708,7 +1790,7 @@ const InvoicesPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </>
   )
 }
 

@@ -142,22 +142,19 @@ const MaterialBalanceImpactPage = () => {
       field: 'ordered_qty', 
       headerName: 'Ordered Qty', 
       flex: 0.8,
-      type: 'number',
-      valueFormatter: (params) => params.value?.toFixed(2) || '0.00'
+      type: 'number'
     },
     { 
       field: 'received_qty', 
       headerName: 'Received Qty', 
       flex: 0.8,
-      type: 'number',
-      valueFormatter: (params) => params.value?.toFixed(2) || '0.00'
+      type: 'number'
     },
     { 
       field: 'balance_qty', 
       headerName: 'Balance Qty', 
       flex: 0.8,
       type: 'number',
-      valueFormatter: (params) => params.value?.toFixed(2) || '0.00',
       renderCell: (params) => {
         const balance = params.value || 0
         const isNegative = balance < 0
