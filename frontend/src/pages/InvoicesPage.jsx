@@ -57,7 +57,6 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import BusinessIcon from '@mui/icons-material/Business';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-import { Save as SaveIcon, Close as CloseIcon } from '@mui/icons-material';
 
 // Invoice Row Component with Expandable Items
 const InvoiceRow = ({ invoice, onEdit, onDelete, onDownloadPDF, canEdit, canDelete, getInvoiceTypeColor, getRowStyle }) => {
@@ -343,6 +342,12 @@ const InvoicesPage = () => {
     remarks: '',
     items: []
   })
+  
+  // Validation errors for inline display
+  const [validationErrors, setValidationErrors] = useState({})
+  
+  // Material edit mode per row (Phase 3 #7)
+  const [editingMaterialRow, setEditingMaterialRow] = useState(null)
 
   const fetchInvoices = async () => {
     try {
@@ -549,7 +554,7 @@ const InvoicesPage = () => {
             items: po.items?.map(item => {
               const baseItem = {
                 ordered_quantity: item.ordered_quantity,
-                shipped_quantity: item.ordered_quantity - (item.fulfilled_quantity || 0),
+                shipped_quantity: item.ordered_quantity, // PHASE 1 FIX #1: Default to ordered_quantity
                 unit: item.unit,
                 unit_price: 0, // User must enter actual price
                 tax_rate: 18, // Default GST
@@ -562,16 +567,14 @@ const InvoicesPage = () => {
                 expiry_date: ''
               }
 
-              // Set the appropriate ID and name based on PO type
+              // PHASE 1 FIX #2: Strict type mapping - NO fallbacks
               if (po.po_type === 'RM') {
                 baseItem.raw_material_id = item.raw_material_id ? Number(item.raw_material_id) : ''
                 baseItem.raw_material_name = item.raw_material?.rm_name || ''
-                // Do not fallback to medicine_id
               } else if (po.po_type === 'PM') {
                 baseItem.packing_material_id = item.packing_material_id ? Number(item.packing_material_id) : ''
                 baseItem.packing_material_name = item.packing_material?.pm_name || ''
-                // Do not fallback to medicine_id
-              } else {
+              } else if (po.po_type === 'FG') {
                 baseItem.medicine_id = item.medicine_id ? Number(item.medicine_id) : ''
                 baseItem.medicine_name = item.medicine?.medicine_name || ''
               }
@@ -597,10 +600,50 @@ const InvoicesPage = () => {
 
   const handleCreateItemChange = (index, field, value) => {
     const updatedItems = [...createFormData.items]
+    const item = updatedItems[index]
     updatedItems[index][field] = value
 
+    // PHASE 3 FIX #8: Auto-populate metadata (HSN, GST, tax_rate) when material selected
+    if (field === 'raw_material_id' && value) {
+      const rm = rawMaterials.find(r => r.id === parseInt(value))
+      if (rm) {
+        if (rm.hsn_code) updatedItems[index].hsn_code = rm.hsn_code
+        if (rm.gst_rate) updatedItems[index].gst_rate = rm.gst_rate
+        if (rm.gst_rate) updatedItems[index].tax_rate = rm.gst_rate // Auto-fill tax_rate from GST
+      }
+      setEditingMaterialRow(null) // Close edit mode after selection
+    } else if (field === 'packing_material_id' && value) {
+      const pm = packingMaterials.find(p => p.id === parseInt(value))
+      if (pm) {
+        if (pm.hsn_code) updatedItems[index].hsn_code = pm.hsn_code
+        if (pm.gst_rate) updatedItems[index].gst_rate = pm.gst_rate
+        if (pm.gst_rate) updatedItems[index].tax_rate = pm.gst_rate
+      }
+      setEditingMaterialRow(null)
+    } else if (field === 'medicine_id' && value) {
+      const med = medicines.find(m => m.id === parseInt(value))
+      if (med) {
+        if (med.hsn_code) updatedItems[index].hsn_code = med.hsn_code
+        if (med.gst_rate) updatedItems[index].gst_rate = med.gst_rate
+        if (med.gst_rate) updatedItems[index].tax_rate = med.gst_rate
+      }
+      setEditingMaterialRow(null)
+    }
+
+    // PHASE 2 FIX #5: Validate shipped_quantity <= ordered_quantity
+    if (field === 'shipped_quantity') {
+      const shippedQty = parseFloat(value || 0)
+      const orderedQty = parseFloat(item.ordered_quantity || 0)
+      const newErrors = { ...validationErrors }
+      if (orderedQty > 0 && shippedQty > orderedQty) {
+        newErrors[`item_${index}_shipped_qty`] = `Cannot exceed ordered qty: ${orderedQty}`
+      } else {
+        delete newErrors[`item_${index}_shipped_qty`]
+      }
+      setValidationErrors(newErrors)
+    }
+
     if (field === 'shipped_quantity' || field === 'unit_price' || field === 'tax_rate') {
-      const item = updatedItems[index]
       const qty = parseFloat(item.shipped_quantity || 0)
       const price = parseFloat(item.unit_price || 0)
       const tax = parseFloat(item.tax_rate || 0)
@@ -696,8 +739,11 @@ const InvoicesPage = () => {
           shipped_quantity: parseFloat(item.shipped_quantity),
           unit_price: parseFloat(item.unit_price),
           tax_rate: parseFloat(item.tax_rate),
-          batch_number: item.batch_number,
-          expiry_date: item.expiry_date,
+          hsn_code: item.hsn_code || null,
+          gst_rate: parseFloat(item.gst_rate) || 0,
+          batch_number: item.batch_number || null,
+          manufacturing_date: item.manufacturing_date || null,
+          expiry_date: item.expiry_date || null,
           total_price: item.total_price
         }))
       }
@@ -784,7 +830,35 @@ const InvoicesPage = () => {
 
   const handleEditItemChange = (index, field, value) => {
     const updatedItems = [...editFormData.items]
+    const item = updatedItems[index]
     updatedItems[index][field] = value
+
+    // PHASE 3 FIX #8: Auto-populate metadata in edit mode
+    if (field === 'raw_material_id' && value) {
+      const rm = rawMaterials.find(r => r.id === parseInt(value))
+      if (rm) {
+        if (rm.hsn_code) updatedItems[index].hsn_code = rm.hsn_code
+        if (rm.gst_rate) updatedItems[index].gst_rate = rm.gst_rate
+        if (rm.gst_rate) updatedItems[index].tax_rate = rm.gst_rate
+      }
+      setEditingMaterialRow(null)
+    } else if (field === 'packing_material_id' && value) {
+      const pm = packingMaterials.find(p => p.id === parseInt(value))
+      if (pm) {
+        if (pm.hsn_code) updatedItems[index].hsn_code = pm.hsn_code
+        if (pm.gst_rate) updatedItems[index].gst_rate = pm.gst_rate
+        if (pm.gst_rate) updatedItems[index].tax_rate = pm.gst_rate
+      }
+      setEditingMaterialRow(null)
+    } else if (field === 'medicine_id' && value) {
+      const med = medicines.find(m => m.id === parseInt(value))
+      if (med) {
+        if (med.hsn_code) updatedItems[index].hsn_code = med.hsn_code
+        if (med.gst_rate) updatedItems[index].gst_rate = med.gst_rate
+        if (med.gst_rate) updatedItems[index].tax_rate = med.gst_rate
+      }
+      setEditingMaterialRow(null)
+    }
 
     if (field === 'shipped_quantity' || field === 'unit_price' || field === 'tax_rate') {
       const item = updatedItems[index]
@@ -1177,6 +1251,13 @@ const InvoicesPage = () => {
                         // Existing logic already fetches PO details and updates form
                       }
                     }}
+                    MenuProps={{
+                      PaperProps: {
+                        style: {
+                          maxHeight: 300,
+                        },
+                      },
+                    }}
                   >
                     <MenuItem value=""><em>Select PO</em></MenuItem>
                     {(() => {
@@ -1306,8 +1387,11 @@ const InvoicesPage = () => {
                 Add Item
               </Button>
             </Box>
-            <TableContainer component={Paper} variant="outlined" sx={{ mb: 3, maxHeight: 400 }}>
-              <Table size="small" stickyHeader>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              💡 <strong>Smart Auto-Fill:</strong> Select material to automatically populate HSN Code, GST Rate, and Tax Rate from master data. Click the edit icon (✏️) to change material.
+            </Alert>
+            <TableContainer component={Paper} variant="outlined" sx={{ mb: 3, maxHeight: 400, '& .MuiTableCell-root': { py: 0.5, px: 1 } }}>
+              <Table size="small" stickyHeader sx={{ '& .MuiTableCell-root': { fontSize: '0.813rem' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>
@@ -1329,56 +1413,119 @@ const InvoicesPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(editDialogOpen ? editFormData.items : createFormData.items).map((item, index) => (
+                  {(editDialogOpen ? editFormData.items : createFormData.items).map((item, index) => {
+                    // Helper function to get material display name
+                    const getMaterialName = () => {
+                      const invoiceType = editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type
+                      if (invoiceType === 'RM' && item.raw_material_id) {
+                        const rm = rawMaterials.find(r => r.id === parseInt(item.raw_material_id))
+                        return rm ? `${rm.rm_code} - ${rm.rm_name}` : 'Not selected'
+                      } else if (invoiceType === 'PM' && item.packing_material_id) {
+                        const pm = packingMaterials.find(p => p.id === parseInt(item.packing_material_id))
+                        return pm ? `${pm.pm_code} - ${pm.pm_name}` : 'Not selected'
+                      } else if (invoiceType === 'FG' && item.medicine_id) {
+                        const med = medicines.find(m => m.id === parseInt(item.medicine_id))
+                        return med ? `${med.medicine_code} - ${med.medicine_name}` : 'Not selected'
+                      }
+                      return 'Not selected'
+                    }
+                    
+                    const materialSelected = (editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' ? !!item.raw_material_id : 
+                                            (editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' ? !!item.packing_material_id : 
+                                            !!item.medicine_id
+                    
+                    return (
                     <TableRow key={index}>
                       <TableCell>
-                        <FormControl size="small" fullWidth required>
-                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && (
-                            <Select
-                              value={item.raw_material_id || ''}
-                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'raw_material_id', e.target.value) : handleCreateItemChange(index, 'raw_material_id', e.target.value))}
-                              displayEmpty
+                        {/* PHASE 3 FIX #7: Material Edit Icon Pattern */}
+                        {editingMaterialRow === index ? (
+                          <FormControl size="small" fullWidth required>
+                            {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'RM' && (
+                              <Select
+                                value={item.raw_material_id || ''}
+                                onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'raw_material_id', e.target.value) : handleCreateItemChange(index, 'raw_material_id', e.target.value))}
+                                displayEmpty
+                                autoFocus
+                                onBlur={() => setEditingMaterialRow(null)}
+                              >
+                                <MenuItem value=""><em>Select Raw Material</em></MenuItem>
+                                {rawMaterials.map(rm => (
+                                  <MenuItem key={rm.id} value={rm.id}>{rm.rm_code} - {rm.rm_name}</MenuItem>
+                                ))}
+                              </Select>
+                            )}
+                            {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' && (
+                              <Select
+                                value={item.packing_material_id || ''}
+                                onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'packing_material_id', e.target.value) : handleCreateItemChange(index, 'packing_material_id', e.target.value))}
+                                displayEmpty
+                                autoFocus
+                                onBlur={() => setEditingMaterialRow(null)}
+                              >
+                                <MenuItem value=""><em>Select Packing Material</em></MenuItem>
+                                {packingMaterials.map(pm => (
+                                  <MenuItem key={pm.id} value={pm.id}>{pm.pm_code} - {pm.pm_name}</MenuItem>
+                                ))}
+                              </Select>
+                            )}
+                            {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' && (
+                              <Select
+                                value={item.medicine_id || ''}
+                                onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'medicine_id', e.target.value) : handleCreateItemChange(index, 'medicine_id', e.target.value))}
+                                displayEmpty
+                                autoFocus
+                                onBlur={() => setEditingMaterialRow(null)}
+                              >
+                                <MenuItem value=""><em>Select Medicine</em></MenuItem>
+                                {medicines.map(med => (
+                                  <MenuItem key={med.id} value={med.id}>{med.medicine_code} - {med.medicine_name}</MenuItem>
+                                ))}
+                              </Select>
+                            )}
+                          </FormControl>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: '32px' }}>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                flex: 1,
+                                color: materialSelected ? 'text.primary' : 'text.disabled',
+                                fontWeight: materialSelected ? 'medium' : 'normal',
+                                fontSize: '0.813rem',
+                                lineHeight: 1.2
+                              }}
                             >
-                              <MenuItem value=""><em>Select Raw Material</em></MenuItem>
-                              {rawMaterials.map(rm => (
-                                <MenuItem key={rm.id} value={rm.id}>{rm.rm_name}</MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'PM' && (
-                            <Select
-                              value={item.packing_material_id || ''}
-                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'packing_material_id', e.target.value) : handleCreateItemChange(index, 'packing_material_id', e.target.value))}
-                              displayEmpty
-                            >
-                              <MenuItem value=""><em>Select Packing Material</em></MenuItem>
-                              {packingMaterials.map(pm => (
-                                <MenuItem key={pm.id} value={pm.id}>{pm.pm_name}</MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                          {(editDialogOpen ? editFormData.invoice_type : createFormData.invoice_type) === 'FG' && (
-                            <Select
-                              value={item.medicine_id || ''}
-                              onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'medicine_id', e.target.value) : handleCreateItemChange(index, 'medicine_id', e.target.value))}
-                              displayEmpty
-                            >
-                              <MenuItem value=""><em>Select Medicine</em></MenuItem>
-                              {medicines.map(med => (
-                                <MenuItem key={med.id} value={med.id}>{med.medicine_name}</MenuItem>
-                              ))}
-                            </Select>
-                          )}
-                        </FormControl>
+                              {getMaterialName()}
+                            </Typography>
+                            <Tooltip title="Change material (auto-fills HSN & GST)" arrow>
+                              <IconButton 
+                                size="small" 
+                                onClick={() => setEditingMaterialRow(index)}
+                                color="primary"
+                                sx={{ p: 0.5 }}
+                              >
+                                <EditIcon sx={{ fontSize: '1rem' }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          size="small"
-                          placeholder="HSN"
-                          value={item.hsn_code}
-                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'hsn_code', e.target.value) : handleCreateItemChange(index, 'hsn_code', e.target.value))}
-                          sx={{ width: 100 }}
-                        />
+                        <Tooltip title={item.hsn_code ? 'Auto-filled from material master' : 'Select material to auto-fill'} arrow>
+                          <TextField
+                            size="small"
+                            placeholder="Auto"
+                            value={item.hsn_code || ''}
+                            InputProps={{
+                              readOnly: true,
+                              sx: { 
+                                bgcolor: item.hsn_code ? 'success.50' : 'action.hover',
+                                fontSize: '0.813rem'
+                              }
+                            }}
+                            sx={{ width: 90 }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
@@ -1392,6 +1539,8 @@ const InvoicesPage = () => {
                           value={item.shipped_quantity}
                           onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'shipped_quantity', e.target.value) : handleCreateItemChange(index, 'shipped_quantity', e.target.value))}
                           inputProps={{ min: 0, step: 0.01 }}
+                          error={!!validationErrors[`item_${index}_shipped_qty`]}
+                          helperText={validationErrors[`item_${index}_shipped_qty`] || ''}
                           sx={{ width: 100 }}
                         />
                       </TableCell>
@@ -1406,25 +1555,39 @@ const InvoicesPage = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={item.tax_rate}
-                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'tax_rate', e.target.value) : handleCreateItemChange(index, 'tax_rate', e.target.value))}
-                          inputProps={{ min: 0, max: 100, step: 0.01 }}
-                          sx={{ width: 80 }}
-                        />
+                        <Tooltip title="Tax rate for calculations (auto-filled from GST, editable)" arrow>
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={item.tax_rate || ''}
+                            onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'tax_rate', e.target.value) : handleCreateItemChange(index, 'tax_rate', e.target.value))}
+                            inputProps={{ min: 0, max: 100, step: 0.01 }}
+                            sx={{ 
+                              width: 80,
+                              '& .MuiOutlinedInput-root': {
+                                bgcolor: item.tax_rate > 0 ? 'background.paper' : 'action.hover'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          type="number"
-                          size="small"
-                          placeholder="GST %"
-                          value={item.gst_rate}
-                          onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'gst_rate', e.target.value) : handleCreateItemChange(index, 'gst_rate', e.target.value))}
-                          inputProps={{ min: 0, max: 100, step: 0.01 }}
-                          sx={{ width: 80 }}
-                        />
+                        <Tooltip title={item.gst_rate ? 'Auto-filled from material master (editable)' : 'Select material to auto-fill'} arrow>
+                          <TextField
+                            type="number"
+                            size="small"
+                            placeholder="0"
+                            value={item.gst_rate || ''}
+                            onChange={(e) => (editDialogOpen ? handleEditItemChange(index, 'gst_rate', e.target.value) : handleCreateItemChange(index, 'gst_rate', e.target.value))}
+                            inputProps={{ min: 0, max: 100, step: 0.01 }}
+                            sx={{ 
+                              width: 80,
+                              '& .MuiOutlinedInput-root': {
+                                bgcolor: item.gst_rate > 0 ? 'success.50' : 'action.hover'
+                              }
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <TextField
@@ -1471,7 +1634,8 @@ const InvoicesPage = () => {
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )
+                })}
                 </TableBody>
               </Table>
             </TableContainer>

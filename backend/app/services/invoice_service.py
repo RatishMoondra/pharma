@@ -236,7 +236,7 @@ class InvoiceService:
                 total_shipped_qty += shipped_qty
                 
                 # Validate not over-shipped
-                if po_item.fulfilled_quantity > po_item.ordered_quantity:
+                if shipped_qty > po_item.ordered_quantity:
                     raise AppException(
                         f"Shipped quantity exceeds ordered quantity for {item_name}",
                         "ERR_OVERSHIPPED",
