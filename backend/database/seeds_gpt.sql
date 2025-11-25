@@ -2,49 +2,51 @@
 -- Full demo dataset (Option C) for PharmaFlow 360
 -- Run AFTER pharma_schema.sql applied
 
+
 BEGIN;
 
--- ⚠ FULL CLEANUP OF ALL TRANSACTIONAL DATA
--- Uses CASCADE wherever safe & needed
--- Table names match your actual schema
+-- =============================
+-- 1. FULL CLEANUP & IDENTITY RESET
+-- =============================
+-- Order: child tables first, parent tables last
 
--- 1. Material Balance & Receipts
-DELETE FROM material_balance CASCADE;
-DELETE FROM material_receipts CASCADE;
+-- Transactional tables
+TRUNCATE TABLE material_balance RESTART IDENTITY CASCADE;
+TRUNCATE TABLE material_receipts RESTART IDENTITY CASCADE;
+TRUNCATE TABLE vendor_invoice_items RESTART IDENTITY CASCADE;
+TRUNCATE TABLE vendor_invoices RESTART IDENTITY CASCADE;
+TRUNCATE TABLE po_items RESTART IDENTITY CASCADE;
+TRUNCATE TABLE purchase_orders RESTART IDENTITY CASCADE;
+TRUNCATE TABLE eopa_items RESTART IDENTITY CASCADE;
+TRUNCATE TABLE eopa RESTART IDENTITY CASCADE;
+TRUNCATE TABLE pi_items RESTART IDENTITY CASCADE;
+TRUNCATE TABLE pi RESTART IDENTITY CASCADE;
+TRUNCATE TABLE medicine_raw_materials RESTART IDENTITY CASCADE;
+TRUNCATE TABLE medicine_packing_materials RESTART IDENTITY CASCADE;
+TRUNCATE TABLE partner_vendor_medicines RESTART IDENTITY CASCADE;
+TRUNCATE TABLE warehouse_grn RESTART IDENTITY CASCADE;
+TRUNCATE TABLE dispatch_advice RESTART IDENTITY CASCADE;
 
--- 2. Invoice-related tables
-DELETE FROM vendor_invoice_items CASCADE;
-DELETE FROM vendor_invoices CASCADE;
+-- Master tables
+TRUNCATE TABLE medicine_master RESTART IDENTITY CASCADE;
+TRUNCATE TABLE raw_material_master RESTART IDENTITY CASCADE;
+TRUNCATE TABLE packing_material_master RESTART IDENTITY CASCADE;
+TRUNCATE TABLE vendors RESTART IDENTITY CASCADE;
+TRUNCATE TABLE countries RESTART IDENTITY CASCADE;
+TRUNCATE TABLE product_master RESTART IDENTITY CASCADE;
+TRUNCATE TABLE terms_conditions_master RESTART IDENTITY CASCADE;
+TRUNCATE TABLE vendor_terms_conditions RESTART IDENTITY CASCADE;
 
--- 3. Purchase Orders
-DELETE FROM po_items CASCADE;
-DELETE FROM purchase_orders CASCADE;
-
--- 4. EOPA
-DELETE FROM eopa_items CASCADE;
-DELETE FROM eopa CASCADE;
-
--- 5. PI
-DELETE FROM pi_items CASCADE;
-DELETE FROM pi CASCADE;
-
--- 6. Medicine Mappings
-DELETE FROM medicine_raw_materials CASCADE;
-DELETE FROM medicine_packing_materials CASCADE;
-DELETE FROM partner_vendor_medicines CASCADE;
-DELETE FROM warehouse_grn CASCADE;
-DELETE FROM dispatch_advice CASCADE;
-DELETE from medicine_master CASCADE;
-
--- 7. Vendors (correct table name is vendor)
-DELETE FROM raw_material_master CASCADE;
-DELETE FROM vendors CASCADE;
-DELETE FROM countries CASCADE;
-
--- 0. convenience: make deterministic timestamps
+-- Set deterministic timestamps
 SET LOCAL TIME ZONE 'UTC';
 
 -- 1) Countries (10)
+
+-- =============================
+-- 2. MASTER DATA INSERTS
+-- =============================
+
+-- Countries
 INSERT INTO countries (id, country_code, country_name, language, currency, is_active, created_at, updated_at)
 VALUES
 (1, 'IND', 'India', 'English / Hindi', 'INR', true, NOW(), NOW()),
@@ -72,6 +74,8 @@ VALUES
 
 -- 3) Vendors (20 = 5 PARTNER,5 RM,5 PM,5 MANUFACTURER)
 -- We'll insert specific vendor_codes matching your earlier pattern
+
+-- Vendors
 INSERT INTO vendors (vendor_code, vendor_name, vendor_type, contact_person, email, phone, address, country_id, is_active, created_at, updated_at)
 VALUES
 ('VEN-PART-001','HealthCare Distributors Ltd','PARTNER','Ajay','hcdistributor1@example.com','+91-987650001','Mumbai, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
@@ -82,27 +86,24 @@ VALUES
 
 ('VEN-RM-001','ChemSource Raw Materials Pvt Ltd','RM','Ramesh','rm1@example.com','+91-220110001','Vadodara, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
 ('VEN-RM-002','SynthLabs Ltd','RM','Meena','rmlabs2@example.com','+91-220110002','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-RM-003','Global RM Corp','RM','John','rmglobal3@example.com','+44-208110003','London, UK', (SELECT id FROM countries WHERE country_code='IND') /* fallback country */, true, now(), now()),
+('VEN-RM-003','Global RM Corp','RM','John','rmglobal3@example.com','+44-208110003','London, UK', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
 ('VEN-RM-004','AfriChem Supplies','RM','Kofi','africhem@example.com','+233-201110004','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), true, now(), now()),
 ('VEN-RM-005','Nile Raw Materials','RM','Lillian','nileraw@example.com','+256-700110005','Kampala, Uganda', (SELECT id FROM countries WHERE country_code='UGA'), true, now(), now()),
 
 ('VEN-PM-001','Prime Packaging Solutions','PM','Shalini','pm1@example.com','+91-330110001','Pune, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
 ('VEN-PM-002','PackWorld Africa','PM','Okechukwu','pmafrica2@example.com','+254-700110002','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), true, now(), now()),
 ('VEN-PM-003','LabelPrint Co','PM','Suresh','labelprint3@example.com','+91-330110003','Delhi, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-PM-004','EuroPack Ltd','PM','Claire','europack@example.com','+33-140110004','Paris, France', (SELECT id FROM countries WHERE country_code='IND') /* fallback */, true, now(), now()),
+('VEN-PM-004','EuroPack Ltd','PM','Claire','europack@example.com','+33-140110004','Paris, France', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
 ('VEN-PM-005','AfriLabel Solutions','PM','Mensah','afrilabel@example.com','+233-201110005','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), true, now(), now()),
 
 ('VEN-MFG-001','MediCure Manufacturing Co','MANUFACTURER','Patel','mfg1@example.com','+91-440110001','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-MFG-002','GlobalPharm Contract Mfg','MANUFACTURER','Linda','mfg2@example.com','+44-208110002','London, UK', (SELECT id FROM countries WHERE country_code='IND') /* fallback */, true, now(), now()),
+('VEN-MFG-002','GlobalPharm Contract Mfg','MANUFACTURER','Linda','mfg2@example.com','+44-208110002','London, UK', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
 ('VEN-MFG-003','AfricHealth Mfg','MANUFACTURER','Diallo','mfg3@example.com','+221-770110003','Dakar, Senegal', (SELECT id FROM countries WHERE country_code='SEN'), true, now(), now()),
 ('VEN-MFG-004','Kenya Pharma Works','MANUFACTURER','Wanjiru','mfg4@example.com','+254-700110004','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), true, now(), now()),
 ('VEN-MFG-005','Ethiopia Pharma Labs','MANUFACTURER','Solomon','mfg5@example.com','+251-911110005','Addis Ababa, Ethiopia', (SELECT id FROM countries WHERE country_code='ETH'), true, now(), now());
 
-DELETE FROM product_master CASCADE;
-TRUNCATE TABLE product_master RESTART IDENTITY CASCADE;
 
-
--- 4) Product master (few entries)
+-- Product master
 INSERT INTO product_master (product_code, product_name, description, unit_of_measure, is_active, created_at, updated_at)
 VALUES
 ('PRD-001','Antibiotics Range','Antibiotics family','box', true, now(), now()),
@@ -111,13 +112,6 @@ VALUES
 
 
 
-DELETE FROM dispatch_advice CASCADE;
-TRUNCATE TABLE dispatch_advice RESTART IDENTITY CASCADE;
-DELETE FROM warehouse_grn CASCADE;
-TRUNCATE TABLE warehouse_grn RESTART IDENTITY CASCADE;
-
-DELETE FROM medicine_master CASCADE;
-TRUNCATE TABLE medicine_master RESTART IDENTITY CASCADE;
 
 -- 5) Medicine master (10)
 INSERT INTO medicine_master (medicine_code, medicine_name, product_id, strength, dosage_form, pack_size, is_active, created_at, updated_at, manufacturer_vendor_id, rm_vendor_id, pm_vendor_id, hsn_code, primary_unit, units_per_pack)
@@ -133,9 +127,78 @@ VALUES
 ('MED-009','Cough Syrup 100ml', 2, '100ml','Syrup','100ml', true, now(), now(), (SELECT id FROM vendors WHERE vendor_code='VEN-MFG-004'), (SELECT id FROM vendors WHERE vendor_code='VEN-RM-004'), (SELECT id FROM vendors WHERE vendor_code='VEN-PM-004'), 'HSN0109','bottle',1),
 ('MED-010','Antipyretic Syrup 100ml', 2, '100ml','Syrup','100ml', true, now(), now(), (SELECT id FROM vendors WHERE vendor_code='VEN-MFG-005'), (SELECT id FROM vendors WHERE vendor_code='VEN-RM-005'), (SELECT id FROM vendors WHERE vendor_code='VEN-PM-005'), 'HSN0110','bottle',1);
 
-delete from raw_material_master CASCADE;
-TRUNCATE table raw_material_master RESTART IDENTITY CASCADE;
--- 6) Raw material master: 40 entries
+INSERT INTO terms_conditions_master (term_text, category, priority, is_active, created_at, updated_at)
+VALUES
+-- GENERAL TERMS
+('This Purchase Order must be acknowledged within 24 hours of receipt.', 'GENERAL', 1, TRUE, NOW(), NOW()),
+('All supplies must strictly adhere to the specifications mentioned in the PO.', 'GENERAL', 2, TRUE, NOW(), NOW()),
+('No deviation in material quality, specifications, or artwork is permitted without written approval.', 'GENERAL', 3, TRUE, NOW(), NOW()),
+('Vendor must supply the material from approved manufacturing sites only.', 'GENERAL', 4, TRUE, NOW(), NOW()),
+('Partial delivery must be communicated in advance for approval.', 'GENERAL', 5, TRUE, NOW(), NOW()),
+
+-- QUALITY / GMP
+('All materials must comply with applicable GMP and regulatory requirements.', 'QUALITY', 6, TRUE, NOW(), NOW()),
+('Raw materials must be accompanied by a Certificate of Analysis (COA).', 'QUALITY', 7, TRUE, NOW(), NOW()),
+('COA must match the batch supplied; retrospective COAs are not acceptable.', 'QUALITY', 8, TRUE, NOW(), NOW()),
+('Packing materials must be as per approved artwork and die-line specifications.', 'QUALITY', 9, TRUE, NOW(), NOW()),
+('Vendor must maintain proper traceability of raw material lots/batches used.', 'QUALITY', 10, TRUE, NOW(), NOW()),
+('Vendor should notify any OOS or OOT before dispatch.', 'QUALITY', 11, TRUE, NOW(), NOW()),
+('Any quality complaints must be addressed within 48 hours of intimation.', 'QUALITY', 12, TRUE, NOW(), NOW()),
+
+-- RAW MATERIAL
+('Raw materials must be packed in tamper-proof containers.', 'RAW_MATERIAL', 13, TRUE, NOW(), NOW()),
+('Raw materials must be supplied with purity, assay, moisture content, and impurity profile.', 'RAW_MATERIAL', 14, TRUE, NOW(), NOW()),
+('Material must have a minimum 80% shelf life remaining at the time of supply.', 'RAW_MATERIAL', 15, TRUE, NOW(), NOW()),
+('Any deviation in pack size must be pre-approved.', 'RAW_MATERIAL', 16, TRUE, NOW(), NOW()),
+
+-- PACKING MATERIAL / PRINTING MATERIAL
+('Packing material must match the approved artwork version exactly.', 'PACKING_MATERIAL', 17, TRUE, NOW(), NOW()),
+('Printing color, GSM, shade, and dimensions must meet approved standards.', 'PACKING_MATERIAL', 18, TRUE, NOW(), NOW()),
+('No overprinting or part-printing is permitted without written approval.', 'PACKING_MATERIAL', 19, TRUE, NOW(), NOW()),
+('Vendor must submit shade cards, proofs, or samples for approval when required.', 'PACKING_MATERIAL', 20, TRUE, NOW(), NOW()),
+('Language-specific printing must strictly follow approved text.', 'PACKING_MATERIAL', 21, TRUE, NOW(), NOW()),
+('Packing materials must be free from smudging, misalignment, or ink bleeding.', 'PACKING_MATERIAL', 22, TRUE, NOW(), NOW()),
+
+-- FINISHED GOODS (FG MANUFACTURING)
+('Manufacturing must use only approved raw and packing materials.', 'FINISHED_GOODS', 23, TRUE, NOW(), NOW()),
+('Manufacturer must follow approved BMR/BPR for each batch.', 'FINISHED_GOODS', 24, TRUE, NOW(), NOW()),
+('Stability data must be maintained for the manufactured batch.', 'FINISHED_GOODS', 25, TRUE, NOW(), NOW()),
+('Batch production records must be shared within 2 working days of completion.', 'FINISHED_GOODS', 26, TRUE, NOW(), NOW()),
+('Shelf life must comply with export market regulatory requirements.', 'FINISHED_GOODS', 27, TRUE, NOW(), NOW()),
+
+-- DELIVERY & LOGISTICS
+('Delivery must be made within the timeline committed in the PO.', 'DELIVERY', 28, TRUE, NOW(), NOW()),
+('Advance dispatch intimation must be provided 48 hours prior.', 'DELIVERY', 29, TRUE, NOW(), NOW()),
+('PO number, batch number, and item code must be mentioned on invoice & packing list.', 'DELIVERY', 30, TRUE, NOW(), NOW()),
+('Damaged or short-supplied items will be rejected and replaced at no extra cost.', 'DELIVERY', 31, TRUE, NOW(), NOW()),
+('Freight charges apply as per agreed Incoterms (FOB/CIF/Ex-Works).', 'DELIVERY', 32, TRUE, NOW(), NOW()),
+
+-- PAYMENT
+('Payment will be released only after verification of quality and quantity.', 'PAYMENT', 33, TRUE, NOW(), NOW()),
+('Original invoice, COA, and delivery challan are mandatory for payment processing.', 'PAYMENT', 34, TRUE, NOW(), NOW()),
+('Penalties may apply for delayed delivery beyond agreed timelines.', 'PAYMENT', 35, TRUE, NOW(), NOW()),
+('TDS or statutory deductions may apply as per applicable laws.', 'PAYMENT', 36, TRUE, NOW(), NOW()),
+
+-- LEGAL / COMPLIANCE
+('Vendor must maintain confidentiality of product specifications and artwork.', 'LEGAL', 37, TRUE, NOW(), NOW()),
+('Any breach of confidentiality may result in immediate contract termination.', 'LEGAL', 38, TRUE, NOW(), NOW()),
+('All disputes are subject to the jurisdiction of the company’s registered location.', 'LEGAL', 39, TRUE, NOW(), NOW()),
+('Company reserves the right to cancel the PO for justified reasons.', 'LEGAL', 40, TRUE, NOW(), NOW()),
+
+-- EXPORT-SPECIFIC
+('All documents must comply with export requirements of the destination country.', 'EXPORT', 41, TRUE, NOW(), NOW()),
+('Wrong, incomplete, or missing documents may lead to rejection or penalties.', 'EXPORT', 42, TRUE, NOW(), NOW()),
+('Vendor must provide MSDS for hazardous materials, if applicable.', 'EXPORT', 43, TRUE, NOW(), NOW()),
+('Proper export packaging norms must be followed.', 'EXPORT', 44, TRUE, NOW(), NOW()),
+
+-- COMPANY-SPECIFIC
+('GST number must be mentioned on all invoices.', 'COMPANY', 45, TRUE, NOW(), NOW()),
+('Price validity must be maintained for the agreed contract period.', 'COMPANY', 46, TRUE, NOW(), NOW()),
+('Any statutory tax changes must be communicated immediately.', 'COMPANY', 47, TRUE, NOW(), NOW()),
+('Vendor must inform about planned maintenance shutdowns in advance.', 'COMPANY', 48, TRUE, NOW(), NOW()),
+('No price escalation will be accepted without written approval.', 'COMPANY', 49, TRUE, NOW(), NOW());
+
+-- Raw material master
 INSERT INTO raw_material_master (rm_code, rm_name, description, category, unit_of_measure, standard_purity, hsn_code, gst_rate, default_vendor_id, is_active, created_at, updated_at)
 SELECT
   'RM-' || LPAD(i::text,3,'0'),
@@ -152,9 +215,8 @@ SELECT
   now()
 FROM generate_series(1,40) AS s(i);
 
-delete from packing_material_master CASCADE;
-TRUNCATE table packing_material_master RESTART IDENTITY CASCADE;
--- 7) Packing material master: 40 entries
+
+-- Packing material master
 INSERT INTO packing_material_master (pm_code, pm_name, description, pm_type, language, artwork_version, unit_of_measure, hsn_code, gst_rate, default_vendor_id, is_active, created_at, updated_at)
 SELECT
   'PM-' || LPAD(i::text,3,'0'),
@@ -174,9 +236,7 @@ FROM generate_series(1,40) AS s(i);
 
 
 -- 8) medicine_raw_materials links: generate 200 links (allow duplicates across medicines)
-DELETE FROM medicine_raw_materials CASCADE;
-TRUNCATE TABLE medicine_raw_materials RESTART IDENTITY CASCADE;
-TRUNCATE TABLE medicine_raw_materials RESTART IDENTITY CASCADE;
+
 
 WITH rm_vendor_list AS (
     SELECT id FROM vendors WHERE vendor_type = 'RM' ORDER BY id
@@ -218,8 +278,7 @@ ORDER BY medicine_id, raw_material_id;
 
 
 -- 9) medicine_packing_materials links: generate 200 links
-DELETE FROM medicine_packing_materials CASCADE;
-TRUNCATE TABLE medicine_packing_materials RESTART IDENTITY CASCADE;
+
 
 WITH pm_vendor_list AS (
     SELECT id FROM vendors WHERE vendor_type = 'PM' ORDER BY id
@@ -267,10 +326,7 @@ WHERE s.rn <= (1 + floor(random()*4))  -- each medicine gets 1–4 PM
 ORDER BY medicine_id, packing_material_id;
 
 -- 10) partner_vendor_medicines: assign medicines to PARTNER vendors (subset)
-DELETE FROM partner_vendor_medicines CASCADE;
-TRUNCATE TABLE partner_vendor_medicines RESTART IDENTITY CASCADE;
-DELETE FROM partner_vendor_medicines CASCADE;
-TRUNCATE TABLE partner_vendor_medicines RESTART IDENTITY CASCADE;
+
 
 WITH partner_list AS (
     SELECT id FROM vendors WHERE vendor_type='PARTNER' ORDER BY id
@@ -313,8 +369,7 @@ ORDER BY partner_id, medicine_id;
 
 -- 12) vendor_terms_conditions: random assignment of some terms to vendors
 
-DELETE FROM vendor_terms_conditions CASCADE;
-TRUNCATE TABLE vendor_terms_conditions RESTART IDENTITY CASCADE;
+
 
 INSERT INTO vendor_terms_conditions (vendor_id, term_id, priority_override, notes, created_at, updated_at)
 SELECT 
@@ -331,10 +386,7 @@ JOIN terms_conditions_master t
 
 
 -- 13) PI (20) with PI items (1..4 items per PI)
-DELETE FROM pi_items CASCADE;
-TRUNCATE TABLE pi_items RESTART IDENTITY CASCADE;
-DELETE FROM pi CASCADE;
-TRUNCATE TABLE pi RESTART IDENTITY CASCADE;
+
 INSERT INTO pi (pi_number, pi_date, partner_vendor_id, total_amount, currency, remarks, created_by, created_at, updated_at, country_id, status)
 SELECT
   'PI/24-' || to_char(now(),'YY') || '/' || LPAD(i::text,4,'0'),
@@ -417,10 +469,7 @@ FROM eopa e
 JOIN pi_item ON pi_item.pi_id = e.pi_id
 LIMIT 40;
 
-DELETE FROM po_items CASCADE;
-TRUNCATE TABLE po_items RESTART IDENTITY CASCADE;
-DELETE FROM purchase_orders CASCADE;
-TRUNCATE TABLE purchase_orders RESTART IDENTITY CASCADE;
+
 -- 15) Purchase Orders (60)
 INSERT INTO purchase_orders (po_number, po_date, po_type, eopa_id, vendor_id, status, delivery_date, remarks, created_by, created_at, updated_at)
 SELECT

@@ -4,6 +4,9 @@ from fastapi.responses import JSONResponse
 from datetime import datetime
 import logging
 import uuid
+import os
+from app.models.base import Base
+
 
 from app.database.session import engine
 from app.models import base
@@ -26,8 +29,13 @@ logging.basicConfig(
 
 logger = logging.getLogger("pharma")
 
-# Create tables
-base.Base.metadata.create_all(bind=engine)
+# DEV mode auto-create schema
+# PROD mode uses Alembic only
+if os.getenv("ENV", "production") == "development":
+    print("🚧 DEVELOPMENT MODE: Auto-creating tables using Base.metadata.create_all()")
+    Base.metadata.create_all(bind=engine)
+else:
+    print("🏭 PRODUCTION MODE: Skipping Base.metadata.create_all(). Alembic controls schema.")
 
 app = FastAPI(
     title="PharmaFlow 360",
