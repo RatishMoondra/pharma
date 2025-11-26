@@ -25,8 +25,8 @@ fi
 # ---------------------------------------------
 # Run SQL seed file (optional)
 # ---------------------------------------------
-SEED_FILE="/usr/src/app/database/seeds_gpt.sql"
-SEED_MARKER="/var/lib/postgresql/data/.seeded"
+SEED_FILE="/usr/src/app/app/database/seeds_gpt.sql"
+SEED_MARKER="/usr/src/app/app/.seeded"
 
 # Run seed only once
 if [ -f "$SEED_FILE" ]; then

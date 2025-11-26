@@ -46,7 +46,6 @@ SET LOCAL TIME ZONE 'UTC';
 -- 2. MASTER DATA INSERTS
 -- =============================
 
--- Countries
 INSERT INTO countries (id, country_code, country_name, language, currency, is_active, created_at, updated_at)
 VALUES
 (1, 'IND', 'India', 'English / Hindi', 'INR', true, NOW(), NOW()),
@@ -63,6 +62,15 @@ VALUES
 (12, 'DZA', 'Algeria', 'Arabic / Berber', 'DZD', true, NOW(), NOW());
 
 
+-- Users (from live pharma_db)
+INSERT INTO users (username, hashed_password, email, full_name, role, is_active, created_at, updated_at)
+VALUES
+('admin', '$2b$12$tGhEkPm1MQGEp.iOxZ7/t.czo.MKaWmxLbFrshSDDBosI3YGFpO5C', 'admin@pharma.com', 'Admin User', 'ADMIN', TRUE, '2025-11-14 17:31:42.294899', NOW()),
+('procurement_officer', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5eX7dK.8pWu8W', 'procurement@pharma.com', 'Procurement Officer', 'PROCUREMENT_OFFICER', TRUE, '2025-11-14 23:38:23.273786', NOW()),
+('warehouse_mgr', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5eX7dK.8pWu8W', 'warehouse@pharma.com', 'Warehouse Manager', 'WAREHOUSE_MANAGER', TRUE, '2025-11-14 23:38:23.273786', NOW()),
+('accountant', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5eX7dK.8pWu8W', 'accounts@pharma.com', 'Accountant', 'ACCOUNTANT', TRUE, '2025-11-14 23:38:23.273786', NOW());
+
+
 -- -- 2) Users (5)
 -- INSERT INTO users (username, hashed_password, email, role, is_active, created_at)
 -- VALUES
@@ -76,31 +84,31 @@ VALUES
 -- We'll insert specific vendor_codes matching your earlier pattern
 
 -- Vendors
-INSERT INTO vendors (vendor_code, vendor_name, vendor_type, contact_person, email, phone, address, country_id, is_active, created_at, updated_at)
+INSERT INTO vendors (vendor_code, vendor_name, vendor_type, contact_person, email, phone, address, country_id, gmp_certified, iso_certified, is_active, created_at, updated_at)
 VALUES
-('VEN-PART-001','HealthCare Distributors Ltd','PARTNER','Ajay','hcdistributor1@example.com','+91-987650001','Mumbai, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-PART-002','AfricMedic Tradex','PARTNER','Amina','africmed@example.com','+233-201000002','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), true, now(), now()),
-('VEN-PART-003','Kenya Health Supplies','PARTNER','Kamau','kenyasup@example.com','+254-700300003','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), true, now(), now()),
-('VEN-PART-004','Sahara Pharm Traders','PARTNER','Fatou','saharatrade@example.com','+221-770400004','Dakar, Senegal', (SELECT id FROM countries WHERE country_code='SEN'), true, now(), now()),
-('VEN-PART-005','Ethiopia Medical Importers','PARTNER','Bekele','ethioimport@example.com','+251-911500005','Addis Ababa, Ethiopia', (SELECT id FROM countries WHERE country_code='ETH'), true, now(), now()),
+('VEN-PART-001','HealthCare Distributors Ltd','PARTNER','Ajay','hcdistributor1@example.com','+91-987650001','Mumbai, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PART-002','AfricMedic Tradex','PARTNER','Amina','africmed@example.com','+233-201000002','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PART-003','Kenya Health Supplies','PARTNER','Kamau','kenyasup@example.com','+254-700300003','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PART-004','Sahara Pharm Traders','PARTNER','Fatou','saharatrade@example.com','+221-770400004','Dakar, Senegal', (SELECT id FROM countries WHERE country_code='SEN'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PART-005','Ethiopia Medical Importers','PARTNER','Bekele','ethioimport@example.com','+251-911500005','Addis Ababa, Ethiopia', (SELECT id FROM countries WHERE country_code='ETH'), TRUE, TRUE, TRUE, now(), now()),
 
-('VEN-RM-001','ChemSource Raw Materials Pvt Ltd','RM','Ramesh','rm1@example.com','+91-220110001','Vadodara, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-RM-002','SynthLabs Ltd','RM','Meena','rmlabs2@example.com','+91-220110002','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-RM-003','Global RM Corp','RM','John','rmglobal3@example.com','+44-208110003','London, UK', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-RM-004','AfriChem Supplies','RM','Kofi','africhem@example.com','+233-201110004','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), true, now(), now()),
-('VEN-RM-005','Nile Raw Materials','RM','Lillian','nileraw@example.com','+256-700110005','Kampala, Uganda', (SELECT id FROM countries WHERE country_code='UGA'), true, now(), now()),
+('VEN-RM-001','ChemSource Raw Materials Pvt Ltd','RM','Ramesh','rm1@example.com','+91-220110001','Vadodara, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-RM-002','SynthLabs Ltd','RM','Meena','rmlabs2@example.com','+91-220110002','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-RM-003','Global RM Corp','RM','John','rmglobal3@example.com','+44-208110003','London, UK', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-RM-004','AfriChem Supplies','RM','Kofi','africhem@example.com','+233-201110004','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-RM-005','Nile Raw Materials','RM','Lillian','nileraw@example.com','+256-700110005','Kampala, Uganda', (SELECT id FROM countries WHERE country_code='UGA'), TRUE, TRUE, TRUE, now(), now()),
 
-('VEN-PM-001','Prime Packaging Solutions','PM','Shalini','pm1@example.com','+91-330110001','Pune, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-PM-002','PackWorld Africa','PM','Okechukwu','pmafrica2@example.com','+254-700110002','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), true, now(), now()),
-('VEN-PM-003','LabelPrint Co','PM','Suresh','labelprint3@example.com','+91-330110003','Delhi, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-PM-004','EuroPack Ltd','PM','Claire','europack@example.com','+33-140110004','Paris, France', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-PM-005','AfriLabel Solutions','PM','Mensah','afrilabel@example.com','+233-201110005','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), true, now(), now()),
+('VEN-PM-001','Prime Packaging Solutions','PM','Shalini','pm1@example.com','+91-330110001','Pune, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PM-002','PackWorld Africa','PM','Okechukwu','pmafrica2@example.com','+254-700110002','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PM-003','LabelPrint Co','PM','Suresh','labelprint3@example.com','+91-330110003','Delhi, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PM-004','EuroPack Ltd','PM','Claire','europack@example.com','+33-140110004','Paris, France', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-PM-005','AfriLabel Solutions','PM','Mensah','afrilabel@example.com','+233-201110005','Accra, Ghana', (SELECT id FROM countries WHERE country_code='GHA'), TRUE, TRUE, TRUE, now(), now()),
 
-('VEN-MFG-001','MediCure Manufacturing Co','MANUFACTURER','Patel','mfg1@example.com','+91-440110001','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-MFG-002','GlobalPharm Contract Mfg','MANUFACTURER','Linda','mfg2@example.com','+44-208110002','London, UK', (SELECT id FROM countries WHERE country_code='IND'), true, now(), now()),
-('VEN-MFG-003','AfricHealth Mfg','MANUFACTURER','Diallo','mfg3@example.com','+221-770110003','Dakar, Senegal', (SELECT id FROM countries WHERE country_code='SEN'), true, now(), now()),
-('VEN-MFG-004','Kenya Pharma Works','MANUFACTURER','Wanjiru','mfg4@example.com','+254-700110004','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), true, now(), now()),
-('VEN-MFG-005','Ethiopia Pharma Labs','MANUFACTURER','Solomon','mfg5@example.com','+251-911110005','Addis Ababa, Ethiopia', (SELECT id FROM countries WHERE country_code='ETH'), true, now(), now());
+('VEN-MFG-001','MediCure Manufacturing Co','MANUFACTURER','Patel','mfg1@example.com','+91-440110001','Ahmedabad, India', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-MFG-002','GlobalPharm Contract Mfg','MANUFACTURER','Linda','mfg2@example.com','+44-208110002','London, UK', (SELECT id FROM countries WHERE country_code='IND'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-MFG-003','AfricHealth Mfg','MANUFACTURER','Diallo','mfg3@example.com','+221-770110003','Dakar, Senegal', (SELECT id FROM countries WHERE country_code='SEN'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-MFG-004','Kenya Pharma Works','MANUFACTURER','Wanjiru','mfg4@example.com','+254-700110004','Nairobi, Kenya', (SELECT id FROM countries WHERE country_code='KEN'), TRUE, TRUE, TRUE, now(), now()),
+('VEN-MFG-005','Ethiopia Pharma Labs','MANUFACTURER','Solomon','mfg5@example.com','+251-911110005','Addis Ababa, Ethiopia', (SELECT id FROM countries WHERE country_code='ETH'), TRUE, TRUE, TRUE, now(), now());
 
 
 -- Product master
@@ -444,148 +452,148 @@ FROM (
 
 -- update PI totals
 UPDATE pi
-SET total_amount = COALESCE( (SELECT SUM(total_price) FROM pi_item WHERE pi_item.pi_id = pi.id), 0);
+SET total_amount = COALESCE( (SELECT SUM(total_price) FROM pi_items WHERE pi_items.pi_id = pi.id), 0);
 
--- 14) EOPA: create 20 EOPAs derived from some PI items
-INSERT INTO eopa (eopa_number, eopa_date, pi_id, status, remarks, approved_by, approved_at, created_by, created_at, updated_at)
-SELECT
-  'EOPA/' || to_char(now(),'YY') || '/' || LPAD(nextval('eopa_new_id_seq')::text,4,'0'),
-  CURRENT_DATE,
-  pi_item.pi_id,
-  'PENDING',
-  'Auto EOPA from PI item ' || pi_item.id,
-  NULL, NULL,
-  (SELECT id FROM users ORDER BY id LIMIT 1),
-  now(),
-  now()
-FROM pi_item
-WHERE (pi_item.id % 3) = 0
-LIMIT 20;
+-- -- 14) EOPA: create 20 EOPAs derived from some PI items
+-- INSERT INTO eopa (eopa_number, eopa_date, pi_id, status, remarks, approved_by, approved_at, created_by, created_at, updated_at)
+-- SELECT
+--   'EOPA/' || to_char(now(),'YY') || '/' || LPAD(nextval('eopa_new_id_seq')::text,4,'0'),
+--   CURRENT_DATE,
+--   pi_item.pi_id,
+--   'PENDING',
+--   'Auto EOPA from PI item ' || pi_item.id,
+--   NULL, NULL,
+--   (SELECT id FROM users ORDER BY id LIMIT 1),
+--   now(),
+--   now()
+-- FROM pi_item
+-- WHERE (pi_item.id % 3) = 0
+-- LIMIT 20;
 
--- eopa_items: for each new eopa, create eopa_items based on its pi_items (quantity same as PI item)
-INSERT INTO eopa_items (eopa_id, pi_item_id, quantity, estimated_unit_price, estimated_total, created_by, created_at, updated_at)
-SELECT e.id, pi_item.id, pi_item.quantity, pi_item.unit_price, pi_item.total_price, (SELECT id FROM users ORDER BY id LIMIT 1), now(), now()
-FROM eopa e
-JOIN pi_item ON pi_item.pi_id = e.pi_id
-LIMIT 40;
+-- -- eopa_items: for each new eopa, create eopa_items based on its pi_items (quantity same as PI item)
+-- INSERT INTO eopa_items (eopa_id, pi_item_id, quantity, estimated_unit_price, estimated_total, created_by, created_at, updated_at)
+-- SELECT e.id, pi_item.id, pi_item.quantity, pi_item.unit_price, pi_item.total_price, (SELECT id FROM users ORDER BY id LIMIT 1), now(), now()
+-- FROM eopa e
+-- JOIN pi_item ON pi_item.pi_id = e.pi_id
+-- LIMIT 40;
 
 
--- 15) Purchase Orders (60)
-INSERT INTO purchase_orders (po_number, po_date, po_type, eopa_id, vendor_id, status, delivery_date, remarks, created_by, created_at, updated_at)
-SELECT
-  'PO/' || CASE WHEN (i % 3)=0 THEN 'RM' WHEN (i % 3)=1 THEN 'PM' ELSE 'FG' END || '/' || LPAD(i::text,4,'0'),
-  CURRENT_DATE - (60 - i),
-  CASE WHEN (i % 3)=0 THEN 'RM' WHEN (i % 3)=1 THEN 'PM' ELSE 'FG' END,
-  NULL,
-  CASE WHEN (i % 3)=0 THEN (SELECT id FROM vendors WHERE vendor_type='RM' ORDER BY id OFFSET ((i-1)%5) LIMIT 1)
-       WHEN (i % 3)=1 THEN (SELECT id FROM vendors WHERE vendor_type='PM' ORDER BY id OFFSET ((i-1)%5) LIMIT 1)
-       ELSE (SELECT id FROM vendors WHERE vendor_type='MANUFACTURER' ORDER BY id OFFSET ((i-1)%5) LIMIT 1) END,
-  'DRAFT',
-  CURRENT_DATE + (7 + (i % 20)),
-  'Auto PO ' || i,
-  (SELECT id FROM users ORDER BY id LIMIT 1),
-  now(),
-  now()
-FROM generate_series(1,60) AS s(i);
+-- -- 15) Purchase Orders (60)
+-- INSERT INTO purchase_orders (po_number, po_date, po_type, eopa_id, vendor_id, status, delivery_date, remarks, created_by, created_at, updated_at)
+-- SELECT
+--   'PO/' || CASE WHEN (i % 3)=0 THEN 'RM' WHEN (i % 3)=1 THEN 'PM' ELSE 'FG' END || '/' || LPAD(i::text,4,'0'),
+--   CURRENT_DATE - (60 - i),
+--   CASE WHEN (i % 3)=0 THEN 'RM' WHEN (i % 3)=1 THEN 'PM' ELSE 'FG' END,
+--   NULL,
+--   CASE WHEN (i % 3)=0 THEN (SELECT id FROM vendors WHERE vendor_type='RM' ORDER BY id OFFSET ((i-1)%5) LIMIT 1)
+--        WHEN (i % 3)=1 THEN (SELECT id FROM vendors WHERE vendor_type='PM' ORDER BY id OFFSET ((i-1)%5) LIMIT 1)
+--        ELSE (SELECT id FROM vendors WHERE vendor_type='MANUFACTURER' ORDER BY id OFFSET ((i-1)%5) LIMIT 1) END,
+--   'DRAFT',
+--   CURRENT_DATE + (7 + (i % 20)),
+--   'Auto PO ' || i,
+--   (SELECT id FROM users ORDER BY id LIMIT 1),
+--   now(),
+--   now()
+-- FROM generate_series(1,60) AS s(i);
 
--- po_item: create 1..3 items per PO mapped to medicines (and optionally raw_material_id or packing_material_id)
-INSERT INTO po_item (po_id, medicine_id, created_at, ordered_quantity, unit, hsn_code, raw_material_id, packing_material_id)
-SELECT
-  po.id,
-  ((po.id * 5) % (SELECT count(*) FROM medicine_master)) + 1,
-  now(),
-  (50 + (po.id % 200))::numeric(15,3),
-  'box',
-  (SELECT hsn_code FROM medicine_master WHERE id = ((po.id * 5) % (SELECT count(*) FROM medicine_master)) + 1),
-  CASE WHEN (po.id % 2)=0 THEN ((po.id % (SELECT count(*) FROM raw_material_master)) + 1) ELSE NULL END,
-  CASE WHEN (po.id % 2)=1 THEN ((po.id % (SELECT count(*) FROM packing_material_master)) + 1) ELSE NULL END
-FROM purchase_order po
-CROSS JOIN generate_series(1,3) seq
-WHERE (po.id + seq) % 2 = 0;
+-- -- po_item: create 1..3 items per PO mapped to medicines (and optionally raw_material_id or packing_material_id)
+-- INSERT INTO po_item (po_id, medicine_id, created_at, ordered_quantity, unit, hsn_code, raw_material_id, packing_material_id)
+-- SELECT
+--   po.id,
+--   ((po.id * 5) % (SELECT count(*) FROM medicine_master)) + 1,
+--   now(),
+--   (50 + (po.id % 200))::numeric(15,3),
+--   'box',
+--   (SELECT hsn_code FROM medicine_master WHERE id = ((po.id * 5) % (SELECT count(*) FROM medicine_master)) + 1),
+--   CASE WHEN (po.id % 2)=0 THEN ((po.id % (SELECT count(*) FROM raw_material_master)) + 1) ELSE NULL END,
+--   CASE WHEN (po.id % 2)=1 THEN ((po.id % (SELECT count(*) FROM packing_material_master)) + 1) ELSE NULL END
+-- FROM purchase_order po
+-- CROSS JOIN generate_series(1,3) seq
+-- WHERE (po.id + seq) % 2 = 0;
 
--- 16) Vendor invoices (create 60 invoices, mapping to PO)
--- Table name in schema: vendor_invoices and vendor_invoice_items
-INSERT INTO vendor_invoices (invoice_number, invoice_date, invoice_type, po_id, vendor_id, subtotal, tax_amount, total_amount, status, remarks, received_by, received_at, created_at, updated_at)
-SELECT
-  'INV/' || to_char(now(),'YY') || '/' || LPAD(nextval('vendor_invoices_id_seq')::text,6,'0'),
-  CURRENT_DATE - (i % 12),
-  CASE WHEN (po.po_type='RM') THEN 'RM' WHEN (po.po_type='PM') THEN 'PM' ELSE 'FG' END,
-  po.id,
-  po.vendor_id,
-  (SELECT COALESCE(SUM(ordered_quantity * 1.0),0) FROM po_item WHERE po_item.po_id = po.id),
-  0,
-  0,
-  'PENDING',
-  'Auto invoice for PO ' || po.id,
-  (SELECT id FROM users ORDER BY id LIMIT 1),
-  now(),
-  now(),
-  now()
-FROM purchase_order po
-JOIN generate_series(1,1) s(i) ON true
-LIMIT 60;
+-- -- 16) Vendor invoices (create 60 invoices, mapping to PO)
+-- -- Table name in schema: vendor_invoices and vendor_invoice_items
+-- INSERT INTO vendor_invoices (invoice_number, invoice_date, invoice_type, po_id, vendor_id, subtotal, tax_amount, total_amount, status, remarks, received_by, received_at, created_at, updated_at)
+-- SELECT
+--   'INV/' || to_char(now(),'YY') || '/' || LPAD(nextval('vendor_invoices_id_seq')::text,6,'0'),
+--   CURRENT_DATE - (i % 12),
+--   CASE WHEN (po.po_type='RM') THEN 'RM' WHEN (po.po_type='PM') THEN 'PM' ELSE 'FG' END,
+--   po.id,
+--   po.vendor_id,
+--   (SELECT COALESCE(SUM(ordered_quantity * 1.0),0) FROM po_item WHERE po_item.po_id = po.id),
+--   0,
+--   0,
+--   'PENDING',
+--   'Auto invoice for PO ' || po.id,
+--   (SELECT id FROM users ORDER BY id LIMIT 1),
+--   now(),
+--   now(),
+--   now()
+-- FROM purchase_order po
+-- JOIN generate_series(1,1) s(i) ON true
+-- LIMIT 60;
 
--- vendor_invoice_items: 1 item per vendor_invoices referencing a medicine or raw/packing material
-INSERT INTO vendor_invoice_items (invoice_id, medicine_id, shipped_quantity, unit_price, total_price, tax_rate, tax_amount, created_at, hsn_code, raw_material_id, packing_material_id)
-SELECT
-  vi.id,
-  pi_item.medicine_id,
-  LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10),
-  round( (1.0 + (vi.id % 10) * 0.1)::numeric, 2),
-  round( (LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10) * (1.0 + (vi.id % 10) * 0.1))::numeric, 2),
-  18.00,
-  round((LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10) * (1.0 + (vi.id % 10) * 0.1) * 0.18)::numeric, 2),
-  now(),
-  COALESCE(pi_item.hsn_code, (SELECT hsn_code FROM medicine_master WHERE id = pi_item.medicine_id LIMIT 1)),
-  po_item.raw_material_id,
-  po_item.packing_material_id
-FROM vendor_invoices vi
-LEFT JOIN purchase_order po ON po.id = vi.po_id
-LEFT JOIN LATERAL (
-  SELECT * FROM po_item WHERE po_item.po_id = po.id LIMIT 1
-) po_item ON true
-LEFT JOIN LATERAL (
-  SELECT * FROM pi_item WHERE pi_item.pi_id = (SELECT pi_id FROM pi WHERE id = (SELECT pi_id FROM pi LIMIT 1)) LIMIT 1
-) pi_item ON true
-LIMIT 120;
+-- -- vendor_invoice_items: 1 item per vendor_invoices referencing a medicine or raw/packing material
+-- INSERT INTO vendor_invoice_items (invoice_id, medicine_id, shipped_quantity, unit_price, total_price, tax_rate, tax_amount, created_at, hsn_code, raw_material_id, packing_material_id)
+-- SELECT
+--   vi.id,
+--   pi_item.medicine_id,
+--   LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10),
+--   round( (1.0 + (vi.id % 10) * 0.1)::numeric, 2),
+--   round( (LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10) * (1.0 + (vi.id % 10) * 0.1))::numeric, 2),
+--   18.00,
+--   round((LEAST(pi_item.quantity, (po_item.ordered_quantity)::numeric) * (0.8 + ((vi.id % 3)::numeric)/10) * (1.0 + (vi.id % 10) * 0.1) * 0.18)::numeric, 2),
+--   now(),
+--   COALESCE(pi_item.hsn_code, (SELECT hsn_code FROM medicine_master WHERE id = pi_item.medicine_id LIMIT 1)),
+--   po_item.raw_material_id,
+--   po_item.packing_material_id
+-- FROM vendor_invoices vi
+-- LEFT JOIN purchase_order po ON po.id = vi.po_id
+-- LEFT JOIN LATERAL (
+--   SELECT * FROM po_item WHERE po_item.po_id = po.id LIMIT 1
+-- ) po_item ON true
+-- LEFT JOIN LATERAL (
+--   SELECT * FROM pi_item WHERE pi_item.pi_id = (SELECT pi_id FROM pi WHERE id = (SELECT pi_id FROM pi LIMIT 1)) LIMIT 1
+-- ) pi_item ON true
+-- LIMIT 120;
 
--- 17) Update purchase_order counts
-UPDATE purchase_order p
-SET total_ordered_qty = COALESCE((SELECT SUM(ordered_quantity) FROM po_item WHERE po_item.po_id = p.id),0),
-    total_fulfilled_qty = COALESCE((SELECT SUM(vii.shipped_quantity) FROM vendor_invoice_items vii JOIN vendor_invoices vi ON vi.id = vii.invoice_id WHERE vi.po_id = p.id),0)
-WHERE EXISTS (SELECT 1 FROM po_item WHERE po_item.po_id = p.id);
+-- -- 17) Update purchase_order counts
+-- UPDATE purchase_order p
+-- SET total_ordered_qty = COALESCE((SELECT SUM(ordered_quantity) FROM po_item WHERE po_item.po_id = p.id),0),
+--     total_fulfilled_qty = COALESCE((SELECT SUM(vii.shipped_quantity) FROM vendor_invoice_items vii JOIN vendor_invoices vi ON vi.id = vii.invoice_id WHERE vi.po_id = p.id),0)
+-- WHERE EXISTS (SELECT 1 FROM po_item WHERE po_item.po_id = p.id);
 
--- 18) material_balance: create 200 rows mapping raw_material_id/packing_material_id to PO/invoice pairs
-INSERT INTO material_balance (raw_material_id, vendor_id, po_id, invoice_id, ordered_qty, received_qty, balance_qty, last_updated, packing_material_id)
-SELECT
-  ((i - 1) % (SELECT COUNT(*) FROM raw_material_master)) + 1 AS raw_material_id,
-  (SELECT id FROM vendors WHERE vendor_type='RM' ORDER BY id OFFSET ((i - 1) % 5) LIMIT 1) AS vendor_id,
-  po.id,
-  vi.id,
-  COALESCE(po_item.ordered_quantity, 0),
-  COALESCE(vii.shipped_quantity, 0),
-  (COALESCE(po_item.ordered_quantity,0) - COALESCE(vii.shipped_quantity,0)),
-  now(),
-  po_item.packing_material_id
-FROM generate_series(1,200) s(i)
-JOIN LATERAL (SELECT id FROM purchase_order ORDER BY id OFFSET ((i - 1) % (SELECT COUNT(*) FROM purchase_order)) LIMIT 1) po ON true
-LEFT JOIN LATERAL (SELECT id, shipped_quantity FROM vendor_invoice_items WHERE invoice_id IN (SELECT id FROM vendor_invoices WHERE po_id = po.id) LIMIT 1) vii ON true
-LEFT JOIN LATERAL (SELECT * FROM po_item WHERE po_item.po_id = po.id LIMIT 1) po_item ON true
-LEFT JOIN LATERAL (SELECT id FROM vendor_invoices WHERE po_id = po.id LIMIT 1) vi ON true;
+-- -- 18) material_balance: create 200 rows mapping raw_material_id/packing_material_id to PO/invoice pairs
+-- INSERT INTO material_balance (raw_material_id, vendor_id, po_id, invoice_id, ordered_qty, received_qty, balance_qty, last_updated, packing_material_id)
+-- SELECT
+--   ((i - 1) % (SELECT COUNT(*) FROM raw_material_master)) + 1 AS raw_material_id,
+--   (SELECT id FROM vendors WHERE vendor_type='RM' ORDER BY id OFFSET ((i - 1) % 5) LIMIT 1) AS vendor_id,
+--   po.id,
+--   vi.id,
+--   COALESCE(po_item.ordered_quantity, 0),
+--   COALESCE(vii.shipped_quantity, 0),
+--   (COALESCE(po_item.ordered_quantity,0) - COALESCE(vii.shipped_quantity,0)),
+--   now(),
+--   po_item.packing_material_id
+-- FROM generate_series(1,200) s(i)
+-- JOIN LATERAL (SELECT id FROM purchase_order ORDER BY id OFFSET ((i - 1) % (SELECT COUNT(*) FROM purchase_order)) LIMIT 1) po ON true
+-- LEFT JOIN LATERAL (SELECT id, shipped_quantity FROM vendor_invoice_items WHERE invoice_id IN (SELECT id FROM vendor_invoices WHERE po_id = po.id) LIMIT 1) vii ON true
+-- LEFT JOIN LATERAL (SELECT * FROM po_item WHERE po_item.po_id = po.id LIMIT 1) po_item ON true
+-- LEFT JOIN LATERAL (SELECT id FROM vendor_invoices WHERE po_id = po.id LIMIT 1) vi ON true;
 
--- 19) material_receipts: create 40 receipts mapping to some POs
-INSERT INTO material_receipts (receipt_number, receipt_date, po_id, medicine_id, quantity_received, batch_number, remarks, received_by, created_at)
-SELECT
-  'RCPT/' || to_char(now(),'YY') || '/' || LPAD(i::text,4,'0'),
-  CURRENT_DATE - (i % 10),
-  po.id,
-  (SELECT id FROM medicine_master ORDER BY id OFFSET ((i -1) % (SELECT COUNT(*) FROM medicine_master)) LIMIT 1),
-  (10 + (i % 50))::numeric(15,3),
-  'BATCH-' || i,
-  'Auto receipt',
-  (SELECT id FROM users ORDER BY id LIMIT 1),
-  now()
-FROM generate_series(1,40) s(i)
-JOIN LATERAL (SELECT id FROM purchase_order ORDER BY id OFFSET ((i -1) % (SELECT COUNT(*) FROM purchase_order)) LIMIT 1) po ON true;
+-- -- 19) material_receipts: create 40 receipts mapping to some POs
+-- INSERT INTO material_receipts (receipt_number, receipt_date, po_id, medicine_id, quantity_received, batch_number, remarks, received_by, created_at)
+-- SELECT
+--   'RCPT/' || to_char(now(),'YY') || '/' || LPAD(i::text,4,'0'),
+--   CURRENT_DATE - (i % 10),
+--   po.id,
+--   (SELECT id FROM medicine_master ORDER BY id OFFSET ((i -1) % (SELECT COUNT(*) FROM medicine_master)) LIMIT 1),
+--   (10 + (i % 50))::numeric(15,3),
+--   'BATCH-' || i,
+--   'Auto receipt',
+--   (SELECT id FROM users ORDER BY id LIMIT 1),
+--   now()
+-- FROM generate_series(1,40) s(i)
+-- JOIN LATERAL (SELECT id FROM purchase_order ORDER BY id OFFSET ((i -1) % (SELECT COUNT(*) FROM purchase_order)) LIMIT 1) po ON true;
 
 COMMIT;
