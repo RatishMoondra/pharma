@@ -1,0 +1,65 @@
+name: Build & Publish Docker Images (Backend + Frontend)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Login to GitHub Container Registry
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      # Build backend
+      - name: Build backend image
+        run: |
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-backend:latest ./backend
+
+      # Build frontend
+      - name: Build frontend image
+        run: |
+          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-frontend:latest ./frontend
+
+      # Push images
+      - name: Push backend image
+        run: |
+          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-backend:latest
+
+      - name: Push frontend image
+        run: |
+          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-frontend:latest
+
+      # Export backend image as TAR
+      - name: Save backend image to tar
+        run: |
+          docker save ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-backend:latest -o backend.tar
+
+      # Export frontend image as TAR
+      - name: Save frontend image to tar
+        run: |
+          docker save ghcr.io/${{ secrets.GHCR_USERNAME }}/pharma-frontend:latest -o frontend.tar
+
+      # Upload tar files as artifacts
+      - name: Upload backend.tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: backend.tar
+
+      - name: Upload frontend.tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image
+          path: frontend.tar
